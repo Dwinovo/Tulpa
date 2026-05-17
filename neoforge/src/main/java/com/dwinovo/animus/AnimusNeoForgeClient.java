@@ -4,6 +4,7 @@ import com.dwinovo.animus.agent.skill.BuiltinSkillBootstrap;
 import com.dwinovo.animus.agent.skill.SkillRegistry;
 import com.dwinovo.animus.anim.compile.BedrockResourceLoader;
 import com.dwinovo.animus.client.agent.AgentLoopRegistry;
+import com.dwinovo.animus.client.screen.AnimusManagerScreen;
 import com.dwinovo.animus.client.screen.SettingsScreen;
 import com.dwinovo.animus.entity.InitEntity;
 import com.dwinovo.animus.render.AnimusRenderer;
@@ -37,11 +38,19 @@ public class AnimusNeoForgeClient {
 
     @SubscribeEvent
     static void registerClientCommands(RegisterClientCommandsEvent event) {
+        // Each verb is its own literal — no bare /animus <text> with a
+        // greedy fallback, because Brigadier would let the greedy argument
+        // swallow literals like "settings" registered later.
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("animus")
-                .then(Commands.argument("text", StringArgumentType.greedyString())
-                        .executes(AnimusNeoForgeClient::cmdPrompt))
+                .executes(AnimusNeoForgeClient::cmdManager)
                 .then(Commands.literal("settings").executes(AnimusNeoForgeClient::cmdSettings))
-                .then(Commands.literal("reset").executes(AnimusNeoForgeClient::cmdReset));
+                .then(Commands.literal("reset").executes(AnimusNeoForgeClient::cmdReset))
+                .then(Commands.literal("prompt").then(
+                        Commands.argument("text", StringArgumentType.greedyString())
+                                .executes(AnimusNeoForgeClient::cmdPrompt)))
+                .then(Commands.literal("say").then(
+                        Commands.argument("text", StringArgumentType.greedyString())
+                                .executes(AnimusNeoForgeClient::cmdPrompt)));
         event.getDispatcher().register(root);
     }
 
@@ -53,8 +62,13 @@ public class AnimusNeoForgeClient {
         return 1;
     }
 
+    private static int cmdManager(CommandContext<CommandSourceStack> ctx) {
+        AnimusManagerScreen.open();
+        return 1;
+    }
+
     private static int cmdSettings(CommandContext<CommandSourceStack> ctx) {
-        Minecraft.getInstance().execute(() -> SettingsScreen.open(null));
+        SettingsScreen.open(null);
         return 1;
     }
 

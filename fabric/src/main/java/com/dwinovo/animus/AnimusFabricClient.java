@@ -4,6 +4,7 @@ import com.dwinovo.animus.agent.skill.BuiltinSkillBootstrap;
 import com.dwinovo.animus.agent.skill.SkillRegistry;
 import com.dwinovo.animus.anim.compile.BedrockResourceLoader;
 import com.dwinovo.animus.client.agent.AgentLoopRegistry;
+import com.dwinovo.animus.client.screen.AnimusManagerScreen;
 import com.dwinovo.animus.client.screen.SettingsScreen;
 import com.dwinovo.animus.entity.InitEntity;
 import com.dwinovo.animus.render.AnimusRenderer;
@@ -73,30 +74,31 @@ public class AnimusFabricClient implements ClientModInitializer {
     }
 
     /**
-     * Register the {@code /animus} client commands. All three branches run
-     * entirely client-side — they only manipulate the {@code PlayerAgentLoop}
+     * Register the {@code /animus} client commands. All branches run
+     * entirely client-side — they only manipulate {@code PlayerAgentLoop}
      * and open client GUIs.
+     *
+     * <h2>Subcommand layout</h2>
+     * Each verb is its own literal — no bare {@code /animus <text>} with a
+     * greedy fallback, because Brigadier would let the greedy argument
+     * swallow literals like "settings" (registered later) and route them
+     * through {@code submitPrompt} instead of into the GUI.
      */
     private static void registerClientCommands() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registry) -> {
             LiteralArgumentBuilder<FabricClientCommandSource> root =
-                    net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal("animus");
+                    net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal("animus")
+                            // /animus (no args) → open the manager GUI (Chat tab by default).
+                            .executes(ctx -> {
+                                AnimusManagerScreen.open();
+                                return 1;
+                            });
 
-            // /animus <prompt...>  — alias for /animus prompt
-            root.then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
-                    .argument("text", StringArgumentType.greedyString())
-                    .executes(ctx -> {
-                        String text = StringArgumentType.getString(ctx, "text");
-                        AgentLoopRegistry.playerAgent().submitPrompt(text);
-                        ctx.getSource().sendFeedback(Component.literal("[animus] dispatched: " + truncate(text, 60)));
-                        return 1;
-                    }));
-
-            // /animus settings  — open settings GUI
+            // /animus settings  — explicit alias
             root.then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
                     .literal("settings")
                     .executes(ctx -> {
-                        Minecraft.getInstance().execute(() -> SettingsScreen.open(null));
+                        SettingsScreen.open(null);
                         return 1;
                     }));
 
@@ -108,6 +110,32 @@ public class AnimusFabricClient implements ClientModInitializer {
                         ctx.getSource().sendFeedback(Component.literal("[animus] conversation cleared"));
                         return 1;
                     }));
+
+            // /animus prompt <text...>  — submit a prompt to PlayerAgent
+            root.then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
+                    .literal("prompt")
+                    .then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
+                            .argument("text", StringArgumentType.greedyString())
+                            .executes(ctx -> {
+                                String text = StringArgumentType.getString(ctx, "text");
+                                AgentLoopRegistry.playerAgent().submitPrompt(text);
+                                ctx.getSource().sendFeedback(
+                                        Component.literal("[animus] dispatched: " + truncate(text, 60)));
+                                return 1;
+                            })));
+
+            // /animus say <text...>  — short alias for prompt
+            root.then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
+                    .literal("say")
+                    .then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
+                            .argument("text", StringArgumentType.greedyString())
+                            .executes(ctx -> {
+                                String text = StringArgumentType.getString(ctx, "text");
+                                AgentLoopRegistry.playerAgent().submitPrompt(text);
+                                ctx.getSource().sendFeedback(
+                                        Component.literal("[animus] dispatched: " + truncate(text, 60)));
+                                return 1;
+                            })));
 
             dispatcher.register(root);
         });
