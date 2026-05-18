@@ -77,6 +77,8 @@ public class AnimusFabricClient implements ClientModInitializer {
 
         registerClientCommands();
         registerKeybinding();
+        // Drive the per-EntityAgent stale-result watchdog from the client tick.
+        ClientTickEvents.END_CLIENT_TICK.register(mc -> AgentLoopRegistry.tickAll());
     }
 
     /**

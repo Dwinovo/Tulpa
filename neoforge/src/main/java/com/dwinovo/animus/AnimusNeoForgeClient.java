@@ -41,6 +41,12 @@ public class AnimusNeoForgeClient {
         event.registerEntityRenderer(InitEntity.ANIMUS.get(), AnimusRenderer::new);
     }
 
+    /** Per-tick stale-result watchdog fan-out for EntityAgent loops. */
+    @SubscribeEvent
+    static void onClientTick(ClientTickEvent.Post event) {
+        AgentLoopRegistry.tickAll();
+    }
+
     /** Default keybind: {@code X} → open the Animus manager. */
     private static final KeyMapping OPEN_MANAGER = new KeyMapping(
             "key.animus.open_manager",

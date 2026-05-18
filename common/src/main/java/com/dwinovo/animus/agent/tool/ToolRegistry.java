@@ -46,6 +46,28 @@ public final class ToolRegistry {
         return TOOLS.get(name);
     }
 
+    /**
+     * Lenient lookup — exact match first, then case-insensitive fallback.
+     * Mirrors opencode's {@code experimental_repairToolCall} pattern
+     * ({@code llm.ts:331-350}) where mis-cased tool names from the LLM
+     * are silently fixed instead of crashing the turn.
+     *
+     * <p>Most LLM typo failure modes come from case drift
+     * ({@code Move_to} vs {@code move_to}, {@code AssignTask} vs
+     * {@code assign_task}); a single lowercase compare catches them all.
+     * For names that still don't resolve, callers should surface a
+     * structured "unknown tool" error so the LLM can self-correct on
+     * the next turn.
+     */
+    public static AnimusTool resolve(String name) {
+        if (name == null) return null;
+        AnimusTool exact = TOOLS.get(name);
+        if (exact != null) return exact;
+        String lower = name.toLowerCase();
+        if (lower.equals(name)) return null;  // already lowercase, no further fallback
+        return TOOLS.get(lower);
+    }
+
     public static Collection<AnimusTool> all() {
         return Collections.unmodifiableCollection(TOOLS.values());
     }

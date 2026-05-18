@@ -111,6 +111,15 @@ public final class EntityAgentLoop {
               - "Step 1: walk to coords. Step 2: ..."  (narration — call tools)
             """;
 
+    /**
+     * Server-result watchdog timeout. If {@link #pendingToolCallIds} stays
+     * non-empty without any add/remove churn for this long, we assume the
+     * server hung / packet was lost / entity died without our death hook
+     * firing, and we self-terminate with state=timeout so the LLM (and
+     * PlayerAgent) aren't blocked forever.
+     */
+    private static final long STALE_PENDING_TIMEOUT_MS = 30_000L;
+
     private final int vanillaEntityId;
     private final int unitId;
     private final ConvoState convo = new ConvoState();
@@ -120,6 +129,8 @@ public final class EntityAgentLoop {
     private boolean aborted = false;
     /** True once the recall packet has been sent — prevents duplicate sends on race. */
     private boolean disposed = false;
+    /** Wall-clock of the last {@link #pendingToolCallIds} mutation. 0 = inactive. */
+    private long lastPendingChangeMs = 0L;
 
     EntityAgentLoop(int vanillaEntityId, int unitId) {
         this.vanillaEntityId = vanillaEntityId;
@@ -148,11 +159,34 @@ public final class EntityAgentLoop {
                     unitId, vanillaEntityId, toolCallId);
             return;
         }
+        lastPendingChangeMs = System.currentTimeMillis();
         convo.addToolResult(toolCallId, resultJson);
         Constants.LOG.info("[animus-entity#{}/{}] tool_result id={} (pending={}) → {}",
                 unitId, vanillaEntityId, toolCallId, pendingToolCallIds.size(),
                 truncate(resultJson, 200));
         if (pendingToolCallIds.isEmpty()) tryStartTurn();
+    }
+
+    /**
+     * Per-client-tick poll. Drives the {@link #STALE_PENDING_TIMEOUT_MS}
+     * watchdog — fires the {@code timeout} termination when a server-side
+     * task result has been outstanding without progress for too long.
+     * Fanned out by {@link AgentLoopRegistry#tickAll()} from the loader's
+     * client-tick event.
+     */
+    public void tick() {
+        if (disposed) return;
+        if (pendingToolCallIds.isEmpty()) return;
+        long elapsed = System.currentTimeMillis() - lastPendingChangeMs;
+        if (elapsed >= STALE_PENDING_TIMEOUT_MS) {
+            Constants.LOG.warn("[animus-entity#{}/{}] stale watchdog fired ({} pending for {}s)",
+                    unitId, vanillaEntityId, pendingToolCallIds.size(), elapsed / 1000);
+            terminateWithReport("timeout",
+                    "No server tool-result received for " + (STALE_PENDING_TIMEOUT_MS / 1000)
+                            + "s with " + pendingToolCallIds.size()
+                            + " pending; likely server hang, network loss, or entity death "
+                            + "without UnitDiedPayload reaching the client.");
+        }
     }
 
     /**
@@ -302,12 +336,15 @@ public final class EntityAgentLoop {
         }
 
         for (LlmToolCall tc : turn.toolCalls()) {
-            AnimusTool tool = ToolRegistry.get(tc.name());
+            AnimusTool tool = ToolRegistry.resolve(tc.name());
             if (tool == null || !tool.allowedRoles().contains(AgentRole.ENTITY)) {
                 Constants.LOG.warn("[animus-entity#{}/{}] LLM called unknown / wrong-role tool '{}'",
                         unitId, vanillaEntityId, tc.name());
+                String reason = (tool == null)
+                        ? "unknown tool: " + escape(tc.name())
+                        : "tool '" + escape(tc.name()) + "' is not callable from EntityAgent role";
                 convo.addToolResult(tc.id(),
-                        "{\"success\":false,\"message\":\"unknown tool: " + escape(tc.name()) + "\"}");
+                        "{\"success\":false,\"message\":\"" + reason + "\"}");
                 continue;
             }
             if (tool.isLocal()) {
@@ -326,6 +363,7 @@ public final class EntityAgentLoop {
             }
             // World-action: ship to server with our vanilla entity id.
             pendingToolCallIds.add(tc.id());
+            lastPendingChangeMs = System.currentTimeMillis();
             Services.NETWORK.sendToServer(new ExecuteToolPayload(
                     vanillaEntityId, tc.id(), tc.name(), tc.arguments()));
             Constants.LOG.info("[animus-entity#{}/{}] dispatch tool={} args={}",

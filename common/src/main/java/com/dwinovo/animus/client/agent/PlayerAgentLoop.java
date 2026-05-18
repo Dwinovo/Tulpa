@@ -336,10 +336,13 @@ public final class PlayerAgentLoop {
 
         // PlayerAgent has no world-action tools — every dispatch resolves locally.
         for (LlmToolCall tc : turn.toolCalls()) {
-            AnimusTool tool = ToolRegistry.get(tc.name());
+            AnimusTool tool = ToolRegistry.resolve(tc.name());
             if (tool == null || !tool.allowedRoles().contains(AgentRole.PLAYER)) {
+                String reason = (tool == null)
+                        ? "unknown tool: " + escape(tc.name())
+                        : "tool '" + escape(tc.name()) + "' is not callable from PlayerAgent role";
                 convo.addToolResult(tc.id(),
-                        "{\"success\":false,\"message\":\"unknown / wrong-role tool: " + escape(tc.name()) + "\"}");
+                        "{\"success\":false,\"message\":\"" + reason + "\"}");
                 continue;
             }
             if (!tool.isLocal()) {

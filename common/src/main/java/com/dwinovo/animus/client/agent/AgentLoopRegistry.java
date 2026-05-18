@@ -119,4 +119,19 @@ public final class AgentLoopRegistry {
         }
         return Optional.empty();
     }
+
+    /**
+     * Per-client-tick fan-out. Invoked once per client tick from the
+     * loader's tick event (Fabric {@code ClientTickEvents.END_CLIENT_TICK} /
+     * NeoForge {@code ClientTickEvent.Post}). Each entity loop runs its
+     * watchdog. Snapshots the values to a fresh array so a loop terminating
+     * itself mid-iteration doesn't blow up the iterator.
+     */
+    public static void tickAll() {
+        if (ENTITY_LOOPS.isEmpty()) return;
+        EntityAgentLoop[] snapshot = ENTITY_LOOPS.values().toArray(new EntityAgentLoop[0]);
+        for (EntityAgentLoop loop : snapshot) {
+            loop.tick();
+        }
+    }
 }
