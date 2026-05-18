@@ -27,8 +27,10 @@ import java.util.stream.Collectors;
  */
 public final class ConvoState {
 
-    /** Hard cap on LLM calls per chain. Borrowed from TLM as a sane default. */
-    public static final int MAX_TOOL_TURN_COUNT = 16;
+    /** Hard cap on LLM calls per chain. Bumped from 16 to 32 to accommodate
+     * multi-step resource-collection flows (e.g. scan + pathfind_and_mine ×N
+     * for "mine 10 iron ore"). Compaction is the longer-term fix. */
+    public static final int MAX_TOOL_TURN_COUNT = 32;
     /** Identical-batch repeats before we declare a loop. */
     public static final int MAX_REPEAT_TOOL_BATCH_COUNT = 2;
 
