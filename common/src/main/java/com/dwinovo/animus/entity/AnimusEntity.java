@@ -228,9 +228,9 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
             taskQueue.cancelAll("entity removed: " + reason);
         }
         if (this.level() instanceof ServerLevel sl) {
-            PlayerAnimusData.findUnitFor(this.getId()).ifPresent(key -> {
-                PlayerAnimusData data = PlayerAnimusData.of(key.playerUuid());
-                data.unbindActive(key.unitId());
+            PlayerAnimusData.findUnitFor(sl.getServer(), this.getId()).ifPresent(key -> {
+                PlayerAnimusData.lookup(sl.getServer(), key.playerUuid()).ifPresent(data ->
+                        data.unbindActive(key.unitId()));
                 ServerPlayer player = sl.getServer().getPlayerList().getPlayer(key.playerUuid());
                 if (player != null) {
                     Services.NETWORK.sendToPlayer(player,

@@ -199,20 +199,24 @@ public final class BlockMiningProgress {
                 spawnAsItemEntity(level, pos, leftover);
             }
         }
-        // Push fresh storage snapshot to the owner so the GUI / env_block see the new items.
+        // Persist + push fresh snapshot to the owner so GUI / env_block see the new items.
         Player owner = entity.getOwner() instanceof Player p ? p : null;
-        if (owner instanceof ServerPlayer sp) {
+        if (owner instanceof ServerPlayer sp && sp.level() instanceof ServerLevel spLevel) {
+            PlayerAnimusData.lookup(spLevel.getServer(), sp.getUUID())
+                    .ifPresent(PlayerAnimusData::markDirty);
             UnitsSnapshotPayload.sendTo(sp);
         }
     }
 
     /**
      * Resolve the storage associated with this entity's owner. Returns
-     * {@code null} on any miss (no owner UUID, owner not currently a player).
+     * {@code null} on any miss (no owner UUID, owner not currently a player,
+     * not on a server level).
      */
     private PlayerAnimusStorage lookupOwnerStorage() {
         if (entity.getOwnerReference() == null) return null;
-        var data = PlayerAnimusData.lookup(entity.getOwnerReference().getUUID());
+        if (!(entity.level() instanceof ServerLevel sl)) return null;
+        var data = PlayerAnimusData.lookup(sl.getServer(), entity.getOwnerReference().getUUID());
         return data.map(PlayerAnimusData::storage).orElse(null);
     }
 

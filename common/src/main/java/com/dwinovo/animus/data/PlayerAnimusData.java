@@ -1,7 +1,10 @@
 package com.dwinovo.animus.data;
 
 import com.dwinovo.animus.Constants;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -14,23 +17,18 @@ import java.util.UUID;
  * mapping used by the scheduling layer ({@code AssignTaskPayload}).
  *
  * <h2>Lifecycle</h2>
- * Created on first lookup ({@link #of}) for a player. Held in a process-wide
- * static map keyed by player UUID — survives logout/login within a server
- * session, lost on server restart. The choice is intentional for MVP; a
- * later commit elevates the data to a vanilla {@code SavedData} backed by
- * disk.
+ * Held by {@link AnimusSavedData}, which serialises the persistent half
+ * (units + storage) into the overworld's
+ * {@link net.minecraft.world.level.storage.SavedDataStorage}. Survives
+ * server restart. Mutations to persistent fields must call
+ * {@link #markDirty} so the SavedData layer flushes the change.
  *
- * <h2>What it stores</h2>
+ * <h2>Persistent vs runtime fields</h2>
  * <ul>
- *   <li>{@code units} — fixed 6-entry array indexed 0..5 (representing
- *       unit_id 1..6). Each entry is the stable per-slot metadata.</li>
- *   <li>{@code storage} — shared inventory across all of this player's
- *       Animuses.</li>
- *   <li>{@code activeVanillaId} — for each slot, the vanilla
- *       {@code entity.getId()} of the currently-spawned Animus, or -1 if
- *       the slot is idle (no entity in world).</li>
- *   <li>{@code vanillaToUnitId} — reverse map so server-side events on a
- *       vanilla Animus can find "which unit slot did this come from".</li>
+ *   <li><strong>Persistent</strong>: {@link #units} (name, model_key, alive),
+ *       {@link #storage} contents.</li>
+ *   <li><strong>Runtime only</strong>: {@link #activeVanillaId},
+ *       {@link #vanillaToUnitId} — rebuilt at summon time, not saved.</li>
  * </ul>
  *
  * <h2>Threading</h2>
@@ -41,8 +39,6 @@ public final class PlayerAnimusData {
 
     public static final int SLOT_COUNT = 6;
 
-    private static final Map<UUID, PlayerAnimusData> BY_PLAYER = new HashMap<>();
-
     private final UUID playerUuid;
     private final UnitConfig[] units = new UnitConfig[SLOT_COUNT];
     private final PlayerAnimusStorage storage = new PlayerAnimusStorage();
@@ -50,7 +46,10 @@ public final class PlayerAnimusData {
     private final int[] activeVanillaId = new int[SLOT_COUNT];
     private final Map<Integer, Integer> vanillaToUnitId = new HashMap<>();
 
-    private PlayerAnimusData(UUID playerUuid) {
+    /** Set by {@link AnimusSavedData} when this instance is owned by it. */
+    private AnimusSavedData parent;
+
+    PlayerAnimusData(UUID playerUuid) {
         this.playerUuid = playerUuid;
         for (int i = 0; i < SLOT_COUNT; i++) {
             units[i] = UnitConfig.defaultFor(i + 1);
@@ -58,39 +57,30 @@ public final class PlayerAnimusData {
         }
     }
 
-    /** Get or lazily create the data block for a player. */
+    /** Get-or-lazily-create via {@link AnimusSavedData}. Server-side only. */
     public static PlayerAnimusData of(ServerPlayer player) {
-        return of(player.getUUID());
+        ServerLevel sl = (ServerLevel) player.level();
+        return AnimusSavedData.get(sl.getServer()).getOrCreate(player.getUUID());
     }
 
-    public static PlayerAnimusData of(UUID playerUuid) {
-        return BY_PLAYER.computeIfAbsent(playerUuid, PlayerAnimusData::new);
-    }
-
-    /** Lookup without creation; returns empty when player has never been initialised. */
-    public static Optional<PlayerAnimusData> lookup(UUID playerUuid) {
-        return Optional.ofNullable(BY_PLAYER.get(playerUuid));
+    /** Lookup without creation — accepts the server to find the correct world's data. */
+    public static Optional<PlayerAnimusData> lookup(MinecraftServer server, UUID playerUuid) {
+        return AnimusSavedData.get(server).lookup(playerUuid);
     }
 
     /**
-     * Reverse-lookup the owning player for a vanilla entity id, useful when
+     * Reverse-lookup the owning player for a vanilla entity id. Useful when
      * the server gets a callback on an Animus and needs to find "whose
-     * storage / which unit_id is this?". Linear over all players, but the
-     * count is small (per-server online players).
+     * storage / which unit_id is this?". Linear over loaded players.
      */
-    public static Optional<UnitKey> findUnitFor(int vanillaEntityId) {
-        for (var entry : BY_PLAYER.entrySet()) {
-            Integer unitId = entry.getValue().vanillaToUnitId.get(vanillaEntityId);
-            if (unitId != null) {
-                return Optional.of(new UnitKey(entry.getKey(), unitId));
-            }
-        }
-        return Optional.empty();
+    public static Optional<UnitKey> findUnitFor(MinecraftServer server, int vanillaEntityId) {
+        return AnimusSavedData.get(server).findUnitFor(vanillaEntityId);
     }
 
-    /** Drop all data — called on server shutdown. */
-    public static void clearAll() {
-        BY_PLAYER.clear();
+    /** Convenience: get the server from a server-side entity, then look up. */
+    public static Optional<UnitKey> findUnitFor(Entity contextEntity) {
+        if (!(contextEntity.level() instanceof ServerLevel sl)) return Optional.empty();
+        return findUnitFor(sl.getServer(), contextEntity.getId());
     }
 
     // ---- per-player API ----
@@ -121,7 +111,7 @@ public final class PlayerAnimusData {
 
     /**
      * Register the mapping between a freshly-spawned Animus and a unit slot.
-     * Both forward and reverse maps are updated atomically.
+     * Runtime state — does NOT trigger dirty.
      */
     public void bindActive(int unitId, int vanillaEntityId) {
         if (activeVanillaId[unitId - 1] != -1) {
@@ -134,14 +124,36 @@ public final class PlayerAnimusData {
     }
 
     /**
-     * Clear the active mapping for a unit slot. Called on EntityAgent
-     * termination or entity removal. Idempotent.
+     * Clear the active mapping for a unit slot. Runtime state — does NOT
+     * trigger dirty. Idempotent.
      */
     public void unbindActive(int unitId) {
         int vanillaId = activeVanillaId[unitId - 1];
         if (vanillaId == -1) return;
         vanillaToUnitId.remove(vanillaId);
         activeVanillaId[unitId - 1] = -1;
+    }
+
+    /** Used by {@link AnimusSavedData#findUnitFor} reverse lookup. */
+    int findActiveUnitForVanillaId(int vanillaEntityId) {
+        Integer unitId = vanillaToUnitId.get(vanillaEntityId);
+        return unitId == null ? -1 : unitId;
+    }
+
+    // ---- persistence wiring ----
+
+    /** Called by {@link AnimusSavedData} when this instance becomes part of saved state. */
+    void bindParent(AnimusSavedData parent) {
+        this.parent = parent;
+    }
+
+    /**
+     * Mark the persistent state dirty so the world-save loop flushes
+     * to disk. Call after any mutation to {@link #units} fields or
+     * {@link #storage} contents.
+     */
+    public void markDirty() {
+        if (parent != null) parent.setDirty();
     }
 
     /** Pair of (player_uuid, unit_id) — the canonical address of an Animus slot. */

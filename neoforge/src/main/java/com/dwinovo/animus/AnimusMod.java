@@ -56,9 +56,8 @@ public class AnimusMod {
                         com.dwinovo.animus.network.payload.UnitsSnapshotPayload.sendTo(sp);
                     }
                 });
-        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
-                (net.neoforged.neoforge.event.server.ServerStoppingEvent ev) ->
-                        com.dwinovo.animus.data.PlayerAnimusData.clearAll());
+        // Server-shutdown cleanup no longer needed — AnimusSavedData persists
+        // via vanilla save loop. (PlayerAnimusData.clearAll removed.)
 
         CommonClass.init();
         Constants.LOG.info("Animus mod initialised on NeoForge.");

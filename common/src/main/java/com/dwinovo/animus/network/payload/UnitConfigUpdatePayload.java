@@ -44,13 +44,13 @@ public record UnitConfigUpdatePayload(int unitId, String name, String modelKey)
                     p.unitId(), player.getName().getString());
             return;
         }
-        UnitConfig cfg = PlayerAnimusData.of(player).unit(p.unitId());
+        PlayerAnimusData data = PlayerAnimusData.of(player);
+        UnitConfig cfg = data.unit(p.unitId());
         String newName = p.name().isEmpty() ? null : p.name();
         cfg.setName(newName);
         if (!p.modelKey().isEmpty()) {
             cfg.setModelKey(p.modelKey());
             // If the unit is currently spawned, push the model change live.
-            PlayerAnimusData data = PlayerAnimusData.of(player);
             if (data.isActive(p.unitId()) && player.level() instanceof net.minecraft.server.level.ServerLevel sl) {
                 var raw = sl.getEntity(data.activeVanillaId(p.unitId()));
                 if (raw instanceof com.dwinovo.animus.entity.AnimusEntity ae) {
@@ -59,6 +59,7 @@ public record UnitConfigUpdatePayload(int unitId, String name, String modelKey)
                 }
             }
         }
+        data.markDirty();
         Constants.LOG.info("[animus-net] config-update player={} unit={} name={} model={}",
                 player.getName().getString(), p.unitId(), newName, p.modelKey());
         UnitsSnapshotPayload.sendTo(player);

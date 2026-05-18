@@ -1,12 +1,10 @@
 package com.dwinovo.animus;
 
-import com.dwinovo.animus.data.PlayerAnimusData;
 import com.dwinovo.animus.entity.AnimusEntity;
 import com.dwinovo.animus.entity.InitEntity;
 import com.dwinovo.animus.network.AnimusNetwork;
 import com.dwinovo.animus.network.payload.UnitsSnapshotPayload;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.minecraft.core.Registry;
@@ -31,11 +29,11 @@ public class AnimusMod implements ModInitializer {
 
         AnimusNetwork.register();
 
-        // Lifecycle hooks for the multi-agent state holder.
+        // Push initial snapshot to the client when a player joins. Server-shutdown
+        // cleanup is no longer needed — AnimusSavedData is persisted to disk by
+        // vanilla's save loop.
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 UnitsSnapshotPayload.sendTo(handler.getPlayer()));
-        ServerLifecycleEvents.SERVER_STOPPING.register(server ->
-                PlayerAnimusData.clearAll());
 
         CommonClass.init();
         Constants.LOG.info("Animus mod initialised on Fabric.");

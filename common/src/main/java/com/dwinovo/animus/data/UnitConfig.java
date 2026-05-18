@@ -1,5 +1,8 @@
 package com.dwinovo.animus.data;
 
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+
 /**
  * Per-slot configuration for one of a player's six Animus units. Holds
  * <strong>only persistent metadata</strong> (name, model_key, alive flag).
@@ -39,6 +42,18 @@ public final class UnitConfig {
         // null name = "unnamed" (LLM will see name=null in env block)
         return new UnitConfig(unitId, null, "animus:hachiware", true);
     }
+
+    /**
+     * Codec for persistence. Treats {@code null} name as an empty string on
+     * the wire — emptied on the way out, re-nulled on read.
+     */
+    public static final Codec<UnitConfig> CODEC = RecordCodecBuilder.create(inst -> inst.group(
+            Codec.INT.fieldOf("unit_id").forGetter(c -> c.unitId),
+            Codec.STRING.optionalFieldOf("name", "").forGetter(c -> c.name == null ? "" : c.name),
+            Codec.STRING.fieldOf("model_key").forGetter(c -> c.modelKey),
+            Codec.BOOL.fieldOf("alive").forGetter(c -> c.alive)
+    ).apply(inst, (id, name, model, alive) ->
+            new UnitConfig(id, name.isEmpty() ? null : name, model, alive)));
 
     public String name() { return name; }
     public void setName(String name) { this.name = name; }
