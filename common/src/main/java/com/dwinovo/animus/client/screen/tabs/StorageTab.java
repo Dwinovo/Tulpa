@@ -2,6 +2,9 @@ package com.dwinovo.animus.client.screen.tabs;
 
 import com.dwinovo.animus.client.data.ClientPlayerAnimusState;
 import com.dwinovo.animus.client.screen.AnimusManagerScreen;
+import com.dwinovo.animus.client.screen.SimpleButton;
+import com.dwinovo.animus.network.payload.OpenStorageMenuPayload;
+import com.dwinovo.animus.platform.Services;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -9,15 +12,18 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Storage tab — read-only 9 × 6 grid of the player's virtual chest. Items
- * land here via mining; the player can see what's been collected but can't
- * yet take items back to their inventory (that needs a server-synced
- * {@code AbstractContainerMenu}, deferred to a follow-up commit).
+ * Storage tab — 9 × 6 read-only preview of the player's virtual chest,
+ * plus an "Open inventory" button that opens the storage as a standard
+ * vanilla chest GUI (server-synced via {@code MenuType.GENERIC_9x6}) so
+ * the player can actually move items between storage and their personal
+ * inventory.
  *
- * <h2>Tooltips</h2>
- * Hovering a slot uses vanilla {@code setTooltipForNextFrame(font, stack,
- * mx, my)} so we get item names, durability bars, enchantments — same
- * rendering as inventory slots.
+ * <h2>Why preview + open button instead of in-place chest GUI</h2>
+ * Embedding a live menu inside a tab requires re-implementing slot
+ * synchronisation manually — vanilla's {@code AbstractContainerScreen}
+ * assumes it's the top-level screen. The two-stage flow (preview here,
+ * full chest UI behind a button) gets us both: glance-able preview when
+ * skimming the manager, full interaction when needed.
  */
 public final class StorageTab extends Tab {
 
@@ -42,6 +48,22 @@ public final class StorageTab extends Tab {
         int gridW = COLS * SLOT_SIZE;
         this.gridX = x + (width - gridW) / 2;
         this.gridY = y + 24;  // leave room for header label
+
+        // "Open inventory" button below the grid. Closes the manager + sends
+        // OpenStorageMenuPayload; server opens vanilla chest UI synced from
+        // the player's PlayerAnimusStorage.
+        int buttonY = gridY + ROWS * SLOT_SIZE + 18;
+        int buttonW = 140;
+        int buttonX = x + (width - buttonW) / 2;
+        SimpleButton openBtn = new SimpleButton(buttonX, buttonY, buttonW, 18,
+                Component.literal("Open inventory"),
+                b -> {
+                    Services.NETWORK.sendToServer(OpenStorageMenuPayload.instance());
+                    // Don't close the manager ourselves — server's openMenu
+                    // sends a ClientboundOpenScreenPacket which replaces the
+                    // current screen with ChestScreen automatically.
+                });
+        parent.registerTabWidget(openBtn);
     }
 
     @Override

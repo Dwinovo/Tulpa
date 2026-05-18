@@ -55,6 +55,8 @@ public final class PlayerAnimusData {
             units[i] = UnitConfig.defaultFor(i + 1);
             activeVanillaId[i] = -1;
         }
+        // Hook chest-menu mutations into the SavedData dirty flag.
+        storage.setOnChangeHook(this::markDirty);
     }
 
     /** Get-or-lazily-create via {@link AnimusSavedData}. Server-side only. */

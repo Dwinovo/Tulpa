@@ -28,8 +28,26 @@ public final class PlayerAnimusStorage extends SimpleContainer {
 
     public static final int CAPACITY = 54;  // double-chest size
 
+    /**
+     * Wired by {@link PlayerAnimusData} on construction; runs on every
+     * {@link #setChanged()} so chest-menu drags flush to the SavedData
+     * dirty flag (and trigger any other change-listening hooks). Null
+     * during construction / deserialisation — safe to no-op then.
+     */
+    private Runnable onChangeHook;
+
     public PlayerAnimusStorage() {
         super(CAPACITY);
+    }
+
+    public void setOnChangeHook(Runnable hook) {
+        this.onChangeHook = hook;
+    }
+
+    @Override
+    public void setChanged() {
+        super.setChanged();
+        if (onChangeHook != null) onChangeHook.run();
     }
 
     /**

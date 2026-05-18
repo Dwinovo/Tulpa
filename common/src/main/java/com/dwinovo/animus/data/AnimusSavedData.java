@@ -116,18 +116,19 @@ public final class AnimusSavedData extends SavedData {
         AnimusSavedData self = new AnimusSavedData();
         for (PlayerSnapshot s : snapshots) {
             PlayerAnimusData p = new PlayerAnimusData(s.uuid);
-            p.bindParent(self);
-            // Restore units in slot order. Codec already preserves the array's
-            // unit_id field; we match by that, not list position.
+            // Populate BEFORE binding parent — storage.setItem triggers
+            // setChanged → markDirty, which would falsely mark the
+            // just-loaded SavedData dirty. With parent unbound, markDirty
+            // is a no-op.
             for (UnitConfig cfg : s.units()) {
                 if (cfg.unitId >= 1 && cfg.unitId <= PlayerAnimusData.SLOT_COUNT) {
                     p.units()[cfg.unitId - 1] = cfg;
                 }
             }
-            // Restore storage in slot order.
             for (int i = 0; i < s.storage().size() && i < p.storage().getContainerSize(); i++) {
                 p.storage().setItem(i, s.storage().get(i));
             }
+            p.bindParent(self);  // bind AFTER population
             self.byPlayer.put(s.uuid, p);
         }
         return self;

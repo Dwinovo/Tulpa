@@ -1,6 +1,7 @@
 package com.dwinovo.animus.network;
 
 import com.dwinovo.animus.network.payload.ExecuteToolPayload;
+import com.dwinovo.animus.network.payload.OpenStorageMenuPayload;
 import com.dwinovo.animus.network.payload.RecallUnitPayload;
 import com.dwinovo.animus.network.payload.SetModelPayload;
 import com.dwinovo.animus.network.payload.SummonUnitPayload;
@@ -63,5 +64,8 @@ public final class AnimusNetwork {
         Services.NETWORK.registerServerToClient(
                 UnitsSnapshotPayload.TYPE, UnitsSnapshotPayload.STREAM_CODEC,
                 UnitsSnapshotPayload::handle);
+        Services.NETWORK.registerClientToServer(
+                OpenStorageMenuPayload.TYPE, OpenStorageMenuPayload.STREAM_CODEC,
+                OpenStorageMenuPayload::handle);
     }
 }
