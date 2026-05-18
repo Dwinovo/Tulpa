@@ -151,11 +151,23 @@ public final class PlayerAnimusData {
 
     /**
      * Mark the persistent state dirty so the world-save loop flushes
-     * to disk. Call after any mutation to {@link #units} fields or
-     * {@link #storage} contents.
+     * to disk AND push a fresh snapshot to the owning client so its
+     * mirror (used by the Storage tab preview and the {@code get_storage}
+     * tool the LLM sees) stays in lockstep.
+     *
+     * <p>Called after any mutation: storage mining-insert, chest-menu
+     * slot drag (via {@link PlayerAnimusStorage#setChanged}), unit name /
+     * model edits.
      */
     public void markDirty() {
-        if (parent != null) parent.setDirty();
+        if (parent == null) return;
+        parent.setDirty();
+        net.minecraft.server.MinecraftServer server = parent.server();
+        if (server == null) return;
+        net.minecraft.server.level.ServerPlayer owner = server.getPlayerList().getPlayer(playerUuid);
+        if (owner != null) {
+            com.dwinovo.animus.network.payload.UnitsSnapshotPayload.sendTo(owner);
+        }
     }
 
     /** Pair of (player_uuid, unit_id) — the canonical address of an Animus slot. */

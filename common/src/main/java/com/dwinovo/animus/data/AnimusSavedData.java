@@ -69,14 +69,28 @@ public final class AnimusSavedData extends SavedData {
 
     private final Map<UUID, PlayerAnimusData> byPlayer = new HashMap<>();
 
+    /**
+     * Server reference latched on the first {@link #get(MinecraftServer)}
+     * call so {@link PlayerAnimusData#markDirty} can look up the owning
+     * player and push a fresh {@link com.dwinovo.animus.network.payload.UnitsSnapshotPayload}.
+     * Without this, chest-menu slot drags would persist to disk but the
+     * client mirror (and therefore the {@code get_storage} tool the LLM
+     * sees) would stay stale until the next mining event.
+     */
+    private MinecraftServer server;
+
     public AnimusSavedData() {}
 
     // ---- public API ----
 
     /** Get-or-load the singleton for this server (overworld data storage). */
     public static AnimusSavedData get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(TYPE);
+        AnimusSavedData data = server.overworld().getDataStorage().computeIfAbsent(TYPE);
+        if (data.server == null) data.server = server;
+        return data;
     }
+
+    public MinecraftServer server() { return server; }
 
     /**
      * Get-or-create a player's data block, wiring {@code this} as its
