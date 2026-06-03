@@ -25,4 +25,9 @@ public final class MoveToTaskRecord extends TaskRecord {
         this.z = z;
         this.speed = speed;
     }
+
+    @Override
+    public String describe() {
+        return TOOL_NAME + " " + (int) x + "," + (int) y + "," + (int) z;
+    }
 }

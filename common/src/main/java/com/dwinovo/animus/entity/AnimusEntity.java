@@ -77,6 +77,18 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
     private static final EntityDataAccessor<String> DATA_MODEL_KEY =
             SynchedEntityData.defineId(AnimusEntity.class, EntityDataSerializers.STRING);
 
+    /**
+     * Human-readable description of what this Animus is doing right now (e.g.
+     * {@code "move_to 12,64,-30"} or {@code "idle"}). Server writes it as tasks
+     * start/stop (see {@link com.dwinovo.animus.task.LlmTaskGoal}); synced to
+     * all tracking clients for the {@code /animus debug} head overlay.
+     */
+    private static final EntityDataAccessor<String> DATA_DEBUG_TASK =
+            SynchedEntityData.defineId(AnimusEntity.class, EntityDataSerializers.STRING);
+
+    /** Default debug-task string: nothing running. */
+    private static final String DEBUG_TASK_IDLE = "idle";
+
     private static final String NBT_KEY_MODEL = "ModelKey";
     private static final String NBT_KEY_INVENTORY = "Inventory";
 
@@ -236,6 +248,7 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(DATA_MODEL_KEY, AnimusAnimated.DEFAULT_MODEL_KEY.toString());
+        builder.define(DATA_DEBUG_TASK, DEBUG_TASK_IDLE);
     }
 
     @Override
@@ -275,6 +288,25 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
             return "busy:" + taskQueue.pendingCount();
         }
         return "none";
+    }
+
+    /**
+     * Set the running-task description shown by the {@code /animus debug}
+     * overlay. Called from {@link com.dwinovo.animus.task.LlmTaskGoal} on the
+     * server tick thread; {@link SynchedEntityData} broadcasts it to clients.
+     * Passing {@code null}/blank resets to {@link #DEBUG_TASK_IDLE}.
+     */
+    public void setDebugTask(String description) {
+        String value = (description == null || description.isBlank())
+                ? DEBUG_TASK_IDLE : description;
+        if (!value.equals(this.entityData.get(DATA_DEBUG_TASK))) {
+            this.entityData.set(DATA_DEBUG_TASK, value);
+        }
+    }
+
+    /** Current running-task description for the debug overlay. Never null. */
+    public String getDebugTask() {
+        return this.entityData.get(DATA_DEBUG_TASK);
     }
 
     // ---- interaction ----

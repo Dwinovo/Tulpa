@@ -85,6 +85,7 @@ public abstract class LlmTaskGoal<T extends TaskRecord> extends Goal {
         }
         currentRecord = recordClass.cast(polled);
         currentRecord.setState(TaskState.RUNNING);
+        entity.setDebugTask(currentRecord.describe());
         onStart(currentRecord);
     }
 
@@ -122,6 +123,7 @@ public abstract class LlmTaskGoal<T extends TaskRecord> extends Goal {
         currentRecord.setResult(result);
         entity.getTaskQueue().complete(currentRecord);
         currentRecord = null;
+        entity.setDebugTask(null);   // back to idle
     }
 
     @Override

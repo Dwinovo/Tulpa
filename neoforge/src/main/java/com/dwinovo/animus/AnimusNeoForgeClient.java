@@ -48,7 +48,8 @@ public class AnimusNeoForgeClient {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("animus")
                 .executes(AnimusNeoForgeClient::cmdSettings)
                 .then(Commands.literal("settings").executes(AnimusNeoForgeClient::cmdSettings))
-                .then(Commands.literal("reset").executes(AnimusNeoForgeClient::cmdReset));
+                .then(Commands.literal("reset").executes(AnimusNeoForgeClient::cmdReset))
+                .then(Commands.literal("debug").executes(AnimusNeoForgeClient::cmdDebug));
         event.getDispatcher().register(root);
     }
 
@@ -61,6 +62,13 @@ public class AnimusNeoForgeClient {
         AgentLoopRegistry.clear();
         ctx.getSource().sendSuccess(() ->
                 Component.literal("[animus] conversations cleared"), false);
+        return 1;
+    }
+
+    private static int cmdDebug(CommandContext<CommandSourceStack> ctx) {
+        boolean on = com.dwinovo.animus.client.debug.AnimusDebugState.toggle();
+        ctx.getSource().sendSuccess(() ->
+                Component.literal("[animus] debug overlay " + (on ? "on" : "off")), false);
         return 1;
     }
 

@@ -111,6 +111,16 @@ public class AnimusFabricClient implements ClientModInitializer {
                         return 1;
                     }));
 
+            // /animus debug  — toggle the head overlay (current task above each pet)
+            root.then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
+                    .literal("debug")
+                    .executes(ctx -> {
+                        boolean on = com.dwinovo.animus.client.debug.AnimusDebugState.toggle();
+                        ctx.getSource().sendFeedback(Component.literal(
+                                "[animus] debug overlay " + (on ? "on" : "off")));
+                        return 1;
+                    }));
+
             dispatcher.register(root);
         });
     }

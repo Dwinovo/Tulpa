@@ -78,6 +78,13 @@ public class AnimusRenderState extends LivingEntityRenderState {
     public float netHeadYaw;
     /** Head pitch (entity X rotation) in degrees, captured at extract time for the same reason. */
     public float headPitch;
+    /**
+     * Current-task text for the {@code /animus debug} head overlay, or
+     * {@code null} when the overlay is off or there's nothing to show. Set at
+     * extract time from {@link com.dwinovo.animus.entity.AnimusEntity#getDebugTask()}
+     * only when {@link com.dwinovo.animus.client.debug.AnimusDebugState} is on.
+     */
+    public net.minecraft.network.chat.Component debugText;
 
     private static final ControllerSnapshot[] EMPTY = new ControllerSnapshot[0];
     private static final boolean[] EMPTY_HIDDEN = new boolean[0];

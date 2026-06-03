@@ -339,6 +339,27 @@ public abstract class AnimusEntityRenderer<T extends Entity> extends EntityRende
             state.maxHealth  = living.getMaxHealth();
         }
 
+        // Debug head overlay: only capture the task text when the toggle is on
+        // and the entity actually exposes a debug task, so the submit path can
+        // stay a cheap null-check in the common (overlay-off) case.
+        state.debugText = null;
+        if (com.dwinovo.animus.client.debug.AnimusDebugState.isEnabled()
+                && entity instanceof com.dwinovo.animus.entity.AnimusEntity animus) {
+            String task = animus.getDebugTask();
+            if (task != null && !task.isBlank()) {
+                state.debugText = net.minecraft.network.chat.Component.literal(task);
+                // Anchor above the head. Animus never shows a vanilla name tag,
+                // so nameTagAttachment is otherwise unset — fill it ourselves
+                // from the NAME_TAG attachment, falling back to the box height.
+                net.minecraft.world.phys.Vec3 anchor = entity.getAttachments().getNullable(
+                        net.minecraft.world.entity.EntityAttachment.NAME_TAG, 0,
+                        entity.getYRot(partialTick));
+                state.nameTagAttachment = anchor != null
+                        ? anchor
+                        : new net.minecraft.world.phys.Vec3(0.0, entity.getBbHeight() + 0.5, 0.0);
+            }
+        }
+
         if (entity instanceof AnimusAnimated animated) {
             state.entityTaskHash = com.dwinovo.animus.anim.molang.MolangQueries.hashString(animated.getCurrentTask());
 
@@ -441,6 +462,14 @@ public abstract class AnimusEntityRenderer<T extends Entity> extends EntityRende
     @Override
     public void submit(AnimusRenderState state, PoseStack poseStack,
                        SubmitNodeCollector collector, CameraRenderState camera) {
+        // Debug head overlay first, while the PoseStack is still at the clean
+        // entity-root frame (before the Bedrock body rotation + pixel scale).
+        // submitNameTag handles billboarding to the camera for us.
+        if (state.debugText != null && state.nameTagAttachment != null) {
+            collector.submitNameTag(poseStack, state.nameTagAttachment, 0, state.debugText,
+                    false, state.lightCoords, state.distanceToCameraSq, camera);
+        }
+
         BakedModel model = ModelLibrary.get(state.modelKey);
         if (model == null) return;
 

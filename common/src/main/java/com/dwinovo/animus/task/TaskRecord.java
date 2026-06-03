@@ -67,4 +67,13 @@ public abstract class TaskRecord {
     /** Called by {@link LlmTaskGoal} as the record transitions through lifecycle. */
     public final void setState(TaskState state) { this.state = state; }
     public final void setResult(TaskResult result) { this.result = result; }
+
+    /**
+     * Short human-readable description for the {@code /animus debug} head
+     * overlay. Defaults to the tool name; subclasses override to append their
+     * salient parameters (e.g. {@code MoveToTaskRecord} adds the target coords).
+     */
+    public String describe() {
+        return toolName;
+    }
 }
