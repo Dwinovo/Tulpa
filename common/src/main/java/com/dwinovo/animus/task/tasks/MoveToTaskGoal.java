@@ -2,6 +2,7 @@ package com.dwinovo.animus.task.tasks;
 
 import com.dwinovo.animus.entity.AnimusEntity;
 import com.dwinovo.animus.pathing.calc.AStar;
+import com.dwinovo.animus.pathing.calc.AStarSearch;
 import com.dwinovo.animus.pathing.calc.NavContext;
 import com.dwinovo.animus.pathing.calc.Path;
 import com.dwinovo.animus.pathing.exec.PathExecutor;
@@ -21,11 +22,18 @@ import java.util.Map;
  * all costed by what it actually carries.
  *
  * <h2>Plan → execute → replan loop</h2>
- * {@link #onStart} computes an A* path and hands it to a {@link PathExecutor}.
- * Each tick the executor advances one movement; when it reports
- * {@code NEEDS_REPLAN} (ran out of scaffolding, world changed, stuck) we run a
- * fresh search from the current position with a fresh inventory snapshot. A
- * replan budget bounds the loop so a genuinely-unreachable goal fails instead
+ * Each task alternates between two per-tick modes:
+ * <ul>
+ *   <li><b>PLANNING</b> — a {@link AStarSearch time-sliced A* search} is
+ *       advanced by a bounded node budget every tick until it produces a path,
+ *       so a far/complex target never stalls the server tick (mineflayer-style
+ *       cooperative slicing, all on the tick thread reading the live world).</li>
+ *   <li><b>EXECUTING</b> — a {@link PathExecutor} advances one movement per
+ *       tick; when it reports {@code NEEDS_REPLAN} (ran out of scaffolding,
+ *       world changed, stuck) or {@code ARRIVED} on a partial path we drop back
+ *       to PLANNING with a fresh inventory snapshot.</li>
+ * </ul>
+ * A replan budget bounds the loop so a genuinely-unreachable goal fails instead
  * of spinning.
  *
  * <h2>Outcomes</h2>
@@ -48,8 +56,18 @@ public final class MoveToTaskGoal extends LlmTaskGoal<MoveToTaskRecord> {
      */
     private static final int MAX_REPLANS = 30;
 
+    /** Node-expansion budget granted to the in-flight search each tick. */
+    private static final int NODES_PER_TICK = AStar.DEFAULT_NODES_PER_TICK;
+
     private final AStar astar = new AStar();
+
+    /** Non-null while PLANNING; the search being stepped toward a path. */
+    private AStarSearch search;
+    /** Inventory snapshot backing {@link #search}; kept for the fail message. */
+    private NavContext planningCtx;
+    /** Non-null while EXECUTING; drives the entity along the computed path. */
     private PathExecutor executor;
+
     private int replans = 0;
     private String lastFailReason = "target unreachable";
 
@@ -63,7 +81,7 @@ public final class MoveToTaskGoal extends LlmTaskGoal<MoveToTaskRecord> {
             r.setState(TaskState.SUCCESS);
             return;
         }
-        if (!plan(r)) {
+        if (!startPlanning(r)) {
             r.setState(TaskState.FAILED);
         }
     }
@@ -74,6 +92,12 @@ public final class MoveToTaskGoal extends LlmTaskGoal<MoveToTaskRecord> {
             r.setState(TaskState.SUCCESS);
             return;
         }
+        // PLANNING: spend this tick's node budget on the in-flight search.
+        if (search != null) {
+            advancePlanning(r);
+            return;
+        }
+        // EXECUTING: advance the path one movement.
         if (executor == null) {
             r.setState(TaskState.FAILED);
             return;
@@ -83,12 +107,12 @@ public final class MoveToTaskGoal extends LlmTaskGoal<MoveToTaskRecord> {
             case ARRIVED -> {
                 if (closeEnough(r)) {
                     r.setState(TaskState.SUCCESS);
-                } else if (!plan(r)) {            // arrived at a waypoint, push on
+                } else if (!startPlanning(r)) {    // arrived at a waypoint, push on
                     r.setState(closeEnough(r) ? TaskState.SUCCESS : TaskState.FAILED);
                 }
             }
             case NEEDS_REPLAN -> {
-                if (!plan(r)) {
+                if (!startPlanning(r)) {
                     r.setState(closeEnough(r) ? TaskState.SUCCESS : TaskState.FAILED);
                 }
             }
@@ -97,29 +121,50 @@ public final class MoveToTaskGoal extends LlmTaskGoal<MoveToTaskRecord> {
     }
 
     /**
-     * Compute a fresh path from the entity's current position to the target
-     * and install a new executor. Returns false when out of replan budget or
-     * the search produced nothing usable.
+     * Enter PLANNING: tear down any executor, snapshot the inventory, and begin
+     * a fresh time-sliced search from the entity's current position. Returns
+     * false (and sets {@link #lastFailReason}) when the replan budget is spent;
+     * the search itself is stepped over subsequent ticks in
+     * {@link #advancePlanning}.
      */
-    private boolean plan(MoveToTaskRecord r) {
-        if (executor != null) executor.stop();
+    private boolean startPlanning(MoveToTaskRecord r) {
+        if (executor != null) {
+            executor.stop();
+            executor = null;
+        }
         if (replans++ >= MAX_REPLANS) {
             lastFailReason = "gave up after " + MAX_REPLANS + " replans";
             return false;
         }
-        NavContext ctx = new NavContext(entity);
+        planningCtx = new NavContext(entity);
         BlockPos start = entity.blockPosition();
         BlockPos goal = BlockPos.containing(r.x, r.y, r.z);
-        Path path = astar.compute(ctx, start, goal);
+        search = astar.newSearch(planningCtx, start, goal);
+        return true;
+    }
 
-        if (path.isEmpty()) {
-            lastFailReason = ctx.hasScaffold
+    /**
+     * Spend one tick's node budget on the in-flight search. While it's still
+     * computing the entity simply waits; once a path is ready we install an
+     * executor (EXECUTING) or fail if the search found nothing usable.
+     */
+    private void advancePlanning(MoveToTaskRecord r) {
+        if (search.step(NODES_PER_TICK) == AStarSearch.State.COMPUTING) {
+            return;  // resume next tick
+        }
+        Path path = search.result();
+        boolean hadScaffold = planningCtx.hasScaffold;
+        search = null;
+        planningCtx = null;
+
+        if (path == null || path.isEmpty()) {
+            lastFailReason = hadScaffold
                     ? "no path to target (obstructed)"
                     : "blocked by a gap and no bridging blocks — give me cobblestone or dirt";
-            return false;
+            r.setState(closeEnough(r) ? TaskState.SUCCESS : TaskState.FAILED);
+            return;
         }
         executor = new PathExecutor(entity, path, r.speed);
-        return true;
     }
 
     private boolean closeEnough(MoveToTaskRecord r) {
