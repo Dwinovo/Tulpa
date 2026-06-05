@@ -2,7 +2,9 @@ package com.dwinovo.animus.pathing.movement;
 
 import net.minecraft.core.BlockPos;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * One edge in the pathfinding graph: a single step from a feet-position to an
@@ -22,6 +24,8 @@ public final class Movement {
     public enum Kind { TRAVERSE, ASCEND, DESCEND, FALL, DIAGONAL, PILLAR, DIG_DOWN }
 
     public final Kind kind;
+    /** Feet position the entity starts this step at. */
+    public final BlockPos src;
     /** Feet position the entity ends this step at. */
     public final BlockPos dest;
     /** Total step cost in ticks. */
@@ -31,13 +35,61 @@ public final class Movement {
     /** Scaffolding block to place (floor under {@link #dest}), or {@code null}. */
     public final BlockPos toPlace;
 
-    public Movement(Kind kind, BlockPos dest, double cost,
+    /** Lazily-built set of feet cells the entity may legitimately occupy mid-move. */
+    private Set<BlockPos> validPositions;
+
+    public Movement(Kind kind, BlockPos src, BlockPos dest, double cost,
                     List<BlockPos> toBreak, BlockPos toPlace) {
         this.kind = kind;
+        this.src = src.immutable();
         this.dest = dest.immutable();
         this.cost = cost;
         this.toBreak = List.copyOf(toBreak);
         this.toPlace = toPlace == null ? null : toPlace.immutable();
+    }
+
+    /**
+     * The feet positions the entity may legitimately stand in <em>during</em>
+     * this movement — the executor's re-localization anchor. If the entity is
+     * pushed/falls/overshoots, the executor matches its real feet against the
+     * valid sets of nearby movements to resync the path index <em>without</em>
+     * throwing the whole path away (Baritone {@code Movement.getValidPositions}).
+     *
+     * <p>Derived purely from {@link #src}/{@link #dest}/{@link #kind}:
+     * <ul>
+     *   <li>most moves — {@code {src, dest}};</li>
+     *   <li>ASCEND — adds {@code src.above()} (the jump-apex feet cell);</li>
+     *   <li>DIAGONAL — adds the two orthogonal corner cells we cut between;</li>
+     *   <li>DESCEND/FALL — adds the horizontal entry cell plus the whole column
+     *       fallen through, since Y diverges legitimately during the drop.</li>
+     * </ul>
+     */
+    public Set<BlockPos> validPositions() {
+        Set<BlockPos> set = validPositions;
+        if (set != null) return set;
+        set = new HashSet<>(6);
+        set.add(src);
+        set.add(dest);
+        switch (kind) {
+            case ASCEND -> set.add(src.above());
+            case DIAGONAL -> {
+                int dx = dest.getX() - src.getX();
+                int dz = dest.getZ() - src.getZ();
+                set.add(src.offset(dx, 0, 0));
+                set.add(src.offset(0, 0, dz));
+            }
+            case DESCEND, FALL -> {
+                // Step horizontally into the column at source height, then fall.
+                BlockPos entry = new BlockPos(dest.getX(), src.getY(), dest.getZ());
+                set.add(entry);
+                for (int y = src.getY() - 1; y > dest.getY(); y--) {
+                    set.add(new BlockPos(dest.getX(), y, dest.getZ()));
+                }
+            }
+            default -> { /* TRAVERSE, PILLAR, DIG_DOWN: just src + dest */ }
+        }
+        validPositions = set;
+        return set;
     }
 
 }

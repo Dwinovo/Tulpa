@@ -104,7 +104,7 @@ public final class Moves {
         }
 
         if (BlockHelper.isHazard(level, dest) || BlockHelper.isHazard(level, head)) return null;
-        return new Movement(Movement.Kind.TRAVERSE, dest, cost, toBreak, toPlace);
+        return new Movement(Movement.Kind.TRAVERSE, from, dest, cost, toBreak, toPlace);
     }
 
     // ---- Ascend: up one block, dig head-room, place step if needed ----
@@ -140,7 +140,7 @@ public final class Moves {
         }
 
         if (BlockHelper.isHazard(level, dest) || BlockHelper.isHazard(level, destHead)) return null;
-        return new Movement(Movement.Kind.ASCEND, dest, cost, toBreak, toPlace);
+        return new Movement(Movement.Kind.ASCEND, from, dest, cost, toBreak, toPlace);
     }
 
     // ---- Descend / Fall: step out and drop to first safe floor ----
@@ -172,7 +172,7 @@ public final class Moves {
                 }
                 double total = cost + ActionCosts.fallCost(drop);
                 Movement.Kind kind = drop == 1 ? Movement.Kind.DESCEND : Movement.Kind.FALL;
-                return new Movement(kind, feet, total, toBreak, null);
+                return new Movement(kind, from, feet, total, toBreak, null);
             }
             // If the cell we'd pass through is itself an obstruction we can't
             // clear, stop scanning this column.
@@ -214,7 +214,7 @@ public final class Moves {
         if (BlockHelper.isHazard(level, dest) || BlockHelper.isHazard(level, dest.above())) return null;
 
         double cost = ActionCosts.WALK_ONE_BLOCK * ActionCosts.SQRT_2;
-        return new Movement(Movement.Kind.DIAGONAL, dest, cost, List.of(), null);
+        return new Movement(Movement.Kind.DIAGONAL, from, dest, cost, List.of(), null);
     }
 
     // ---- Pillar: jump up one, placing a block beneath as we rise ----
@@ -235,7 +235,7 @@ public final class Moves {
         cost += headBreak;
 
         if (BlockHelper.isHazard(level, dest) || BlockHelper.isHazard(level, newHead)) return null;
-        return new Movement(Movement.Kind.PILLAR, dest, cost, toBreak, from);
+        return new Movement(Movement.Kind.PILLAR, from, dest, cost, toBreak, from);
     }
 
     // ---- DigDown: mine the floor underfoot and drop one ----
@@ -254,7 +254,7 @@ public final class Moves {
         List<BlockPos> toBreak = new ArrayList<>(1);
         toBreak.add(below.immutable());
         double cost = breakCost + ActionCosts.fallCost(1);
-        return new Movement(Movement.Kind.DIG_DOWN, below, cost, toBreak, null);
+        return new Movement(Movement.Kind.DIG_DOWN, from, below, cost, toBreak, null);
     }
 
     /**
