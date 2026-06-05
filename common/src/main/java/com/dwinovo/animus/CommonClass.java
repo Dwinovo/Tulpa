@@ -10,6 +10,7 @@ import com.dwinovo.animus.agent.tool.tools.InspectBlockTool;
 import com.dwinovo.animus.agent.tool.tools.LoadSkillTool;
 import com.dwinovo.animus.agent.tool.tools.CraftTool;
 import com.dwinovo.animus.agent.tool.tools.EquipTool;
+import com.dwinovo.animus.agent.tool.tools.HuntTool;
 import com.dwinovo.animus.agent.tool.tools.MineBlockTool;
 import com.dwinovo.animus.agent.tool.tools.LoadFurnaceTool;
 import com.dwinovo.animus.agent.tool.tools.CheckFurnaceTool;
@@ -60,6 +61,7 @@ public class CommonClass {
         // Entity world-action + entity-perspective perception tools.
         ToolRegistry.register(new MoveToTool());
         ToolRegistry.register(new AttackTargetTool());
+        ToolRegistry.register(new HuntTool());
         ToolRegistry.register(new MineBlockTool());
         ToolRegistry.register(new CraftTool());
         ToolRegistry.register(new EquipTool());
