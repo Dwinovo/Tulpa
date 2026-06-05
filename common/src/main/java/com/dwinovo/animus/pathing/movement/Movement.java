@@ -21,7 +21,7 @@ import java.util.Set;
 public final class Movement {
 
     /** Kind tag, used by the executor to pick an animation / phase order. */
-    public enum Kind { TRAVERSE, ASCEND, DESCEND, FALL, DIAGONAL, PILLAR, DIG_DOWN }
+    public enum Kind { TRAVERSE, ASCEND, DESCEND, FALL, DIAGONAL, PILLAR, DIG_DOWN, PARKOUR }
 
     public final Kind kind;
     /** Feet position the entity starts this step at. */
@@ -100,7 +100,7 @@ public final class Movement {
      * fight our explicit jump cycle — so the executor drives them by hand.
      */
     public boolean inputDriven() {
-        return kind == Kind.PILLAR;
+        return kind == Kind.PILLAR || kind == Kind.PARKOUR;
     }
 
 }

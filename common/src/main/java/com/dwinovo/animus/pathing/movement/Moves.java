@@ -51,6 +51,9 @@ public final class Moves {
             {Direction.SOUTH, Direction.WEST},
     };
 
+    /** Maximum parkour gap (blocks) — 4 needs sprint physics, the vanilla cap. */
+    private static final int MAX_PARKOUR = 4;
+
     private Moves() {}
 
     /** All feasible movements out of {@code from}. */
@@ -63,6 +66,8 @@ public final class Moves {
             if (a != null) out.add(a);
             Movement d = descend(ctx, from, dir);
             if (d != null) out.add(d);
+            Movement p = parkour(ctx, from, dir);
+            if (p != null) out.add(p);
         }
         for (Direction[] pair : DIAGONALS) {
             Movement g = diagonal(ctx, from, pair[0], pair[1]);
@@ -255,6 +260,49 @@ public final class Moves {
         toBreak.add(below.immutable());
         double cost = breakCost + ActionCosts.fallCost(1);
         return new Movement(Movement.Kind.DIG_DOWN, from, below, cost, toBreak, null);
+    }
+
+    // ---- Parkour: a running jump across a 2-4 block gap at the same level ----
+
+    /**
+     * A single atomic edge that clears a gap by jumping, rather than bridging it
+     * with scaffolding (Baritone {@code MovementParkour}). Emitted only when
+     * there's a genuine gap straight ahead (no floor immediately in front) and a
+     * clear air corridor at body height across to the nearest landing within
+     * {@link #MAX_PARKOUR}. The momentum + jump timing are supplied by the
+     * executor at runtime; the planner only asserts the gap is jumpable.
+     *
+     * <p>Conservative scope: flat (same-Y) landings only — ascend/drop parkour
+     * and parkour-place are deferred. Neither breaks nor places anything.
+     */
+    private static Movement parkour(NavContext ctx, BlockPos from, Direction dir) {
+        Level level = ctx.level;
+        // Only a real gap warrants a jump: a floor immediately ahead means a
+        // plain traverse/descend already covers it.
+        if (BlockHelper.canWalkOn(level, from.relative(dir).below())) return null;
+        // Head-room to jump from the takeoff.
+        if (!BlockHelper.canWalkThrough(level, from.above(2))) return null;
+
+        for (int d = 2; d <= MAX_PARKOUR; d++) {
+            // Every cell from 1..d must be clear air at feet & head (no clipping).
+            boolean clear = true;
+            for (int i = 1; i <= d; i++) {
+                BlockPos g = from.relative(dir, i);
+                if (!BlockHelper.canWalkThrough(level, g)
+                        || !BlockHelper.canWalkThrough(level, g.above())) {
+                    clear = false;
+                    break;
+                }
+            }
+            if (!clear) break;   // blocked within the gap → no longer jump is possible
+
+            BlockPos land = from.relative(dir, d);
+            if (!BlockHelper.canWalkOn(level, land.below())) continue;   // no floor here, try farther
+            if (BlockHelper.isHazard(level, land) || BlockHelper.isHazard(level, land.above())) break;
+            double cost = ActionCosts.costFromJumpDistance(d);
+            return new Movement(Movement.Kind.PARKOUR, from, land, cost, List.of(), null);
+        }
+        return null;
     }
 
     /**

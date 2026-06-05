@@ -46,7 +46,7 @@ public final class PathExecutor {
 
     public enum Status { RUNNING, ARRIVED, NEEDS_REPLAN, FAILED }
 
-    private enum Phase { PREPARE_BREAK, PREPARE_PLACE, MOVE, PILLAR_UP }
+    private enum Phase { PREPARE_BREAK, PREPARE_PLACE, MOVE, PILLAR_UP, PARKOUR }
 
     /** Movements scanned each side of the current index when resyncing the feet. */
     private static final int RESYNC_SCAN = 8;
@@ -78,6 +78,9 @@ public final class PathExecutor {
     // robust to having landed a block off from the plan.
     private int pillarBaseY;
     private boolean pillarPlacedThisCycle = false;
+
+    // Parkour sub-state: true once we've committed the jump (ballistic, no resync).
+    private boolean parkourLaunched = false;
 
     public PathExecutor(AnimusEntity entity, Path path, double speed) {
         this.entity = entity;
@@ -136,6 +139,7 @@ public final class PathExecutor {
             case PREPARE_PLACE -> tickPlace(mv);
             case MOVE -> tickMove(mv);
             case PILLAR_UP -> tickPillar(mv);
+            case PARKOUR -> tickParkour(mv);
         };
     }
 
@@ -150,6 +154,11 @@ public final class PathExecutor {
     private Status relocalize() {
         BlockPos feet = entity.blockPosition();
         Movement cur = path.movements.get(index);
+        // A committed parkour jump is ballistic — mid-flight the feet are over the
+        // gap (in neither src nor dest); don't resync or replan until it lands.
+        if (cur.kind == Movement.Kind.PARKOUR && parkourLaunched && !entity.onGround()) {
+            return null;
+        }
         if (cur.validPositions().contains(feet)) {
             ticksAway = 0;
             return null;
@@ -210,9 +219,13 @@ public final class PathExecutor {
 
     private Status tickBreak(Movement mv) {
         if (breakIndex >= mv.toBreak.size()) {
-            // Pillar places mid-jump (own phase); everything else places its
-            // floor block first, then walks.
-            phase = (mv.kind == Movement.Kind.PILLAR) ? Phase.PILLAR_UP : Phase.PREPARE_PLACE;
+            // Pillar places mid-jump and parkour is a clear-air jump (each its own
+            // phase); everything else places its floor block first, then walks.
+            phase = switch (mv.kind) {
+                case PILLAR -> Phase.PILLAR_UP;
+                case PARKOUR -> Phase.PARKOUR;
+                default -> Phase.PREPARE_PLACE;
+            };
             return Status.RUNNING;
         }
         BlockPos target = mv.toBreak.get(breakIndex);
@@ -398,6 +411,58 @@ public final class PathExecutor {
         return Status.RUNNING;
     }
 
+    // ---- PARKOUR: a committed running jump across a gap ----
+
+    private Status tickParkour(Movement mv) {
+        double cx = mv.dest.getX() + 0.5;
+        double cz = mv.dest.getZ() + 0.5;
+        entity.getLookControl().setLookAt(cx, mv.dest.getY() + entity.getEyeHeight(), cz);
+
+        // Landed cleanly on the target.
+        if (entity.blockPosition().equals(mv.dest) && entity.onGround()) {
+            advance();
+            return Status.RUNNING;
+        }
+
+        double dx = cx - entity.getX();
+        double dz = cz - entity.getZ();
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        double speedH = parkourSpeed(mv);
+
+        if (!parkourLaunched) {
+            // Hold at the takeoff until grounded, THEN launch — never let
+            // MoveControl walk us off the edge into the gap before we jump.
+            entity.getMoveControl().setWantedPosition(entity.getX(), entity.getY(), entity.getZ(), 0.0);
+            if (entity.onGround() && dist > 1.0e-3) {
+                entity.setDeltaMovement(dx / dist * speedH, 0.42, dz / dist * speedH);
+                parkourLaunched = true;
+                plog(String.format("parkour launch -> %s v=%.2f", mv.dest, speedH));
+            }
+            return Status.RUNNING;
+        }
+
+        // Airborne & committed: re-assert horizontal momentum toward the landing
+        // (counter drag) while vanilla gravity owns Y.
+        if (!entity.onGround() && dist > 1.0e-3) {
+            entity.setDeltaMovement(dx / dist * speedH, entity.getDeltaMovement().y, dz / dist * speedH);
+            return Status.RUNNING;
+        }
+
+        // Touched down (possibly short/off): drop the commit so re-localization or
+        // the arrival check next tick recovers from wherever we actually landed.
+        parkourLaunched = false;
+        return Status.RUNNING;
+    }
+
+    /** Horizontal launch speed (blocks/tick) for a parkour jump of this span. Tunable. */
+    private double parkourSpeed(Movement mv) {
+        int span = Math.max(2, Math.abs(mv.dest.getX() - mv.src.getX())
+                + Math.abs(mv.dest.getZ() - mv.src.getZ()));
+        // A 0.42 jump is airborne ~10-11 ticks; cross `span` blocks in that
+        // window with margin to beat drag.
+        return 0.18 + 0.10 * span;
+    }
+
     private void advance() {
         index++;
         resetMoveState();
@@ -418,6 +483,7 @@ public final class PathExecutor {
         miningStarted = false;
         ticksOnCurrent = 0;
         pillarPlacedThisCycle = false;
+        parkourLaunched = false;
     }
 
     /** Find and return a scaffolding stack from inventory (not yet shrunk), or null. */

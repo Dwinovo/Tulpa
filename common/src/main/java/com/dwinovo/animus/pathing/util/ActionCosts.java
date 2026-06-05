@@ -59,6 +59,22 @@ public final class ActionCosts {
     /** Upward jump (one block) cost, approximated from fall-time symmetry. */
     public static final double JUMP_ONE_BLOCK = 5.0;
 
+    /**
+     * Cost of a parkour jump across {@code blocks} of gap (2..4), in ticks. A
+     * 2–3 block gap is a walk-jump; a 4 block gap needs sprint physics, so it's
+     * costed against the (faster, thus cheaper-per-block) sprint speed. The flat
+     * {@link #JUMP_ONE_BLOCK} is added on top so the planner mildly prefers a
+     * solid bridge/step when one is equally short.
+     */
+    public static double costFromJumpDistance(int blocks) {
+        double base = switch (blocks) {
+            case 2 -> WALK_ONE_BLOCK * 2;
+            case 3 -> WALK_ONE_BLOCK * 3;
+            default -> SPRINT_ONE_BLOCK * blocks;   // 4+ requires sprint
+        };
+        return base + JUMP_ONE_BLOCK;
+    }
+
     /** Center-to-center distance multiplier for a diagonal step. */
     public static final double SQRT_2 = 1.41421356;
 
