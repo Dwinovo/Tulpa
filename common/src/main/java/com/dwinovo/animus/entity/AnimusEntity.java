@@ -16,6 +16,7 @@ import com.dwinovo.animus.task.tasks.CollectFurnaceTaskGoal;
 import com.dwinovo.animus.task.tasks.CraftTaskGoal;
 import com.dwinovo.animus.task.tasks.EquipTaskGoal;
 import com.dwinovo.animus.task.tasks.HuntTaskGoal;
+import com.dwinovo.animus.task.tasks.LocateStrongholdTaskGoal;
 import com.dwinovo.animus.task.tasks.ShootTaskGoal;
 import com.dwinovo.animus.task.tasks.CollectItemsTaskGoal;
 import com.dwinovo.animus.task.tasks.LoadFurnaceTaskGoal;
@@ -183,6 +184,7 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
         this.goalSelector.addGoal(0, new MoveToTaskGoal(this));
         this.goalSelector.addGoal(0, new HuntTaskGoal(this));
         this.goalSelector.addGoal(0, new ShootTaskGoal(this));
+        this.goalSelector.addGoal(0, new LocateStrongholdTaskGoal(this));
         this.goalSelector.addGoal(0, new CollectItemsTaskGoal(this));
         this.goalSelector.addGoal(0, new MineBlockTaskGoal(this));
         this.goalSelector.addGoal(0, new CraftTaskGoal(this));

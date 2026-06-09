@@ -11,6 +11,7 @@ import com.dwinovo.animus.agent.tool.tools.CraftTool;
 import com.dwinovo.animus.agent.tool.tools.EquipTool;
 import com.dwinovo.animus.agent.tool.tools.HuntTool;
 import com.dwinovo.animus.agent.tool.tools.ShootTool;
+import com.dwinovo.animus.agent.tool.tools.LocateStrongholdTool;
 import com.dwinovo.animus.agent.tool.tools.CollectItemsTool;
 import com.dwinovo.animus.agent.tool.tools.MineBlockTool;
 import com.dwinovo.animus.agent.tool.tools.LoadFurnaceTool;
@@ -63,6 +64,7 @@ public class CommonClass {
         ToolRegistry.register(new MoveToTool());
         ToolRegistry.register(new HuntTool());
         ToolRegistry.register(new ShootTool());
+        ToolRegistry.register(new LocateStrongholdTool());
         ToolRegistry.register(new CollectItemsTool());
         ToolRegistry.register(new MineBlockTool());
         ToolRegistry.register(new CraftTool());
