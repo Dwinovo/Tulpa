@@ -1,5 +1,6 @@
 package com.dwinovo.animus;
 
+import com.dwinovo.animus.entity.AnimusDimensionFollow;
 import com.dwinovo.animus.entity.AnimusEntity;
 import com.dwinovo.animus.entity.InitEntity;
 import com.dwinovo.animus.init.InitItem;
@@ -8,6 +9,9 @@ import com.dwinovo.animus.platform.NeoForgeAnimusConfig;
 import com.dwinovo.animus.platform.NeoForgeNetworkChannel;
 import com.dwinovo.animus.platform.Services;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.CreativeModeTabs;
@@ -17,8 +21,10 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -65,6 +71,10 @@ public class AnimusMod {
         // flushes when RegisterPayloadHandlersEvent fires (see below).
         AnimusNetwork.register();
 
+        // Game-bus (not mod-bus) listener: bring owned companions along when the
+        // owner crosses a dimension.
+        NeoForge.EVENT_BUS.addListener(AnimusMod::onPlayerChangedDimension);
+
         CommonClass.init();
         Constants.LOG.info("Animus mod initialised on NeoForge.");
     }
@@ -82,6 +92,17 @@ public class AnimusMod {
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
         if (Services.NETWORK instanceof NeoForgeNetworkChannel ch) {
             ch.flushPending(event);
+        }
+    }
+
+    private static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        MinecraftServer server = player.level().getServer();
+        if (server == null) return;
+        ServerLevel from = server.getLevel(event.getFrom());
+        ServerLevel to = server.getLevel(event.getTo());
+        if (from != null && to != null) {
+            AnimusDimensionFollow.onOwnerChangedDimension(player, from, to);
         }
     }
 }
