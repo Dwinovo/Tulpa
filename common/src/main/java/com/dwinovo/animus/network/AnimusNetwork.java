@@ -1,5 +1,6 @@
 package com.dwinovo.animus.network;
 
+import com.dwinovo.animus.network.payload.AnimusDeathPayload;
 import com.dwinovo.animus.network.payload.AnimusInventoryPayload;
 import com.dwinovo.animus.network.payload.ExecuteToolPayload;
 import com.dwinovo.animus.network.payload.OpenAnimusInventoryPayload;
@@ -44,6 +45,11 @@ public final class AnimusNetwork {
         Services.NETWORK.registerServerToClient(
                 AnimusInventoryPayload.TYPE, AnimusInventoryPayload.STREAM_CODEC,
                 AnimusInventoryPayload::handle);
+
+        // S→C: an Animus body died for good; hard-stop the owner's agent loop.
+        Services.NETWORK.registerServerToClient(
+                AnimusDeathPayload.TYPE, AnimusDeathPayload.STREAM_CODEC,
+                AnimusDeathPayload::handle);
 
         // C→S: open one Animus's inventory as a vanilla chest menu.
         Services.NETWORK.registerClientToServer(

@@ -351,6 +351,16 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
             drainTaskResultsToOwner();
         }
         if (reason.shouldDestroy() && this.level() instanceof ServerLevel sl) {
+            // Real death (KILLED/DISCARDED) — NOT a dimension change
+            // (CHANGED_DIMENSION.shouldDestroy() is false). Tell the owner's
+            // client so its agent loop hard-stops: a dead body can't act, so it
+            // must never call the LLM again. Without this the loop keeps
+            // dispatching tools into the void and the LLM flails on the
+            // resulting "entity not found" errors.
+            if (this.getOwner() instanceof ServerPlayer owner) {
+                Services.NETWORK.sendToPlayer(owner,
+                        new com.dwinovo.animus.network.payload.AnimusDeathPayload(this.getUUID()));
+            }
             for (int i = 0; i < inventory.getContainerSize(); i++) {
                 ItemStack s = inventory.getItem(i);
                 if (!s.isEmpty()) this.spawnAtLocation(sl, s);

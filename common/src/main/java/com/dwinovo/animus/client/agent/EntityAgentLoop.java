@@ -118,6 +118,13 @@ public final class EntityAgentLoop {
     private boolean aborted = false;
 
     /**
+     * Set once the body dies for good (see {@link #onEntityDied}). Terminal: a
+     * dead Animus has no body to act through, so the loop must never call the
+     * LLM again. Guards every turn-start path.
+     */
+    private boolean dead = false;
+
+    /**
      * Bumped every time the owner interrupts a turn ({@link #abort}). Each LLM
      * dispatch captures the value at send time; when the streamed response
      * lands {@link #handleResponse} discards it if the generation no longer
@@ -137,6 +144,10 @@ public final class EntityAgentLoop {
 
     /** Owner typed a prompt in the chat GUI. */
     public void submitPrompt(String text) {
+        if (dead) {
+            Constants.LOG.info("[animus-entity#{}] prompt ignored — body is dead", entityUuid);
+            return;
+        }
         boolean wasAborted = aborted;
         aborted = false;
         // Always buffer first; tryStartTurn() splices buffered prompts into the
@@ -245,6 +256,23 @@ public final class EntityAgentLoop {
         }
     }
 
+    /**
+     * The body died for good — the server told us via {@code AnimusDeathPayload}
+     * (fired only on a destroying removal, never on dimension travel). Hard-stop:
+     * discard any in-flight LLM turn (bumping {@link #turnGeneration} makes
+     * {@link #handleResponse} drop it, so it can't dispatch tools from a corpse),
+     * drop all pending/buffered state, and latch {@link #dead} so no future turn
+     * can ever start. The loop is disposed right after by the payload handler.
+     */
+    public void onEntityDied() {
+        dead = true;
+        turnGeneration++;
+        awaitingLlmResponse = false;
+        pendingToolCallIds.clear();
+        bufferedPrompts.clear();
+        Constants.LOG.info("[animus-entity#{}] body died — loop hard-stopped", entityUuid);
+    }
+
     // ---- internals ----
 
     /**
@@ -268,6 +296,10 @@ public final class EntityAgentLoop {
     }
 
     private void tryStartTurn() {
+        if (dead) {
+            Constants.LOG.debug("[animus-entity#{}] tryStartTurn skipped: body dead", entityUuid);
+            return;
+        }
         if (aborted) {
             Constants.LOG.debug("[animus-entity#{}] tryStartTurn skipped: aborted", entityUuid);
             return;
