@@ -38,13 +38,19 @@ public final class PlaceBlockTool implements AnimusTool {
     @Override
     public String description() {
         return "Place a block from your inventory at an absolute coordinate. The "
-                + "entity walks to a reachable spot next to the target and places it. "
-                + "The block must attach to an existing solid neighbour — you can't "
-                + "place a floating block in mid-air — and the target cell must be "
-                + "empty. Fails with guidance if you don't carry the block, it isn't "
-                + "a placeable block, the target is occupied, there's no support, or "
-                + "no reachable spot to place from. Use it for torches (light), "
-                + "walls/shelter, sealing caves, or positioning a crafting "
+                + "entity travels to a reachable spot next to the target on its own "
+                + "— digging through obstacles, bridging gaps, and pillaring up "
+                + "automatically, like move_to — then places the block. "
+                + "The coordinate is the cell the block will OCCUPY, not the block it "
+                + "sits on — to put a torch on top of a block at (x,y,z), target "
+                + "(x,y+1,z). The block must attach to an existing solid neighbour — "
+                + "you can't place a floating block in mid-air — and the target cell "
+                + "must be empty. Fails with guidance if you don't carry the block, it "
+                + "isn't a placeable block, the target is occupied, there's no "
+                + "support, or no reachable spot to place from; failure messages "
+                + "include nearby coordinates where placement WOULD work — retry with "
+                + "one of those instead of probing blindly. Use it for torches "
+                + "(light), walls/shelter, sealing caves, or positioning a crafting "
                 + "table/furnace/chest.";
     }
 

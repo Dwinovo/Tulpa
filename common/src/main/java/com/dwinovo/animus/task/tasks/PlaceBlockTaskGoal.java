@@ -16,7 +16,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -79,18 +82,20 @@ public final class PlaceBlockTaskGoal extends LlmTaskGoal<PlaceBlockTaskRecord> 
             return;
         }
         if (!BlockHelper.isReplaceableForPlacement(level, r.pos)) {
-            fail("target " + coords(r.pos) + " is occupied by "
+            failSuggesting(level, r.pos, "target " + coords(r.pos) + " is occupied by "
                     + net.minecraft.core.registries.BuiltInRegistries.BLOCK
-                            .getKey(level.getBlockState(r.pos).getBlock()).getPath());
+                            .getKey(level.getBlockState(r.pos).getBlock()).getPath()
+                    + " — mine it first, or place at a free cell");
             return;
         }
         if (solidNeighbour(level, r.pos) == null) {
-            fail("can't place a floating " + r.label + " at " + coords(r.pos)
+            failSuggesting(level, r.pos, "can't place a floating " + r.label + " at " + coords(r.pos)
                     + " — it needs a solid block next to it to attach to");
             return;
         }
         if (occupiesSelf(r.pos)) {
-            fail("can't place a block on myself — that cell is where I'm standing");
+            failSuggesting(level, r.pos, "can't place a block on myself — "
+                    + coords(r.pos) + " is where I'm standing");
             return;
         }
         if (withinReach(r.pos)) {
@@ -99,7 +104,7 @@ public final class PlaceBlockTaskGoal extends LlmTaskGoal<PlaceBlockTaskRecord> 
         }
         standSpot = findStandSpot(level, r.pos);
         if (standSpot == null) {
-            fail("no reachable spot to stand and place at " + coords(r.pos));
+            failSuggesting(level, r.pos, "no reachable spot to stand and place at " + coords(r.pos));
             return;
         }
         // Walk to the stand spot, but arrival = within reach of the TARGET cell
@@ -117,7 +122,12 @@ public final class PlaceBlockTaskGoal extends LlmTaskGoal<PlaceBlockTaskRecord> 
                     nav.stop();
                     phase = Phase.PLACE;
                 } else {
-                    fail("can't reach a spot to stand and place at " + coords(r.pos));
+                    // The navigator's reason carries the teachable part
+                    // ("blocked by a gap and no bridging blocks — give me
+                    // cobblestone or dirt") — never drop it.
+                    failSuggesting(entity.level(), r.pos,
+                            "can't reach a spot to stand and place at " + coords(r.pos)
+                                    + " (" + nav.failReason() + ")");
                 }
             }
         }
@@ -127,16 +137,18 @@ public final class PlaceBlockTaskGoal extends LlmTaskGoal<PlaceBlockTaskRecord> 
         Level level = entity.level();
         // Re-validate — the world or our footing may have shifted while walking.
         if (!BlockHelper.isReplaceableForPlacement(level, r.pos)) {
-            fail("target " + coords(r.pos) + " got occupied before I could place");
+            failSuggesting(level, r.pos,
+                    "target " + coords(r.pos) + " got occupied before I could place");
             return;
         }
         if (occupiesSelf(r.pos)) {
-            fail("can't place at " + coords(r.pos) + " — I'm standing there");
+            failSuggesting(level, r.pos, "can't place at " + coords(r.pos) + " — I'm standing there");
             return;
         }
         BlockPos ref = solidNeighbour(level, r.pos);
         if (ref == null) {
-            fail("can't place a floating " + r.label + " at " + coords(r.pos) + " — no solid block to attach to");
+            failSuggesting(level, r.pos, "can't place a floating " + r.label + " at "
+                    + coords(r.pos) + " — no solid block to attach to");
             return;
         }
         int slot = firstSlotOf(r.item);
@@ -154,8 +166,13 @@ public final class PlaceBlockTaskGoal extends LlmTaskGoal<PlaceBlockTaskRecord> 
         FakePlayerUse.useOnBlock(entity, slot, new BlockHitResult(hitVec, face, ref, false));
 
         if (!level.getBlockState(r.pos).is(r.block)) {
-            fail("placement of " + r.label + " didn't land at " + coords(r.pos)
-                    + " (blocked or invalid spot — try another position)");
+            // Vanilla refused the right-click: a block-specific rule we don't
+            // model (torch needs a full face, door needs the cell above, crop
+            // needs farmland, …). The suggestions are generic cells; the model
+            // pairs them with the block's own rules.
+            failSuggesting(level, r.pos, "placement of " + r.label + " didn't land at "
+                    + coords(r.pos) + " — this block type refused that spot (some blocks "
+                    + "need a full solid face, specific ground, or two free cells)");
             return;
         }
 
@@ -232,6 +249,64 @@ public final class PlaceBlockTaskGoal extends LlmTaskGoal<PlaceBlockTaskRecord> 
     private void fail(String reason) {
         doneReason = reason;
         currentRecord.setState(TaskState.FAILED);
+    }
+
+    /** Radius scanned around a failed target for placeable alternatives. */
+    private static final int SUGGEST_RANGE_H = 3;
+    private static final int SUGGEST_RANGE_V = 2;
+    private static final int MAX_SUGGESTIONS = 5;
+
+    /**
+     * Fail with placement guidance: append up to {@link #MAX_SUGGESTIONS} nearby
+     * cells where a block COULD be placed right now, nearest-to-target first.
+     * The model burns a lot of turns probing coordinates blindly after a failed
+     * placement — handing it working alternatives turns that into one retry.
+     */
+    private void failSuggesting(Level level, BlockPos target, String reason) {
+        List<BlockPos> spots = suggestSpots(level, target);
+        if (spots.isEmpty()) {
+            fail(reason + ". No placeable cell within " + SUGGEST_RANGE_H
+                    + " blocks of it either — pick a spot adjacent to existing solid blocks.");
+            return;
+        }
+        StringBuilder sb = new StringBuilder(reason)
+                .append(". Nearby cells where placement WOULD work right now (nearest first): ");
+        for (int i = 0; i < spots.size(); i++) {
+            if (i > 0) sb.append("; ");
+            sb.append('(').append(coords(spots.get(i))).append(')');
+        }
+        fail(sb.toString());
+    }
+
+    /**
+     * Cells near {@code target} that pass the same checks a placement there
+     * would: empty/replaceable, attached to something solid, not inside the
+     * entity, and not a sealed pocket (at least one open side, so it is
+     * visible/reachable rather than buried in terrain).
+     */
+    private List<BlockPos> suggestSpots(Level level, BlockPos target) {
+        List<BlockPos> out = new ArrayList<>();
+        for (BlockPos c : BlockPos.betweenClosed(
+                target.offset(-SUGGEST_RANGE_H, -SUGGEST_RANGE_V, -SUGGEST_RANGE_H),
+                target.offset(SUGGEST_RANGE_H, SUGGEST_RANGE_V, SUGGEST_RANGE_H))) {
+            if (c.equals(target)) continue;
+            if (!BlockHelper.isReplaceableForPlacement(level, c)) continue;
+            if (solidNeighbour(level, c) == null) continue;
+            if (occupiesSelf(c)) continue;
+            if (!hasOpenSide(level, c)) continue;
+            out.add(c.immutable());
+        }
+        out.sort(Comparator.comparingDouble(p -> p.distSqr(target)));
+        return out.size() > MAX_SUGGESTIONS ? out.subList(0, MAX_SUGGESTIONS) : out;
+    }
+
+    /** At least one neighbour the entity's body could occupy — filters out
+     *  air pockets fully enclosed in terrain, which would suggest unreachable spots. */
+    private static boolean hasOpenSide(Level level, BlockPos pos) {
+        for (Direction dir : Direction.values()) {
+            if (BlockHelper.canWalkThrough(level, pos.relative(dir))) return true;
+        }
+        return false;
     }
 
     @Override
