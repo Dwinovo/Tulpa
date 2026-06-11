@@ -96,26 +96,7 @@ public class AnimusEntity extends PathfinderMob implements OwnableEntity, Animus
 
     public static final int INVENTORY_SIZE = 27;
 
-    /**
-     * Chunk ticket that keeps an ENGAGED Animus loaded and ticking when it
-     * wanders beyond its owner's view distance (mirrors vanilla's ENDER_PEARL
-     * ticket: short timeout, refreshed while alive, self-expires on silence).
-     * Three flags, all load-bearing: LOADING alone produces border chunks
-     * that don't tick entities (hence SIMULATION), and a playerless dimension
-     * stops ticking entities entirely after 300 empty ticks unless a ticket
-     * carries KEEP_DIMENSION_ACTIVE — exactly the "owner went to the Nether,
-     * overworld pet froze" case. Refreshed every
-     * {@link #CHUNK_TICKET_REFRESH_TICKS} while engaged (task running/queued,
-     * or any owner-driven tool call within {@link #CHUNK_TICKET_LINGER_TICKS});
-     * a truly idle companion unloads like any pet, and death/cancel/crash
-     * just stop the refresh — no cleanup path to forget.
-     */
-    public static final net.minecraft.server.level.TicketType TASK_CHUNK_TICKET =
-            new net.minecraft.server.level.TicketType(200L,
-                    net.minecraft.server.level.TicketType.FLAG_LOADING
-                            | net.minecraft.server.level.TicketType.FLAG_SIMULATION
-                            | net.minecraft.server.level.TicketType.FLAG_KEEP_DIMENSION_ACTIVE);
-    /** Refresh cadence (must stay well under the ticket's 200-tick timeout). */
+    /** Refresh cadence (must stay well under the task ticket's 200-tick timeout). */
     private static final int CHUNK_TICKET_REFRESH_TICKS = 60;
     /**
      * How long after the last sign of engagement the ticket keeps refreshing.
@@ -447,7 +428,7 @@ public class AnimusEntity extends PathfinderMob implements OwnableEntity, Animus
         if (!isEngaged()) return;
         if (now % CHUNK_TICKET_REFRESH_TICKS != 0) return;
         level.getChunkSource().addTicketWithRadius(
-                TASK_CHUNK_TICKET, this.chunkPosition(), CHUNK_TICKET_RADIUS);
+                com.dwinovo.animus.init.InitTicketType.TASK, this.chunkPosition(), CHUNK_TICKET_RADIUS);
     }
 
     private void drainTaskResultsToOwner() {
@@ -575,7 +556,7 @@ public class AnimusEntity extends PathfinderMob implements OwnableEntity, Animus
                 && fresh.level() instanceof ServerLevel sl) {
             fresh.markEngagement();
             sl.getChunkSource().addTicketWithRadius(
-                    TASK_CHUNK_TICKET, fresh.chunkPosition(), CHUNK_TICKET_RADIUS);
+                    com.dwinovo.animus.init.InitTicketType.TASK, fresh.chunkPosition(), CHUNK_TICKET_RADIUS);
         }
         return result;
     }

@@ -44,6 +44,16 @@ public class AnimusMod {
     private static final DeferredRegister<Item> ITEMS =
             DeferredRegister.create(BuiltInRegistries.ITEM, Constants.MOD_ID);
 
+    // Registered ticket types are visible to debug tooling and the ticket
+    // storage; vanilla registers all of its own the same way.
+    private static final DeferredRegister<net.minecraft.server.level.TicketType> TICKET_TYPES =
+            DeferredRegister.create(BuiltInRegistries.TICKET_TYPE, Constants.MOD_ID);
+
+    static {
+        TICKET_TYPES.register(com.dwinovo.animus.init.InitTicketType.TASK_ID,
+                () -> com.dwinovo.animus.init.InitTicketType.TASK);
+    }
+
     private static final DeferredHolder<Item, Item> ANIMUS_SPAWN_EGG_HOLDER =
             ITEMS.register("animus_spawn_egg", () ->
                     new SpawnEggItem(new Item.Properties()
@@ -56,6 +66,8 @@ public class AnimusMod {
 
         ITEMS.register(eventBus);
         InitItem.ANIMUS_SPAWN_EGG = ANIMUS_SPAWN_EGG_HOLDER::get;
+
+        TICKET_TYPES.register(eventBus);
 
         eventBus.addListener(AnimusMod::registerAttributes);
         eventBus.addListener(AnimusMod::registerPayloads);

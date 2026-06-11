@@ -4,6 +4,8 @@ import com.dwinovo.animus.entity.AnimusDimensionFollow;
 import com.dwinovo.animus.entity.AnimusEntity;
 import com.dwinovo.animus.entity.InitEntity;
 import com.dwinovo.animus.init.InitItem;
+import com.dwinovo.animus.init.InitTicketType;
+import net.minecraft.resources.Identifier;
 import com.dwinovo.animus.network.AnimusNetwork;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -57,6 +59,12 @@ public class AnimusMod implements ModInitializer {
                         .spawnEgg(animusType)
                         .setId(InitItem.ANIMUS_SPAWN_EGG_KEY)));
         InitItem.ANIMUS_SPAWN_EGG = () -> spawnEgg;
+
+        // Registered ticket types are visible to debug tooling and the ticket
+        // storage; vanilla registers all of its own the same way.
+        Registry.register(BuiltInRegistries.TICKET_TYPE,
+                Identifier.fromNamespaceAndPath(Constants.MOD_ID, InitTicketType.TASK_ID),
+                InitTicketType.TASK);
 
         AnimusNetwork.register();
 

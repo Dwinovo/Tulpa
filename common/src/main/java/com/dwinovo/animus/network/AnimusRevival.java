@@ -56,7 +56,7 @@ public final class AnimusRevival {
         if (lastSeen == null) return false;
         ServerLevel level = server.getLevel(lastSeen.dimension());
         if (level == null) return false;
-        level.getChunkSource().addTicketWithRadius(AnimusEntity.TASK_CHUNK_TICKET,
+        level.getChunkSource().addTicketWithRadius(com.dwinovo.animus.init.InitTicketType.TASK,
                 ChunkPos.containing(lastSeen.pos()), REVIVAL_TICKET_RADIUS);
         PENDING.add(new Pending(p, player.getUUID(),
                 server.getTickCount() + REVIVAL_TIMEOUT_TICKS, lastSeen));
