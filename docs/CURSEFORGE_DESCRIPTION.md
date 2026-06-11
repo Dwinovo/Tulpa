@@ -4,7 +4,7 @@ Animus adds a tameable companion powered by a real LLM (bring your own API
 key). Talk to it in natural language — any language — and it acts with its
 own body in the world: it mines, crafts, smelts, builds, fights, stores loot,
 and reports back in chat. No scripted behaviors; the model decides, a
-27-tool body executes.
+28-tool body executes.
 
 ## Getting started
 
@@ -27,7 +27,8 @@ and reports back in chat. No scripted behaviors; the model decides, a
   reflexes — it eats when hurt mid-fight and swims to shore instead of
   drowning, no AI round-trip needed.
 - **Finding things**: locate any structure (fortresses, strongholds,
-  villages, ancient cities…) with a server-friendly, lag-free search.
+  villages, ancient cities…) or biome (warped forests, deserts…) with a
+  server-friendly, lag-free search.
 - **The long game**: ships with a complete, player-editable skill library
   for the entire Ender Dragon route — gear up, enter the Nether, farm blaze
   rods, hunt pearls, activate the End portal, fight the dragon.

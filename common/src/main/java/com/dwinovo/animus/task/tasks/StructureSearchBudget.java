@@ -30,6 +30,12 @@ final class StructureSearchBudget {
     /** STRUCTURE_STARTS chunk loads are the expensive fallback — strictly capped. */
     private static final int MAX_CHUNK_LOADS_PER_TICK = 2;
     /**
+     * Biome locator samples (pure climate-noise lookups, no chunk access; one
+     * "sample" = one x/z column across all its Y probes). Cheaper than a
+     * structure check, hence the larger pool — still under the shared 4ms lid.
+     */
+    private static final int MAX_BIOME_SAMPLES_PER_TICK = 256;
+    /**
      * Wall-clock hard stop. The count caps bound the common case; this makes
      * the "never stalls the server" promise unconditional even when every
      * check goes cold to disk. 4ms ≈ 8% of a 50ms tick.
@@ -39,6 +45,7 @@ final class StructureSearchBudget {
     private static int stampTick = Integer.MIN_VALUE;
     private static int checksLeft;
     private static int loadsLeft;
+    private static int biomeSamplesLeft;
     private static long deadlineNanos;
 
     private StructureSearchBudget() {}
@@ -50,8 +57,16 @@ final class StructureSearchBudget {
             stampTick = now;
             checksLeft = MAX_CHECKS_PER_TICK;
             loadsLeft = MAX_CHUNK_LOADS_PER_TICK;
+            biomeSamplesLeft = MAX_BIOME_SAMPLES_PER_TICK;
             deadlineNanos = System.nanoTime() + MAX_NANOS_PER_TICK;
         }
+    }
+
+    /** Take one biome-sample permit; false = pool drained, resume next tick. */
+    static boolean tryBiomeSample() {
+        if (biomeSamplesLeft <= 0 || System.nanoTime() >= deadlineNanos) return false;
+        biomeSamplesLeft--;
+        return true;
     }
 
     /** Take one candidate-check permit; false = pool drained, resume next tick. */

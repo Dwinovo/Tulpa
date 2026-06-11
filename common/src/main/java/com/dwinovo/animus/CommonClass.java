@@ -69,6 +69,7 @@ public class CommonClass {
         ToolRegistry.register(new HuntTool());
         ToolRegistry.register(new ShootTool());
         ToolRegistry.register(new LocateStructureTool());
+        ToolRegistry.register(new com.dwinovo.animus.agent.tool.tools.LocateBiomeTool());
         ToolRegistry.register(new CollectItemsTool());
         ToolRegistry.register(new MineBlockTool());
         ToolRegistry.register(new CraftTool());

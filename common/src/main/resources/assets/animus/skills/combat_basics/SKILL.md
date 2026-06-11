@@ -52,6 +52,7 @@ Both `hunt` and `shoot` run until done, so decide *between* tool calls: after ea
 
 - **HP ≤ 8**: stop fighting. `move_to` a point 20+ blocks away (behind terrain if possible), eat back to full, re-engage.
 - **Weapon about to break / out of arrows**: disengage, restock.
+- **Before any long `move_to`, clear or outrun whatever is attacking you** — `scan_nearby_entities(hostile)` shows pursuers. Travelling with a blaze or skeleton on your tail means eating through your food while it snipes you the whole way.
 - Dying loses everything you carry. Retreating five times is cheaper than dying once.
 
 ## Positioning
