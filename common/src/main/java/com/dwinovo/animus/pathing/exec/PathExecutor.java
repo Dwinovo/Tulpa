@@ -42,8 +42,10 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class PathExecutor {
 
-    /** Verbose pathing diagnostics to the {@code Animus} logger at INFO. */
-    public static boolean VERBOSE = true;
+    /** Verbose pathing diagnostics to the {@code Animus} logger at INFO.
+     *  Off by default — per-tick movement logs drown everything else; flip on
+     *  (or via debugger) when chasing an executor bug. */
+    public static boolean VERBOSE = false;
 
     public enum Status { RUNNING, ARRIVED, NEEDS_REPLAN, FAILED }
 
@@ -97,6 +99,12 @@ public final class PathExecutor {
     }
 
     public Status tick() {
+        if (entity.isDeepInWater()) {
+            // Swimming: ground movement can't progress and the stall/off-path
+            // counters would misfire. Yield to the float/escape reflexes; the
+            // re-localization (or a replan) picks the path back up ashore.
+            return Status.RUNNING;
+        }
         if (path.isEmpty()) {
             // Nothing to walk; the path was already at (or couldn't leave) start.
             return path.partial ? Status.NEEDS_REPLAN : Status.ARRIVED;

@@ -41,7 +41,7 @@ import java.util.function.Supplier;
  * returns {@link Status#ARRIVED} exactly when {@code reached} is true,
  * {@link Status#FAILED} when no usable path exists after the replan budget, else
  * {@link Status#RUNNING}. A convenience constructor takes a fixed {@link BlockPos}
- * for stationary goals (move_to, mine_block) — no follow behaviour.
+ * for stationary goals (move_to, auto_mine) — no follow behaviour.
  */
 public final class Navigator {
 
@@ -80,7 +80,7 @@ public final class Navigator {
     private int replans = 0;
     private String failReason = "target unreachable";
 
-    /** Stationary goal (move_to / mine_block) — a fixed cell, no follow. */
+    /** Stationary goal (move_to / auto_mine) — a fixed cell, no follow. */
     public Navigator(AnimusEntity entity, BlockPos goal, double speed, BooleanSupplier reached) {
         this(entity, () -> goal, speed, reached);
     }
@@ -98,6 +98,12 @@ public final class Navigator {
     public Status tick() {
         if (reached.getAsBoolean()) {
             return Status.ARRIVED;
+        }
+        if (entity.isDeepInWater()) {
+            // Swimming: don't plan (a water start has no edges — the search
+            // would fail the whole task mid-lake) and don't execute. The
+            // WaterEscapeGoal beaches the body; we resume from dry land.
+            return Status.RUNNING;
         }
 
         // PLANNING mode: no path yet, spend this tick's budget on the fresh search.

@@ -3,7 +3,6 @@ package com.dwinovo.animus.entity;
 import com.dwinovo.animus.anim.api.AnimusAnimated;
 import com.dwinovo.animus.anim.runtime.Animator;
 import com.dwinovo.animus.entity.interact.AnimusInteractHandler;
-import com.dwinovo.animus.network.payload.AnimusInventoryPayload;
 import com.dwinovo.animus.network.payload.TaskResultPayload;
 import com.dwinovo.animus.pathing.exec.PathTally;
 import com.dwinovo.animus.platform.Services;
@@ -14,9 +13,13 @@ import com.dwinovo.animus.task.TaskState;
 import com.dwinovo.animus.task.tasks.CheckFurnaceTaskGoal;
 import com.dwinovo.animus.task.tasks.CollectFurnaceTaskGoal;
 import com.dwinovo.animus.task.tasks.CraftTaskGoal;
+import com.dwinovo.animus.task.tasks.DepositItemsTaskGoal;
+import com.dwinovo.animus.task.tasks.DropItemsTaskGoal;
 import com.dwinovo.animus.task.tasks.EquipTaskGoal;
+import com.dwinovo.animus.task.tasks.TakeItemsTaskGoal;
+import com.dwinovo.animus.task.tasks.WaitTaskGoal;
 import com.dwinovo.animus.task.tasks.HuntTaskGoal;
-import com.dwinovo.animus.task.tasks.LocateStrongholdTaskGoal;
+import com.dwinovo.animus.task.tasks.LocateStructureTaskGoal;
 import com.dwinovo.animus.task.tasks.ShootTaskGoal;
 import com.dwinovo.animus.task.tasks.CollectItemsTaskGoal;
 import com.dwinovo.animus.task.tasks.LoadFurnaceTaskGoal;
@@ -74,9 +77,8 @@ import java.util.List;
  * <h2>Inventory</h2>
  * Each Animus owns a {@value #INVENTORY_SIZE}-slot {@link SimpleContainer}.
  * Mined / vacuumed drops land here; the owner moves items in and out via the
- * GUI's chest menu. Persisted in entity NBT. Contents drop on death. A
- * snapshot is pushed to the owner ({@link AnimusInventoryPayload}) whenever
- * it changes so the client-side {@code get_storage} tool stays current.
+ * GUI's chest menu. Persisted in entity NBT. Contents drop on death. The LLM
+ * reads it server-side through the {@code get_self_status} query.
  *
  * <h2>Synced model key</h2>
  * {@link #DATA_MODEL_KEY} holds the render-model {@link Identifier}; changed
@@ -86,6 +88,25 @@ import java.util.List;
 public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
 
     public static final int INVENTORY_SIZE = 27;
+
+    /**
+     * Chunk ticket that keeps a WORKING Animus loaded and ticking when it
+     * wanders beyond its owner's view distance (mirrors vanilla's ENDER_PEARL
+     * ticket: short timeout, refreshed while alive, self-expires on silence).
+     * SIMULATION is the load-bearing flag — LOADING alone produces border
+     * chunks that don't tick entities. Refreshed every
+     * {@link #CHUNK_TICKET_REFRESH_TICKS} only while a task is RUNNING; an
+     * idle companion unloads with its owner like any pet, and death/cancel/
+     * crash just stop the refresh — no cleanup path to forget.
+     */
+    private static final net.minecraft.server.level.TicketType TASK_CHUNK_TICKET =
+            new net.minecraft.server.level.TicketType(200L,
+                    net.minecraft.server.level.TicketType.FLAG_LOADING
+                            | net.minecraft.server.level.TicketType.FLAG_SIMULATION);
+    /** Refresh cadence (must stay well under the ticket's 200-tick timeout). */
+    private static final int CHUNK_TICKET_REFRESH_TICKS = 60;
+    /** Ticket radius in chunks: 5x5 covers pathfinder snapshots and dig radii. */
+    private static final int CHUNK_TICKET_RADIUS = 2;
 
     private static final EntityDataAccessor<String> DATA_MODEL_KEY =
             SynchedEntityData.defineId(AnimusEntity.class, EntityDataSerializers.STRING);
@@ -110,19 +131,9 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
     private Identifier cachedModelKey = AnimusAnimated.DEFAULT_MODEL_KEY;
     private String cachedModelKeyString = AnimusAnimated.DEFAULT_MODEL_KEY.toString();
 
-    /**
-     * This Animus's own inventory. Marks {@link #inventoryDirty} on any
-     * change so {@link #customServerAiStep} can push a fresh snapshot to the
-     * owner exactly once per tick instead of per-slot-mutation.
-     */
-    private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE) {
-        @Override
-        public void setChanged() {
-            super.setChanged();
-            inventoryDirty = true;
-        }
-    };
-    private boolean inventoryDirty = false;
+    /** This Animus's own inventory. Server-authoritative; backs the GUI chest
+     *  menu and the {@code get_self_status} query. */
+    private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
 
     /**
      * Lazy server-side task queue, populated by {@code ExecuteToolPayload}
@@ -142,6 +153,35 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
     public AnimusEntity(EntityType<? extends AnimusEntity> type, Level level) {
         super(type, level);
         this.setCanPickUpLoot(true);
+        // Vanilla navigation may start/route through water (the WaterEscapeGoal
+        // relies on it to swim ashore, exactly like vanilla wolves do).
+        this.getNavigation().setCanFloat(true);
+    }
+
+    /**
+     * Actually swimming — in water deeper than the fluid-jump threshold, feet
+     * off the ground. The water reflexes key off this, and the task executors
+     * yield while it's true (their ground-based movement can't make progress
+     * in open water; the escape reflex gets the body ashore, then they replan).
+     */
+    public boolean isDeepInWater() {
+        return this.isInWater()
+                && this.getFluidHeight(net.minecraft.tags.FluidTags.WATER) > this.getFluidJumpThreshold();
+    }
+
+    /**
+     * Resolve an Animus by UUID across ALL dimensions. A working companion may
+     * be in another dimension or far outside its owner's view, kept ticking by
+     * its own chunk tickets — payload handlers must never assume co-location.
+     */
+    public static AnimusEntity findByUuid(net.minecraft.server.MinecraftServer server,
+                                          java.util.UUID uuid) {
+        for (ServerLevel level : server.getAllLevels()) {
+            if (level.getEntity(uuid) instanceof AnimusEntity animus) {
+                return animus;
+            }
+        }
+        return null;
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -154,11 +194,16 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
     @Override
     protected void registerGoals() {
         super.registerGoals();
+        // Water reflexes first: FloatGoal (vanilla, JUMP-channel only) bobs the
+        // body to the surface so it never drowns; WaterEscapeGoal swims it to
+        // the nearest shore. Land mobs sink like stones without these.
+        this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this));
+        this.goalSelector.addGoal(1, new com.dwinovo.animus.entity.ai.WaterEscapeGoal(this));
         this.goalSelector.addGoal(0, new MeleeAttackGoal(this, 1.2D, true));
         this.goalSelector.addGoal(0, new MoveToTaskGoal(this));
         this.goalSelector.addGoal(0, new HuntTaskGoal(this));
         this.goalSelector.addGoal(0, new ShootTaskGoal(this));
-        this.goalSelector.addGoal(0, new LocateStrongholdTaskGoal(this));
+        this.goalSelector.addGoal(0, new LocateStructureTaskGoal(this));
         this.goalSelector.addGoal(0, new CollectItemsTaskGoal(this));
         this.goalSelector.addGoal(0, new MineBlockTaskGoal(this));
         this.goalSelector.addGoal(0, new CraftTaskGoal(this));
@@ -167,8 +212,13 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
         this.goalSelector.addGoal(0, new CheckFurnaceTaskGoal(this));
         this.goalSelector.addGoal(0, new CollectFurnaceTaskGoal(this));
         this.goalSelector.addGoal(0, new PlaceBlockTaskGoal(this));
+        this.goalSelector.addGoal(0, new com.dwinovo.animus.task.tasks.BreakBlockTaskGoal(this));
         this.goalSelector.addGoal(0, new UseItemTaskGoal(this));
         this.goalSelector.addGoal(0, new EatItemTaskGoal(this));
+        this.goalSelector.addGoal(0, new WaitTaskGoal(this));
+        this.goalSelector.addGoal(0, new DropItemsTaskGoal(this));
+        this.goalSelector.addGoal(0, new DepositItemsTaskGoal(this));
+        this.goalSelector.addGoal(0, new TakeItemsTaskGoal(this));
     }
 
     // ---- inventory ----
@@ -178,14 +228,28 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
         return inventory;
     }
 
-    /** Push the current inventory snapshot to the owning player, if online. */
-    public void syncInventoryToOwner() {
-        if (!(this.getOwner() instanceof ServerPlayer owner)) return;
-        List<ItemStack> list = new ArrayList<>(inventory.getContainerSize());
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            list.add(inventory.getItem(i));
+    /**
+     * Make sure at least one {@code item} sits in the backpack container,
+     * pulling the stack back from a HAND slot when that's where it lives.
+     * Equipping moves items out of the container into equipment slots, which
+     * made them invisible to every "find it in the inventory" code path —
+     * the classic symptom: get_self_status shows a bucket in the main hand
+     * while use_item insists there is "no bucket in inventory".
+     *
+     * @return true if the item is now present in the container
+     */
+    public boolean ensureInInventory(net.minecraft.world.item.Item item) {
+        if (inventory.countItem(item) > 0) return true;
+        for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+            ItemStack held = this.getItemBySlot(slot);
+            if (held.isEmpty() || held.getItem() != item) continue;
+            ItemStack overflow = inventory.addItem(held.copy());
+            if (overflow.getCount() == held.getCount()) return false;   // backpack full
+            this.setItemSlot(slot, overflow);   // whatever didn't fit stays in hand
+            inventory.setChanged();
+            return true;
         }
-        Services.NETWORK.sendToPlayer(owner, new AnimusInventoryPayload(this.getUUID(), list));
+        return false;
     }
 
     // ---- task queue ----
@@ -229,11 +293,21 @@ public class AnimusEntity extends TamableAnimal implements AnimusAnimated {
     @Override
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);
+        refreshChunkTicket(level);
         drainTaskResultsToOwner();
-        if (inventoryDirty) {
-            inventoryDirty = false;
-            syncInventoryToOwner();
-        }
+    }
+
+    /**
+     * While a task is RUNNING, periodically re-issue the self-loading chunk
+     * ticket at the current position. The ticket's own timeout handles every
+     * teardown case (task done, cancelled, death, server crash) by simply
+     * expiring once we stop refreshing.
+     */
+    private void refreshChunkTicket(ServerLevel level) {
+        if (activeTask == null || activeTask.getState() != TaskState.RUNNING) return;
+        if (level.getGameTime() % CHUNK_TICKET_REFRESH_TICKS != 0) return;
+        level.getChunkSource().addTicketWithRadius(
+                TASK_CHUNK_TICKET, this.chunkPosition(), CHUNK_TICKET_RADIUS);
     }
 
     private void drainTaskResultsToOwner() {
