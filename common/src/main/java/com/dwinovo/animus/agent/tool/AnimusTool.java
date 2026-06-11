@@ -11,6 +11,24 @@ import java.util.Map;
  * model, validates JSON args coming back from the API, and translates them
  * into a typed task record that the {@link com.dwinovo.animus.task.LlmTaskGoal goal layer} executes.
  *
+ * <h2>Three tool categories</h2>
+ * <ul>
+ *   <li><b>World-action tools</b> (default) — move_to, auto_mine, …: ship to
+ *       the server as {@code ExecuteToolPayload}, run through the
+ *       {@code TaskQueue}/{@code LlmTaskGoal} machinery (they occupy the body),
+ *       result returns via {@code TaskResultPayload}.</li>
+ *   <li><b>Query tools</b> ({@link #isQuery()}) — the perception family:
+ *       read-only, server-side, executed synchronously by the payload handler
+ *       WITHOUT queueing (they must not block behind a running move_to), reply
+ *       immediately. Server-side because the owner's client stops seeing the
+ *       entity beyond tracking range — a working companion may be thousands of
+ *       blocks away in chunk-ticket-loaded terrain the client never has.</li>
+ *   <li><b>Local tools</b> ({@link #isLocal()}) — todowrite / load_skill: pure
+ *       agent-side bookkeeping with no world contact at all; the conversation
+ *       and the skill registry live with the brain on the client, so these
+ *       never cross the network.</li>
+ * </ul>
+ *
  * <h2>Why separate from Task</h2>
  * Two reasons:
  * <ol>
@@ -100,6 +118,30 @@ public interface AnimusTool {
      */
     default boolean isLocal() {
         return false;
+    }
+
+    /**
+     * Query tools = read-only perception (get_self_status, scan_blocks, …).
+     * They ship over the network like world-action tools, but the server
+     * executes {@link #executeQuery} immediately on the tick thread and
+     * replies — no {@code TaskRecord}, no queue, no body occupancy.
+     */
+    default boolean isQuery() {
+        return false;
+    }
+
+    /**
+     * Execute a read-only query against the live server-side entity/world.
+     * Only called when {@link #isQuery()} is true, on the server tick thread,
+     * with a resolved non-null entity. The returned string becomes the
+     * {@code role:tool} message content verbatim.
+     *
+     * @throws IllegalArgumentException for malformed args; the payload handler
+     *                                  converts it into a failed tool result
+     */
+    default String executeQuery(JsonObject args, com.dwinovo.animus.entity.AnimusEntity entity) {
+        throw new UnsupportedOperationException(
+                "executeQuery called on non-query tool " + name());
     }
 
     /**

@@ -31,6 +31,16 @@ import java.util.function.Predicate;
  */
 public final class BlockScanner {
 
+    /**
+     * Hard cap on collected matches. Exists for landscape-scale targets
+     * (water, lava: an ocean inside a 48-block radius is ~10⁵ matching cells)
+     * — without it the match list explodes in memory before sorting. Scanning
+     * stops once the cap is hit, so for super-abundant targets the result is
+     * "plenty of nearby hits" rather than the guaranteed global nearest;
+     * for sparse targets (ores, structures) the cap is never reached.
+     */
+    private static final int MAX_COLLECT = 8_192;
+
     private BlockScanner() {}
 
     /** One match: world position, its state, and Euclidean distance from the search centre. */
@@ -61,6 +71,7 @@ public final class BlockScanner {
 
         List<Hit> matches = new ArrayList<>();
 
+        outer:
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
                 ChunkAccess chunk = level.getChunk(cx, cz);
@@ -74,6 +85,7 @@ public final class BlockScanner {
                     // section's palette holds no target.
                     if (!section.maybeHas(filter)) continue;
                     scanSection(section, cx, sy, cz, center, radius, radiusSq, filter, matches);
+                    if (matches.size() >= MAX_COLLECT) break outer;
                 }
             }
         }

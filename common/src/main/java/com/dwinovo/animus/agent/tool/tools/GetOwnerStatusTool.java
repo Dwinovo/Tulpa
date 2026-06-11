@@ -1,7 +1,6 @@
 package com.dwinovo.animus.agent.tool.tools;
 
 import com.dwinovo.animus.agent.tool.AnimusTool;
-import com.dwinovo.animus.agent.tool.ClientToolContext;
 import com.dwinovo.animus.entity.AnimusEntity;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -19,10 +18,8 @@ import java.util.Map;
  * position / held item / distance. Critical for "stay close" / "protect
  * owner" / "follow" decisions.
  *
- * <p>Returns {@code online: false} when the owner is offline or in a
- * different dimension out of view distance — the player object simply isn't
- * loaded client-side in that case. The LLM should use this to decide
- * whether owner-coordination is even possible right now.
+ * <p>Returns {@code online: false} when the owner is offline. Runs as a
+ * server query, so it sees the owner anywhere — any distance, any dimension.
  */
 public final class GetOwnerStatusTool implements AnimusTool {
 
@@ -36,9 +33,8 @@ public final class GetOwnerStatusTool implements AnimusTool {
         return "Read your owner's current status: name, online state, HP, "
                 + "hunger, position, distance from you, and held item. Call "
                 + "before any 'follow', 'protect', or 'rendezvous' decision. "
-                + "If owner is offline / out of view distance the call returns "
-                + "online:false — you should then default to autonomous mode "
-                + "until they return. No arguments.";
+                + "If the owner is offline the call returns online:false — "
+                + "default to autonomous mode until they return. No arguments.";
     }
 
     @Override
@@ -57,17 +53,12 @@ public final class GetOwnerStatusTool implements AnimusTool {
     }
 
     @Override
-    public boolean isLocal() {
+    public boolean isQuery() {
         return true;
     }
 
     @Override
-    public String executeLocal(JsonObject args, ClientToolContext ctx) {
-        AnimusEntity entity = ctx.entity();
-        if (entity == null) {
-            return "{\"success\":false,\"message\":\"entity not loaded on client\"}";
-        }
-
+    public String executeQuery(JsonObject args, AnimusEntity entity) {
         JsonObject root = new JsonObject();
         EntityReference<LivingEntity> ownerRef = entity.getOwnerReference();
         if (ownerRef == null) {
@@ -80,7 +71,7 @@ public final class GetOwnerStatusTool implements AnimusTool {
         LivingEntity owner = entity.getOwner();
         if (!(owner instanceof Player player)) {
             root.addProperty("online", false);
-            root.addProperty("message", "owner offline or not in view distance");
+            root.addProperty("message", "owner offline");
             return root.toString();
         }
 

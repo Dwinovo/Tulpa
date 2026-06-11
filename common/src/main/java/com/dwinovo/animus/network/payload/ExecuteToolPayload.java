@@ -13,9 +13,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 
 import java.util.UUID;
 
@@ -26,18 +24,30 @@ import java.util.UUID;
  * <h2>Trust model</h2>
  * The server treats this as unvalidated input. Validation chain:
  * <ol>
- *   <li>Target entity must be an {@link AnimusEntity}.</li>
+ *   <li>Target entity must be an {@link AnimusEntity} (searched across ALL
+ *       dimensions — a working companion may be in the Nether while the owner
+ *       waits in the overworld).</li>
  *   <li>Sender must be the entity's owner (TamableAnimal.isOwnedBy).</li>
- *   <li>Sender must be within {@link #MAX_INTERACT_DISTANCE_SQR}.</li>
  *   <li>Tool name must resolve to a registered {@link AnimusTool}.</li>
  *   <li>Arguments JSON must parse and pass the tool's
  *       {@code toTaskRecord} validation.</li>
  * </ol>
- * Any failure path emits an immediate
+ * There is deliberately NO owner-distance check: the whole point of the
+ * chunk-ticket system is that the companion keeps working far away, and the
+ * tools act at the <em>entity's</em> location with the entity's own abilities
+ * — owner distance grants nothing exploitable. (Ownership is the auth.)
+ *
+ * <p>Any failure path emits an immediate
  * {@link TaskResultPayload} with {@code success:false} back to the sender so
  * the client agent loop can keep the conversation consistent — silently
  * dropping a tool call would leave the LLM waiting forever and the chain
  * stuck.
+ *
+ * <h2>Query fast path</h2>
+ * Read-only perception tools ({@link AnimusTool#isQuery()}) never touch the
+ * {@code TaskQueue} — they execute synchronously right here on the tick
+ * thread and the result ships back in the same tick. Queueing them behind a
+ * running {@code move_to} would turn "what's my HP" into a minute-long wait.
  *
  * <h2>Wire format</h2>
  * Fixed-shape strings (Identifier for compactness on the tool name even
@@ -53,7 +63,6 @@ public record ExecuteToolPayload(UUID entityUuid,
     public static final int MAX_TOOL_CALL_ID_LENGTH = 128;
     public static final int MAX_TOOL_NAME_LENGTH = 128;
     public static final int MAX_ARGUMENTS_JSON_LENGTH = 16 * 1024;
-    public static final double MAX_INTERACT_DISTANCE_SQR = 32.0 * 32.0;
 
     public static final Type<ExecuteToolPayload> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(Constants.MOD_ID, "execute_tool"));
@@ -77,37 +86,26 @@ public record ExecuteToolPayload(UUID entityUuid,
         Constants.LOG.debug("[animus-net] ← execute_tool from {} entity={} tool={} id={} args_chars={}",
                 who, p.entityUuid(), p.toolName(), p.toolCallId(), p.argumentsJson().length());
 
-        if (!(player.level() instanceof ServerLevel level)) {
-            replyError(player, p, "no server level (logged out?)");
+        // -- 1. resolve entity by UUID across all dimensions: the companion may
+        //       be working in another dimension or far outside the owner's view,
+        //       kept ticking by its own chunk tickets.
+        AnimusEntity animus = AnimusEntity.findByUuid(player.level().getServer(), p.entityUuid());
+        if (animus == null) {
+            replyError(player, p, "entity not found in any dimension (unloaded or dead?)");
             return;
         }
-
-        // -- 1. resolve entity. UUID, not network id: the companion is co-located
-        //       with its owner, but its int id churns across dimension travel.
-        Entity raw = level.getEntity(p.entityUuid());
-        if (!(raw instanceof AnimusEntity animus)) {
-            replyError(player, p, "entity not found or not an Animus");
-            return;
-        }
-        // -- 2. owner check
+        // -- 2. owner check (the actual authorization)
         if (!animus.isOwnedBy(player)) {
             replyError(player, p, "not the owner");
             return;
         }
-        // -- 3. distance check (server-authoritative, defends against teleport-via-tool)
-        if (animus.distanceToSqr(player) > MAX_INTERACT_DISTANCE_SQR) {
-            replyError(player, p,
-                    "too far from entity (sqDist=" + (int) animus.distanceToSqr(player)
-                            + " > " + (int) MAX_INTERACT_DISTANCE_SQR + ")");
-            return;
-        }
-        // -- 4. tool lookup
+        // -- 3. tool lookup
         AnimusTool tool = ToolRegistry.get(p.toolName());
         if (tool == null) {
             replyError(player, p, "unknown tool: " + p.toolName());
             return;
         }
-        // -- 5. parse + validate args, build TaskRecord
+        // -- 4. parse args
         JsonObject args;
         try {
             args = JsonParser.parseString(p.argumentsJson()).getAsJsonObject();
@@ -115,9 +113,27 @@ public record ExecuteToolPayload(UUID entityUuid,
             replyError(player, p, "invalid arguments JSON: " + ex.getMessage());
             return;
         }
+
+        // -- 5a. query fast path: execute now, reply now, never queue.
+        if (tool.isQuery()) {
+            String result;
+            try {
+                result = tool.executeQuery(args, animus);
+            } catch (RuntimeException ex) {
+                result = "{\"success\":false,\"message\":\"" + escape(ex.getMessage()) + "\"}";
+            }
+            com.dwinovo.animus.platform.Services.NETWORK.sendToPlayer(player,
+                    new TaskResultPayload(p.entityUuid(), p.toolCallId(), result));
+            Constants.LOG.debug("[animus-net] ✓ query tool={} id={} answered inline for {}",
+                    p.toolName(), p.toolCallId(), who);
+            return;
+        }
+
+        // -- 5b. world-action path: validate into a TaskRecord and enqueue.
         TaskRecord record;
         try {
-            record = tool.toTaskRecord(p.toolCallId(), args, level.getGameTime());
+            record = tool.toTaskRecord(p.toolCallId(), args,
+                    animus.level().getGameTime());
         } catch (RuntimeException ex) {
             replyError(player, p, "invalid arguments: " + ex.getMessage());
             return;

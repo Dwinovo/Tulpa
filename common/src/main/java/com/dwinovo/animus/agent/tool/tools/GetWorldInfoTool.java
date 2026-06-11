@@ -1,9 +1,8 @@
 package com.dwinovo.animus.agent.tool.tools;
 
 import com.dwinovo.animus.agent.tool.AnimusTool;
-import com.dwinovo.animus.agent.tool.ClientToolContext;
+import com.dwinovo.animus.entity.AnimusEntity;
 import com.google.gson.JsonObject;
-import net.minecraft.world.entity.LivingEntity;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,18 +52,13 @@ public final class GetWorldInfoTool implements AnimusTool {
     }
 
     @Override
-    public boolean isLocal() {
+    public boolean isQuery() {
         return true;
     }
 
-
     @Override
-    public String executeLocal(JsonObject args, ClientToolContext ctx) {
-        LivingEntity anchor = ctx.anchor();
-        if (anchor == null) {
-            return "{\"success\":false,\"message\":\"perspective entity not available\"}";
-        }
-        var level = anchor.level();
+    public String executeQuery(JsonObject args, AnimusEntity entity) {
+        var level = entity.level();
 
         JsonObject root = new JsonObject();
         root.addProperty("dimension", level.dimension().identifier().toString());

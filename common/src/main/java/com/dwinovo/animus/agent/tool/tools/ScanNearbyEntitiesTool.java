@@ -1,7 +1,7 @@
 package com.dwinovo.animus.agent.tool.tools;
 
 import com.dwinovo.animus.agent.tool.AnimusTool;
-import com.dwinovo.animus.agent.tool.ClientToolContext;
+import com.dwinovo.animus.entity.AnimusEntity;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.world.entity.Entity;
@@ -83,29 +83,24 @@ public final class ScanNearbyEntitiesTool implements AnimusTool {
     }
 
     @Override
-    public boolean isLocal() {
+    public boolean isQuery() {
         return true;
     }
 
     @Override
-    public String executeLocal(JsonObject args, ClientToolContext ctx) {
-        LivingEntity anchor = ctx.anchor();
-        if (anchor == null) {
-            return "{\"success\":false,\"message\":\"perspective entity not available\"}";
-        }
-
+    public String executeQuery(JsonObject args, AnimusEntity entity) {
         double radius = readDouble(args, "radius", MIN_RADIUS, MAX_RADIUS);
         String filter = readEnum(args, "type_filter",
                 List.of("hostile", "passive", "player", "all"));
 
-        AABB box = anchor.getBoundingBox().inflate(radius);
-        List<Entity> raw = anchor.level().getEntities(anchor, box);
+        AABB box = entity.getBoundingBox().inflate(radius);
+        List<Entity> raw = entity.level().getEntities(entity, box);
 
         List<ScoredEntity> matched = new ArrayList<>(raw.size());
         for (Entity e : raw) {
             String cat = categorise(e);
             if (!matches(filter, cat)) continue;
-            matched.add(new ScoredEntity(e, cat, anchor.distanceTo(e)));
+            matched.add(new ScoredEntity(e, cat, entity.distanceTo(e)));
         }
         matched.sort(Comparator.comparingDouble(s -> s.distance));
 

@@ -7,9 +7,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 
 import java.util.UUID;
 
@@ -46,9 +44,10 @@ public record CancelTasksPayload(UUID entityUuid) implements CustomPacketPayload
 
     /** Handler invoked on the server main thread. */
     public static void handle(CancelTasksPayload p, ServerPlayer player) {
-        if (!(player.level() instanceof ServerLevel level)) return;
-        Entity raw = level.getEntity(p.entityUuid());
-        if (!(raw instanceof AnimusEntity animus)) {
+        // Cross-dimension lookup: the owner must be able to stop a companion
+        // that has wandered into another dimension or out of view distance.
+        AnimusEntity animus = AnimusEntity.findByUuid(player.level().getServer(), p.entityUuid());
+        if (animus == null) {
             Constants.LOG.debug("[animus-net] cancel_tasks for unknown entity {}", p.entityUuid());
             return;
         }

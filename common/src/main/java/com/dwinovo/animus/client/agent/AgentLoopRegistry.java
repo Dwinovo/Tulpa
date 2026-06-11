@@ -1,7 +1,5 @@
 package com.dwinovo.animus.client.agent;
 
-import com.dwinovo.animus.client.data.ClientAnimusInventories;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -44,15 +42,13 @@ public final class AgentLoopRegistry {
         return Optional.ofNullable(ENTITY_LOOPS.get(entityUuid));
     }
 
-    /** Drop one entity's loop + inventory mirror (e.g. when it dies / unloads). */
+    /** Drop one entity's loop (e.g. when it dies / unloads). */
     public static void dispose(UUID entityUuid) {
         ENTITY_LOOPS.remove(entityUuid);
-        ClientAnimusInventories.remove(entityUuid);
     }
 
     /** Clear everything — called on world-disconnect / explicit reset. */
     public static void clear() {
         ENTITY_LOOPS.clear();
-        ClientAnimusInventories.clear();
     }
 }

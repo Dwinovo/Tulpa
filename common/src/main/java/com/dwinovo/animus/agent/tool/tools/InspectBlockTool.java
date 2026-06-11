@@ -1,12 +1,11 @@
 package com.dwinovo.animus.agent.tool.tools;
 
 import com.dwinovo.animus.agent.tool.AnimusTool;
-import com.dwinovo.animus.agent.tool.ClientToolContext;
+import com.dwinovo.animus.entity.AnimusEntity;
 import com.dwinovo.animus.task.tasks.BlockMiningProgress;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -30,11 +29,11 @@ import java.util.Map;
  *   <li>{@code hardness} — float; -1 means unbreakable (bedrock, barrier)</li>
  *   <li>{@code needs_correct_tool}, {@code current_hand_correct_tool}</li>
  *   <li>{@code estimated_mining_ticks} — with whatever the entity holds now</li>
- *   <li>{@code in_reach} — within 4.5 blocks (the {@code mine_block} reach limit)</li>
+ *   <li>{@code in_reach} — within 4.5 blocks (the {@code auto_mine} reach limit)</li>
  *   <li>{@code distance_to_me}</li>
  * </ul>
  *
- * <p>Useful before {@code mine_block} (confirms in reach + reasonable
+ * <p>Useful before {@code auto_mine} (confirms in reach + reasonable
  * dig time) and before {@code pathfind_and_mine} (confirms mineable so
  * the entity doesn't walk to bedrock).
  */
@@ -52,7 +51,7 @@ public final class InspectBlockTool implements AnimusTool {
                 + "end_portal_frame's has_eye/facing), hardness, whether you have "
                 + "the correct tool in hand, an estimated dig-tick count, and "
                 + "whether the block is in your 4.5-block mining reach. Call this "
-                + "before mine_block to confirm the operation will succeed, or to "
+                + "before auto_mine to confirm the operation will succeed, or to "
                 + "check which end_portal_frame cells still need an ender_eye.";
     }
 
@@ -77,24 +76,19 @@ public final class InspectBlockTool implements AnimusTool {
     }
 
     @Override
-    public boolean isLocal() {
+    public boolean isQuery() {
         return true;
     }
-
 
     @Override
     @SuppressWarnings("deprecation")  // BlockBehaviour.isSolid() carries Mojang's
                                      // "deprecated for override" marker, not phased out.
-    public String executeLocal(JsonObject args, ClientToolContext ctx) {
-        LivingEntity anchor = ctx.anchor();
-        if (anchor == null) {
-            return "{\"success\":false,\"message\":\"perspective entity not available\"}";
-        }
+    public String executeQuery(JsonObject args, AnimusEntity entity) {
         int x = readInt(args, "x");
         int y = readInt(args, "y");
         int z = readInt(args, "z");
         BlockPos pos = new BlockPos(x, y, z);
-        BlockState state = anchor.level().getBlockState(pos);
+        BlockState state = entity.level().getBlockState(pos);
 
         JsonObject root = new JsonObject();
         root.addProperty("x", x);
@@ -115,13 +109,13 @@ public final class InspectBlockTool implements AnimusTool {
         root.addProperty("is_solid", state.isSolid());
         root.addProperty("is_liquid", !state.getFluidState().isEmpty());
 
-        float hardness = state.getDestroySpeed(anchor.level(), pos);
+        float hardness = state.getDestroySpeed(entity.level(), pos);
         root.addProperty("hardness", hardness);
         root.addProperty("unbreakable", hardness < 0);
 
         boolean needsTool = state.requiresCorrectToolForDrops();
         root.addProperty("needs_correct_tool", needsTool);
-        ItemStack hand = anchor.getMainHandItem();
+        ItemStack hand = entity.getMainHandItem();
         boolean handIsRightTool = hand.isCorrectToolForDrops(state);
         root.addProperty("current_hand_correct_tool", handIsRightTool);
 
@@ -139,7 +133,7 @@ public final class InspectBlockTool implements AnimusTool {
         }
 
         Vec3 center = Vec3.atCenterOf(pos);
-        double distSqr = anchor.distanceToSqr(center);
+        double distSqr = entity.distanceToSqr(center);
         root.addProperty("distance_to_me", Math.sqrt(distSqr));
         root.addProperty("in_reach", distSqr <= BlockMiningProgress.REACH_SQR);
 

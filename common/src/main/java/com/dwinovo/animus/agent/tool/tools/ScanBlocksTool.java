@@ -1,7 +1,7 @@
 package com.dwinovo.animus.agent.tool.tools;
 
 import com.dwinovo.animus.agent.tool.AnimusTool;
-import com.dwinovo.animus.agent.tool.ClientToolContext;
+import com.dwinovo.animus.entity.AnimusEntity;
 import com.dwinovo.animus.pathing.util.BlockScanner;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -9,7 +9,6 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -30,11 +29,11 @@ import java.util.Set;
  * "find iron ore" via repeated inspect_block calls is impractical (15k
  * iterations for radius 12). This tool gives the LLM Mineflayer-style
  * {@code findBlocks} as a single primitive — a perception aid for surveying.
- * To actually <em>gather</em> blocks the LLM uses {@code mine_block}, which
+ * To actually <em>gather</em> blocks the LLM uses {@code auto_mine}, which
  * does its own find/pathfind/dig loop and needs no coordinates.
  *
  * <p>The heavy lifting (palette-short-circuited spherical search) lives in
- * {@link BlockScanner}, shared with the {@code mine_block} goal.
+ * {@link BlockScanner}, shared with the {@code auto_mine} goal.
  *
  * <h2>Schema</h2>
  * <pre>
@@ -49,7 +48,9 @@ import java.util.Set;
 public final class ScanBlocksTool implements AnimusTool {
 
     private static final int MIN_RADIUS = 1;
-    private static final int MAX_RADIUS = 12;
+    /** Big enough for landscape-scale targets (water, lava lakes); the palette
+     *  short-circuit keeps sparse-target scans at this radius near-free. */
+    private static final int MAX_RADIUS = 48;
     private static final int MAX_RESULTS = 32;
 
     @Override
@@ -60,8 +61,12 @@ public final class ScanBlocksTool implements AnimusTool {
         return "Bulk find blocks of given type(s) within a spherical radius "
                 + "around you. Returns matches sorted by distance, capped at "
                 + MAX_RESULTS + ". A perception tool for surveying the area — to "
-                + "actually gather blocks use mine_block, which finds and digs "
-                + "them itself. Radius is in blocks (max " + MAX_RADIUS + "). "
+                + "actually gather blocks use auto_mine, which finds and digs "
+                + "them itself. Radius is in blocks (max " + MAX_RADIUS + " — use "
+                + "the max when hunting landscape features). FLUIDS are scannable "
+                + "too: minecraft:water / minecraft:lava work as block_ids, and "
+                + "fluid matches carry source:true/false — only SOURCE lava turns "
+                + "to obsidian under water, and only SOURCE water fills a bucket. "
                 + "block_ids accepts one or more namespaced ids; include all "
                 + "variants (e.g. both iron_ore and deepslate_iron_ore for iron).";
     }
@@ -89,23 +94,18 @@ public final class ScanBlocksTool implements AnimusTool {
     public long defaultTimeoutTicks() { return 1; }
 
     @Override
-    public boolean isLocal() { return true; }
+    public boolean isQuery() { return true; }
 
     @Override
-    public String executeLocal(JsonObject args, ClientToolContext ctx) {
-        LivingEntity anchor = ctx.anchor();
-        if (anchor == null) {
-            return "{\"success\":false,\"message\":\"perspective entity not available\"}";
-        }
-
+    public String executeQuery(JsonObject args, AnimusEntity entity) {
         int radius = readInt(args, "radius", MIN_RADIUS, MAX_RADIUS);
         Set<Block> targets = readBlockIds(args);
         if (targets.isEmpty()) {
             return "{\"success\":false,\"message\":\"no valid block_ids provided\"}";
         }
 
-        BlockPos center = anchor.blockPosition();
-        Level level = anchor.level();
+        BlockPos center = entity.blockPosition();
+        Level level = entity.level();
         List<BlockScanner.Hit> matches = BlockScanner.findWithin(level, center, radius, targets);
         return buildResult(matches, radius, center);
     }
@@ -121,6 +121,11 @@ public final class ScanBlocksTool implements AnimusTool {
             o.addProperty("z", s.pos().getZ());
             o.addProperty("block", BuiltInRegistries.BLOCK.getKey(s.state().getBlock()).toString());
             o.addProperty("distance", s.distance());
+            // Source vs flowing is THE decision bit for fluids: obsidian casting
+            // and bucket-filling both demand a source cell.
+            if (!s.state().getFluidState().isEmpty()) {
+                o.addProperty("source", s.state().getFluidState().isSource());
+            }
             out.add(o);
         }
         JsonObject root = new JsonObject();

@@ -1,11 +1,13 @@
 package com.dwinovo.animus.agent.tool.tools;
 
 import com.dwinovo.animus.agent.tool.AnimusTool;
-import com.dwinovo.animus.agent.tool.ClientToolContext;
 import com.dwinovo.animus.entity.AnimusEntity;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
@@ -14,14 +16,21 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The {@code get_self_status} tool — read the entity's own HP, position,
- * held items, current attack target. Always call this before any combat
- * or risky decision; the LLM otherwise has no idea of its own health.
+ * The {@code get_self_status} tool — the ONE self-awareness call: HP,
+ * position, dimension, equipment (hands + armor), the full backpack
+ * inventory, current attack target, and movement flags.
  *
- * <h2>Why this is local</h2>
- * The Animus entity is rendered on the client, so its synced fields (HP,
- * position, equipment) are all immediately readable without a server
- * round-trip. Zero latency, zero token cost beyond the tool call itself.
+ * <h2>Why one tool instead of status + storage</h2>
+ * They were separate (get_self_status / get_storage) and the model kept
+ * making decisions on half a picture — most famously concluding an equipped
+ * bucket had vanished because the storage call only listed the backpack.
+ * One complete snapshot per call costs a few hundred tokens and removes an
+ * entire class of partial-view mistakes.
+ *
+ * <h2>Why this is a server query</h2>
+ * A working companion may be far beyond the owner's client tracking range
+ * (chunk-ticket-loaded terrain the client never sees). Server-side execution
+ * reads the authoritative entity wherever it is; the round-trip is one tick.
  */
 public final class GetSelfStatusTool implements AnimusTool {
 
@@ -32,11 +41,12 @@ public final class GetSelfStatusTool implements AnimusTool {
 
     @Override
     public String description() {
-        return "Read your own current status: HP / max HP, position, dimension, "
-                + "main hand and off hand items, current attack target, and "
-                + "movement state. ALWAYS call this before combat decisions "
-                + "(hunt, retreat, eat) and periodically during long "
-                + "tasks. No arguments.";
+        return "Read your complete status in one call: HP / max HP, position, "
+                + "dimension, equipment (hands + armor — an equipped item leaves "
+                + "the backpack, it is NOT lost), your full backpack inventory, "
+                + "current attack target, and movement state. ALWAYS call this "
+                + "before combat or planning decisions and periodically during "
+                + "long tasks. No arguments.";
     }
 
     @Override
@@ -51,21 +61,16 @@ public final class GetSelfStatusTool implements AnimusTool {
 
     @Override
     public long defaultTimeoutTicks() {
-        return 1;  // local, ignored
+        return 1;  // query, ignored
     }
 
     @Override
-    public boolean isLocal() {
+    public boolean isQuery() {
         return true;
     }
 
     @Override
-    public String executeLocal(JsonObject args, ClientToolContext ctx) {
-        AnimusEntity entity = ctx.entity();
-        if (entity == null) {
-            return "{\"success\":false,\"message\":\"entity not loaded on client\"}";
-        }
-
+    public String executeQuery(JsonObject args, AnimusEntity entity) {
         JsonObject root = new JsonObject();
         root.addProperty("entity_id", entity.getId());
         root.addProperty("hp", entity.getHealth());
@@ -78,8 +83,38 @@ public final class GetSelfStatusTool implements AnimusTool {
         root.add("position", pos);
 
         root.addProperty("dimension", entity.level().dimension().identifier().toString());
-        root.addProperty("main_hand", itemKey(entity.getMainHandItem()));
-        root.addProperty("off_hand", itemKey(entity.getOffhandItem()));
+
+        // Equipment: hands + armor. Lives OUTSIDE the backpack container.
+        JsonObject equipment = new JsonObject();
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            ItemStack s = entity.getItemBySlot(slot);
+            if (s.isEmpty()) continue;
+            JsonObject o = new JsonObject();
+            o.addProperty("item", BuiltInRegistries.ITEM.getKey(s.getItem()).toString());
+            if (s.getCount() > 1) o.addProperty("count", s.getCount());
+            equipment.add(slot.getName(), o);
+        }
+        root.add("equipment", equipment);
+
+        // Full backpack inventory (empty slots omitted).
+        SimpleContainer inv = entity.getInventory();
+        JsonArray items = new JsonArray();
+        int used = 0;
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack s = inv.getItem(i);
+            if (s.isEmpty()) continue;
+            used++;
+            JsonObject o = new JsonObject();
+            o.addProperty("slot", i);
+            o.addProperty("item", BuiltInRegistries.ITEM.getKey(s.getItem()).toString());
+            o.addProperty("count", s.getCount());
+            items.add(o);
+        }
+        JsonObject inventory = new JsonObject();
+        inventory.add("items", items);
+        inventory.addProperty("slots_used", used);
+        inventory.addProperty("slots_total", inv.getContainerSize());
+        root.add("inventory", inventory);
 
         LivingEntity tgt = entity.getTarget();
         if (tgt != null) {
@@ -97,10 +132,5 @@ public final class GetSelfStatusTool implements AnimusTool {
         root.addProperty("in_lava", entity.isInLava());
 
         return root.toString();
-    }
-
-    private static String itemKey(ItemStack stack) {
-        if (stack.isEmpty()) return "minecraft:air";
-        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 }
