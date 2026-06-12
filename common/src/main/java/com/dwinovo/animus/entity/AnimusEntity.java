@@ -366,6 +366,14 @@ public class AnimusEntity extends PathfinderMob implements OwnableEntity, Animus
         return scaffoldLedger;
     }
 
+    /** The single sanctioned writer of this body's locomotion controls. */
+    private final com.dwinovo.animus.pathing.exec.BodyMotor motor =
+            new com.dwinovo.animus.pathing.exec.BodyMotor(this);
+
+    public com.dwinovo.animus.pathing.exec.BodyMotor motor() {
+        return motor;
+    }
+
     @Override
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);

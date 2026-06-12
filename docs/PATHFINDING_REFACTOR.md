@@ -211,3 +211,38 @@
 ---
 
 *本文档为方案评审稿。落地从 P0+P1 起步即可肉眼验证"被推进坑不再卡死"。*
+
+---
+
+# 二期:执行层架构反转(2026-06-12 批准,顺序:桶二→桶三→桶一→桶四)
+
+一期两原语(validPositions 重定位、边走边算)运行良好。二期换掉补丁考古学暴露的四个结构病灶:
+
+## 桶二:Movement 自带执行(MovementDrive)
+PathExecutor 的 kind-switch 大泥球(相位枚举 + 每种移动的子状态字段散布全类)反转为:
+- `Movement` 仍是搜索产物(轻量数据,每次节点扩展分配 ~18 个,不能重)
+- 执行行为住进 `exec/drive/MovementDrive` 子类:共享的 break/place 准备管线在基类,
+  每个 Kind 一个 drive 类自管子状态(立柱窗口、跑酷弹道、下降刹车)
+- PathExecutor 缩为:重定位 → 卡死预算 → currentDrive.tick() → 推进/重规划
+- 跨移动关心的事(向边缘接近的速度帽、越位瞄准的 next 查询)经 `DriveHost` 接口暴露
+- 收益:新移动类型(游泳/梯子/攀爬)= 新增一个 drive 类,不再动中枢
+
+## 桶三:BodyMotor 运动仲裁
+MoveControl/JumpControl/setDeltaMovement 的多写者问题(残留 MOVE_TO 一类 bug 的根)收口:
+- `BodyMotor` 是唯一写入口:steer/hold/impulse/brake/jump,带 Owner(PATH/REFLEX)
+- 所有权切换自动清场(park);release 即停车。香草 PathNavigation 仍是文档化的共存写者
+  (WaterEscape/MeleeAttack 内部用),但它们的 start/stop 经 motor 声明所有权
+
+## 桶一:游泳成为一等移动原语
+水=可通行高代价地形(Baritone 9.1 tick/格 vs 走 4.6):
+- Kind.SWIM:水↔水横向 + 水中垂直;出水沿用现有 TRAVERSE/ASCEND(从水格出发本就生成)
+- SwimDrive:转向 + 眼睛没出水时持续上浮(水面游泳,不耗氧)
+- 删除整类胶水:Navigator/PathExecutor 的 isDeepInWater 让位 + submerged 计时器 ×2、
+  入水清理三连;WaterEscapeGoal 降级为「无任务时」的兜底反射
+- 范围控制:主动入水(岸→水边)暂不生成——逃生与穿越优先,故意横渡留待需要时
+
+## 桶四:统一 NavGoal 抽象
+到达语义五处各写一份(goalToleranceSqr / REACHED_DISTANCE_SQR / withinReach / 三份手写
+"站到旁边")收敛为 `NavGoal` 接口(isAtGoal/heuristic):GoalExact、GoalNear、GoalAdjacent。
+搜索终止、执行器到达、任务断言消费同一对象。首批转换 move_to;Place/Use/Break 的站位
+选择器后续迁移(它们改为 GoalAdjacent 时搜索会自动选「可达的」站位,优于手挑最近)。
