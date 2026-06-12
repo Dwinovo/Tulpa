@@ -19,9 +19,9 @@ Phase 2 of the dragon route. Build a portal, ignite it, walk through. Actual Net
 **Route B — cast it yourself** when Route A finds nothing:
 
 1. `craft(bucket)` (3 iron ingots).
-2. **Find water**: `scan_blocks(["minecraft:water"], radius=48)` — water is landscape-scale, always scan at max radius, and look where water lives: rivers/lakes/oceans sit in LOW terrain, so scan from a valley or shoreline, not a hilltop. Matches carry `source: true/false` — a bucket only fills from a **source** cell.
+2. **Find water**: `scan_blocks(["minecraft:water"], radius=192)` — water is landscape-scale, always scan at max radius, and look where water lives: rivers/lakes/oceans sit in LOW terrain, so scan from a valley or shoreline, not a hilltop. Matches carry `source: true/false` — a bucket only fills from a **source** cell.
 3. Fill: `use_item(bucket, x, y, z)` on a source water cell.
-4. **Find lava**: `scan_blocks(["minecraft:lava"], radius=48)` near Y -20…-50, or surface lava pools. You need `source: true` cells — **water over SOURCE lava = obsidian; water over flowing lava = cobblestone** (the classic waste).
+4. **Find lava**: `scan_blocks(["minecraft:lava"], radius=128)` near Y -20…-50, or surface lava pools. You need `source: true` cells — **water over SOURCE lava = obsidian; water over flowing lava = cobblestone** (the classic waste).
 5. Stand on solid ground beside the lava (never over it), `use_item(water_bucket, x, y, z)` aimed at a cell ABOVE the lava edge so the water flows across the sources. Each source it touches hardens to obsidian.
 6. Scoop the water back (`use_item(bucket)` on the source you placed), `auto_mine(obsidian, ...)`, repeat until 10.
 

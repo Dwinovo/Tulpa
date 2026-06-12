@@ -7,6 +7,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -74,17 +75,15 @@ public final class BlockScanner {
         outer:
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-                ChunkAccess chunk = level.getChunk(cx, cz);
+                // LOADED chunks only (require=false): a synchronous scan must
+                // never force chunk loads/generation — at radius 96 that used
+                // to mean up to 49 sync loads inside one tick. Long-range
+                // perception over unloaded terrain is ScanBlocksJob's job,
+                // which loads under the global per-tick budget.
+                ChunkAccess chunk = level.getChunk(cx, cz, ChunkStatus.FULL, false);
                 if (chunk == null) continue;
                 for (int sy = minSectionY; sy <= maxSectionY; sy++) {
-                    int idx = level.getSectionIndexFromSectionY(sy);
-                    if (idx < 0 || idx >= chunk.getSectionsCount()) continue;
-                    LevelChunkSection section = chunk.getSection(idx);
-                    if (section == null || section.hasOnlyAir()) continue;
-                    // Palette short-circuit: skip all 4096 inner blocks when the
-                    // section's palette holds no target.
-                    if (!section.maybeHas(filter)) continue;
-                    scanSection(section, cx, sy, cz, center, radius, radiusSq, filter, matches);
+                    scanChunkSection(level, chunk, cx, sy, cz, center, radius, radiusSq, filter, matches);
                     if (matches.size() >= MAX_COLLECT) break outer;
                 }
             }
@@ -92,6 +91,27 @@ public final class BlockScanner {
 
         matches.sort(Comparator.comparingDouble(Hit::distance));
         return matches;
+    }
+
+    /**
+     * Scan ONE section of an already-resolved chunk (palette short-circuit
+     * included), appending sphere-clipped matches to {@code out}. Public so
+     * the budget-sliced {@code ScanBlocksJob} can meter exactly this unit of
+     * work per permit.
+     */
+    public static void scanChunkSection(Level level, ChunkAccess chunk,
+                                        int chunkX, int sectionY, int chunkZ,
+                                        BlockPos center, int radius, double radiusSq,
+                                        Predicate<BlockState> filter,
+                                        List<Hit> out) {
+        int idx = level.getSectionIndexFromSectionY(sectionY);
+        if (idx < 0 || idx >= chunk.getSectionsCount()) return;
+        LevelChunkSection section = chunk.getSection(idx);
+        if (section == null || section.hasOnlyAir()) return;
+        // Palette short-circuit: skip all 4096 inner blocks when the
+        // section's palette holds no target.
+        if (!section.maybeHas(filter)) return;
+        scanSection(section, chunkX, sectionY, chunkZ, center, radius, radiusSq, filter, out);
     }
 
     private static void scanSection(LevelChunkSection section,

@@ -73,6 +73,9 @@ public class AnimusMod implements ModInitializer {
         // Poll chunk-ticket revivals of companions stranded in unloaded chunks.
         ServerTickEvents.END_SERVER_TICK.register(
                 com.dwinovo.animus.network.AnimusRevival::tick);
+        // Advance budget-sliced long-range block scans.
+        ServerTickEvents.END_SERVER_TICK.register(
+                com.dwinovo.animus.task.tasks.ScanBlocksJob::tick);
 
         CommonClass.init();
         Constants.LOG.info("Animus mod initialised on Fabric.");

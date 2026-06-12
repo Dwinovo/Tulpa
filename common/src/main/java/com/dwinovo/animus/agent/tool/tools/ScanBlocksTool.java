@@ -3,6 +3,7 @@ package com.dwinovo.animus.agent.tool.tools;
 import com.dwinovo.animus.agent.tool.AnimusTool;
 import com.dwinovo.animus.entity.AnimusEntity;
 import com.dwinovo.animus.pathing.util.BlockScanner;
+import com.dwinovo.animus.task.tasks.ScanBlocksJob;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -48,9 +49,14 @@ import java.util.Set;
 public final class ScanBlocksTool implements AnimusTool {
 
     private static final int MIN_RADIUS = 1;
-    /** Big enough for landscape-scale targets (water, lava lakes); the palette
-     *  short-circuit keeps sparse-target scans at this radius near-free. */
-    private static final int MAX_RADIUS = 48;
+    /**
+     * Chunk-scale reach (12 chunks out). Affordable because the scan is a
+     * budget-sliced async job ({@link ScanBlocksJob}): palette-filtered
+     * sections under a global per-tick cap, unloaded chunks paid for at the
+     * shared 2-loads/tick pool — a big scan takes seconds of wall time and
+     * zero tick stalls.
+     */
+    private static final int MAX_RADIUS = 192;
     private static final int MAX_RESULTS = 32;
 
     @Override
@@ -62,8 +68,10 @@ public final class ScanBlocksTool implements AnimusTool {
                 + "around you. Returns matches sorted by distance, capped at "
                 + MAX_RESULTS + ". A perception tool for surveying the area — to "
                 + "actually gather blocks use auto_mine, which finds and digs "
-                + "them itself. Radius is in blocks (max " + MAX_RADIUS + " — use "
-                + "the max when hunting landscape features). FLUIDS are scannable "
+                + "them itself. Radius is in blocks (max " + MAX_RADIUS + " = 12 "
+                + "chunks — use big radii for landscape features like water, "
+                + "lava lakes or villages' blocks; a big scan answers after a few "
+                + "seconds, you can keep acting meanwhile). FLUIDS are scannable "
                 + "too: minecraft:water / minecraft:lava work as block_ids, and "
                 + "fluid matches carry source:true/false — only SOURCE lava turns "
                 + "to obsidian under water, and only SOURCE water fills a bucket. "
@@ -94,23 +102,30 @@ public final class ScanBlocksTool implements AnimusTool {
     public long defaultTimeoutTicks() { return 1; }
 
     @Override
-    public boolean isQuery() { return true; }
+    public boolean isAsyncQuery() { return true; }
 
     @Override
-    public String executeQuery(JsonObject args, AnimusEntity entity) {
+    public void startAsyncQuery(JsonObject args, AnimusEntity entity,
+                                java.util.function.Consumer<String> reply) {
         int radius = readInt(args, "radius", MIN_RADIUS, MAX_RADIUS);
         Set<Block> targets = readBlockIds(args);
         if (targets.isEmpty()) {
-            return "{\"success\":false,\"message\":\"no valid block_ids provided\"}";
+            throw new IllegalArgumentException("no valid block_ids provided");
         }
-
+        if (!(entity.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+            throw new IllegalArgumentException("not on a server level");
+        }
         BlockPos center = entity.blockPosition();
-        Level level = entity.level();
-        List<BlockScanner.Hit> matches = BlockScanner.findWithin(level, center, radius, targets);
-        return buildResult(matches, radius, center);
+        ScanBlocksJob.start(entity.getUUID(), sl, center, radius, targets,
+                matches -> reply.accept(buildResult(matches, radius, center, null)),
+                partial -> reply.accept(buildResult(partial.matches(), radius, center,
+                        "partial: time budget hit after " + partial.columnsScanned() + "/"
+                                + partial.columnsTotal() + " chunk columns — results cover "
+                                + "the area nearest you; retry for fresh coverage or scan smaller")));
     }
 
-    private static String buildResult(List<BlockScanner.Hit> matches, int radius, BlockPos center) {
+    private static String buildResult(List<BlockScanner.Hit> matches, int radius,
+                                      BlockPos center, String partialNote) {
         int limit = Math.min(matches.size(), MAX_RESULTS);
         JsonArray out = new JsonArray();
         for (int i = 0; i < limit; i++) {
@@ -133,6 +148,9 @@ public final class ScanBlocksTool implements AnimusTool {
         root.addProperty("total_found", matches.size());
         root.addProperty("truncated", matches.size() > MAX_RESULTS);
         root.addProperty("radius_searched", radius);
+        if (partialNote != null) {
+            root.addProperty("note", partialNote);
+        }
         JsonObject centerJson = new JsonObject();
         centerJson.addProperty("x", center.getX());
         centerJson.addProperty("y", center.getY());

@@ -37,7 +37,7 @@ import java.util.function.Predicate;
  *   <li>probe SEVERAL Y levels per column ({@code Mth.outFromOrigin}, 64-block
  *       steps from the entity's own Y) — Nether and cave biomes are 3D, a
  *       single-Y scan misses warped forests under/above you;</li>
- *   <li>per-tick work caps via the GLOBAL {@link StructureSearchBudget}
+ *   <li>per-tick work caps via the GLOBAL {@link SearchBudget}
  *       shared with structure searches (NC uses a tick worker; same idea).</li>
  * </ul>
  * Coverage: {@value #SEARCH_RADIUS_RINGS} rings × {@value #SAMPLE_STEP_BLOCKS}
@@ -146,13 +146,13 @@ public final class LocateBiomeTaskGoal extends LlmTaskGoal<LocateBiomeTaskRecord
             r.setState(TaskState.FAILED);
             return;
         }
-        StructureSearchBudget.refresh(sl.getServer());
+        SearchBudget.refresh(sl.getServer());
         while (true) {
             if (exhausted) {
                 r.setState(TaskState.SUCCESS);   // best == null → "not found"
                 return;
             }
-            if (!StructureSearchBudget.tryBiomeSample()) {
+            if (!SearchBudget.tryBiomeSample()) {
                 return;                          // pool drained — resume next tick
             }
             BlockPos hit = sampleNext();

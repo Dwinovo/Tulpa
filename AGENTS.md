@@ -31,7 +31,7 @@
 | `equip_item` | `item_id, slot?` | 把背包里的物品**装到身上**才真正生效:工具/武器进主手(加速 `auto_mine`、提升近战),护甲进对应槽。省略 slot 按物品类型自动归位;原槽位物品换回背包。这是 `craft` 的价值落点(合出来的镐不装等于没用)。 |
 | `hunt` | `entity_ids[], count, radius?` | **意图级战斗**(`auto_mine` 的怪物同构体)：给怪物类型和数量,实体自己扫描→**自研地形寻路**追击(搭桥/挖墙/跳过去)→近战击杀→吸取掉落→重复,直到够数或刷空。不需要坐标/id。够不到部分如实回报实际击杀数。低血量时 `AutoEater` 反射自动进食,结果里回报。 |
 | `shoot` | `entity_ids[], count, radius?` | **意图级远程战斗**(`hunt` 的远程版)：给类型和数量,实体自己扫描→寻路靠到弓程+视线内→**拉弓射箭**直到打掉→重复。目标**可含非生命体**(末影水晶 `end_crystal` 必须远程炸;烈焰人远程怪)。**前置门槛**:主手须持弓且背包有箭,缺一上来就指导性失败。 |
-| `locate_structure` | `structure` | **定位最近结构**(id 或 `#tag`:fortress/stronghold/village/ancient_city…)。Explorer's Compass 式跨 tick 切片搜索(放置数学出候选+预算化区块加载验证,全局 `StructureSearchBudget` 限每 tick 开销),不卡服务端。半径语义=香草 `/locate`(100 个放置 region 环)。要塞→末地门:`move_to` 过去→`scan_blocks` 找 `end_portal_frame`→空框架逐个 `use_item` 末影之眼。 |
+| `locate_structure` | `structure` | **定位最近结构**(id 或 `#tag`:fortress/stronghold/village/ancient_city…)。Explorer's Compass 式跨 tick 切片搜索(放置数学出候选+预算化区块加载验证,全局 `SearchBudget` 限每 tick 开销),不卡服务端。半径语义=香草 `/locate`(100 个放置 region 环)。要塞→末地门:`move_to` 过去→`scan_blocks` 找 `end_portal_frame`→空框架逐个 `use_item` 末影之眼。 |
 | `locate_biome` | `biome` | **定位最近生物群系**(id 或 `#tag`:warped_forest 刷末影人/desert…)。Nature's Compass 式纯气候噪声采样(零区块加载),64 格网格螺旋+多 Y 层探测(下界群系是 3D),半径 6400 格=香草。与 locate_structure 互相交叉重定向(拿错类别的 id 会在失败消息里给出修正调用)。 |
 | `wait` | `seconds` | 干等(≤300s,按 game time)。熔炉烧着/等天亮时闲不下来就用它。 |
 | `drop_items` | `item_id, count` | 朝面前扔出物品(40 tick 拾取保护)。给主人递东西/腾背包。 |
@@ -56,7 +56,7 @@
 | 工具 | 参数 | 作用 |
 |---|---|---|
 | `scan_nearby_entities` | `radius, type_filter` | 列附近实体（hostile/passive/player/all），按距离排序，最多 20 个。每条带 id、类型、坐标、距离、HP。纯态势感知（威胁/拥挤/血量）；打怪用 `hunt`（它自己按类型扫）。 |
-| `scan_blocks` | `block_ids[], radius` | 球形范围批量找指定方块(半径≤48)，按距离排序;流体匹配带 `source` 标志(桶只能舀源方块)。纯感知/勘察用——真要采集直接用 `auto_mine`(它自己会找)。 |
+| `scan_blocks` | `block_ids[], radius` | 球形范围批量找指定方块(半径≤192=12区块,异步分片:调色板预筛+全局预算,几秒后回包,期间可继续行动)，按距离排序;流体匹配带 `source` 标志(桶只能舀源方块)。纯感知/勘察用——真要采集直接用 `auto_mine`(它自己会找)。 |
 | `inspect_block` | `x, y, z` | 查单个方块：id、硬度、是否有对的工具、预估挖掘 tick、是否在挖掘范围、BlockState 属性(如末地框架 `has_eye`)。 |
 | `get_world_info` | — | 读世界：维度、game-time、昼夜（战斗/刷怪规划）、天气。 |
 

@@ -121,13 +121,37 @@ public interface AnimusTool {
     }
 
     /**
-     * Query tools = read-only perception (get_self_status, scan_blocks, …).
+     * Query tools = read-only perception (get_self_status, inspect_block, …).
      * They ship over the network like world-action tools, but the server
      * executes {@link #executeQuery} immediately on the tick thread and
      * replies — no {@code TaskRecord}, no queue, no body occupancy.
      */
     default boolean isQuery() {
         return false;
+    }
+
+    /**
+     * Async query tools = read-only perception too expensive for one tick
+     * (scan_blocks at long range). Same contract as {@link #isQuery} — no
+     * queue, no body occupancy — but {@link #startAsyncQuery} registers a
+     * budget-sliced server job and the reply arrives on a later tick through
+     * the given consumer (exactly once).
+     */
+    default boolean isAsyncQuery() {
+        return false;
+    }
+
+    /**
+     * Kick off the sliced job for an async query. Called on the server tick
+     * thread with a resolved, owner-verified entity. {@code reply} accepts
+     * the raw JSON tool-result string and may be invoked on any later tick.
+     *
+     * @throws IllegalArgumentException for malformed args; the payload
+     *                                  handler reports it as a failed result
+     */
+    default void startAsyncQuery(JsonObject args, com.dwinovo.animus.entity.AnimusEntity entity,
+                                 java.util.function.Consumer<String> reply) {
+        throw new UnsupportedOperationException("not an async query tool: " + name());
     }
 
     /**

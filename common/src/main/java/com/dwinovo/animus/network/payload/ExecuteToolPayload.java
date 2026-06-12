@@ -126,6 +126,22 @@ public record ExecuteToolPayload(UUID entityUuid,
             return;
         }
 
+        // -- 5pre. async query: register a budget-sliced server job; the
+        //          reply rides TaskResultPayload on a later tick. No queue,
+        //          no body occupancy — the pet keeps doing whatever it was.
+        if (tool.isAsyncQuery()) {
+            try {
+                tool.startAsyncQuery(args, animus, json ->
+                        com.dwinovo.animus.platform.Services.NETWORK.sendToPlayer(player,
+                                new TaskResultPayload(p.entityUuid(), p.toolCallId(), json)));
+                Constants.LOG.debug("[animus-net] ✓ async query tool={} id={} started for {}",
+                        p.toolName(), p.toolCallId(), who);
+            } catch (RuntimeException ex) {
+                replyError(player, p, "invalid arguments: " + ex.getMessage());
+            }
+            return;
+        }
+
         // -- 5a. query fast path: execute now, reply now, never queue.
         if (tool.isQuery()) {
             String result;

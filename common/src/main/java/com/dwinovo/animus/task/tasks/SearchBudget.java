@@ -3,12 +3,13 @@ package com.dwinovo.animus.task.tasks;
 import net.minecraft.server.MinecraftServer;
 
 /**
- * GLOBAL per-tick budget for structure searching, shared by every
- * {@link LocateStructureTaskGoal} on the server (and any future sliced
- * search, e.g. a biome locator). The Explorer's Compass
- * {@code WorldWorkerManager} model: total search cost per tick is a server
- * constant, independent of how many companions are searching at once —
- * per-task budgets would stack linearly with pet count.
+ * GLOBAL per-tick budget for every sliced world search on the server —
+ * structure locating ({@link LocateStructureTaskGoal}), biome locating
+ * ({@link LocateBiomeTaskGoal}) and long-range block scans
+ * ({@link ScanBlocksJob}). The Explorer's Compass {@code WorldWorkerManager}
+ * model: total search cost per tick is a server constant, independent of how
+ * many companions are searching at once — per-task budgets would stack
+ * linearly with pet count.
  *
  * <h2>Fairness</h2>
  * First-come-first-served within a tick (entities tick in a stable order), so
@@ -23,7 +24,7 @@ import net.minecraft.server.MinecraftServer;
  * uses {@link MinecraftServer#getTickCount()} (monotonic, unaffected by
  * {@code /tick freeze}) to reset the pool exactly once per server tick.
  */
-final class StructureSearchBudget {
+final class SearchBudget {
 
     /** Cached presence checks are cheap; this caps loop work across ALL searches. */
     private static final int MAX_CHECKS_PER_TICK = 128;
@@ -36,6 +37,12 @@ final class StructureSearchBudget {
      */
     private static final int MAX_BIOME_SAMPLES_PER_TICK = 256;
     /**
+     * Block-scan section visits (one permit = one 16³ chunk section). The
+     * palette pre-check makes a miss sub-microsecond and a hit ~50µs of
+     * iteration, so a generous pool still sits safely under the 4ms lid.
+     */
+    private static final int MAX_SECTION_SCANS_PER_TICK = 256;
+    /**
      * Wall-clock hard stop. The count caps bound the common case; this makes
      * the "never stalls the server" promise unconditional even when every
      * check goes cold to disk. 4ms ≈ 8% of a 50ms tick.
@@ -46,9 +53,10 @@ final class StructureSearchBudget {
     private static int checksLeft;
     private static int loadsLeft;
     private static int biomeSamplesLeft;
+    private static int sectionScansLeft;
     private static long deadlineNanos;
 
-    private StructureSearchBudget() {}
+    private SearchBudget() {}
 
     /** Reset the pool when the server tick has advanced. Call before consuming. */
     static void refresh(MinecraftServer server) {
@@ -64,7 +72,15 @@ final class StructureSearchBudget {
         checksLeft = MAX_CHECKS_PER_TICK;
         loadsLeft = MAX_CHUNK_LOADS_PER_TICK;
         biomeSamplesLeft = MAX_BIOME_SAMPLES_PER_TICK;
+        sectionScansLeft = MAX_SECTION_SCANS_PER_TICK;
         deadlineNanos = System.nanoTime() + MAX_NANOS_PER_TICK;
+    }
+
+    /** Take one section-scan permit (one 16³ section); false = resume next tick. */
+    static boolean trySectionScan() {
+        if (sectionScansLeft <= 0 || System.nanoTime() >= deadlineNanos) return false;
+        sectionScansLeft--;
+        return true;
     }
 
     /** Take one biome-sample permit; false = pool drained, resume next tick. */

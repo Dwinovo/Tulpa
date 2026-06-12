@@ -52,7 +52,7 @@ import java.util.Optional;
  *       (a cached lookup that does NOT generate chunks);</li>
  *   <li>only {@code CHUNK_LOAD_NEEDED} fallbacks pay a real
  *       {@code STRUCTURE_STARTS} chunk load, strictly budgeted via the
- *       GLOBAL {@link StructureSearchBudget} shared by all searches.</li>
+ *       GLOBAL {@link SearchBudget} shared by all searches.</li>
  * </ul>
  * Worst case the answer takes a handful of ticks instead of hitching one.
  */
@@ -229,7 +229,7 @@ public final class LocateStructureTaskGoal extends LlmTaskGoal<LocateStructureTa
         }
         // GLOBAL budget: shared by every searching companion on the server, so
         // total per-tick search cost is a constant regardless of pet count.
-        StructureSearchBudget.refresh(sl.getServer());
+        SearchBudget.refresh(sl.getServer());
         while (true) {
             if (jobIndex >= jobs.size()) {
                 r.setState(TaskState.SUCCESS);
@@ -242,7 +242,7 @@ public final class LocateStructureTaskGoal extends LlmTaskGoal<LocateStructureTa
                 jobIndex++;
                 continue;
             }
-            if (!StructureSearchBudget.tryCheck()) {
+            if (!SearchBudget.tryCheck()) {
                 pendingCandidate = candidate;   // pool drained — resume next tick
                 return;
             }
@@ -272,7 +272,7 @@ public final class LocateStructureTaskGoal extends LlmTaskGoal<LocateStructureTa
             if (res == StructureCheckResult.START_PRESENT) return true;
             // CHUNK_LOAD_NEEDED — the expensive fallback, globally budgeted.
             if (loaded == null) {
-                if (!StructureSearchBudget.tryChunkLoad()) return null;
+                if (!SearchBudget.tryChunkLoad()) return null;
                 loaded = sl.getChunk(candidate.x(), candidate.z(), ChunkStatus.STRUCTURE_STARTS);
             }
             StructureStart start = sl.structureManager()
