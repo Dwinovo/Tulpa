@@ -5,6 +5,7 @@ import com.dwinovo.animus.pathing.exec.Navigator;
 import com.dwinovo.animus.task.LlmTaskGoal;
 import com.dwinovo.animus.task.TaskResult;
 import com.dwinovo.animus.task.TaskState;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -74,6 +75,20 @@ public final class BreakBlockTaskGoal extends LlmTaskGoal<BreakBlockTaskRecord> 
      * (the bug that made every break_block fail on its first swing).
      */
     private void beginMine(BreakBlockTaskRecord r) {
+        // Stance discipline: dig the block from beside it, not from on top of
+        // it, whenever sidestepping is possible. break_block is an explicit
+        // coordinate command though — with no adjacent footing (pillar top)
+        // the model deliberately asked to dig down, so proceed.
+        if (entity.blockPosition().below().equals(r.target)) {
+            BlockPos side = adjacentStance();
+            if (side != null) {
+                stopNav();
+                nav = new Navigator(entity, side, WALK_SPEED,
+                        () -> withinReach(r) && !entity.blockPosition().below().equals(r.target));
+                phase = Phase.PATH;
+                return;
+            }
+        }
         if (mining.tryStart(r.target)) {
             phase = Phase.MINE;
             return;
@@ -145,6 +160,18 @@ public final class BreakBlockTaskGoal extends LlmTaskGoal<BreakBlockTaskRecord> 
     private boolean withinReach(BreakBlockTaskRecord r) {
         return entity.onGround()
                 && entity.distanceToSqr(Vec3.atCenterOf(r.target)) <= BlockMiningProgress.REACH_SQR;
+    }
+
+    /** A standable cell horizontally adjacent to the feet, or null. */
+    private BlockPos adjacentStance() {
+        BlockPos feet = entity.blockPosition();
+        for (net.minecraft.core.Direction d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            BlockPos cand = feet.relative(d);
+            if (com.dwinovo.animus.pathing.util.BlockHelper.isStandable(entity.level(), cand)) {
+                return cand;
+            }
+        }
+        return null;
     }
 
     private static String posLabel(BreakBlockTaskRecord r) {

@@ -225,12 +225,44 @@ public final class MineBlockTaskGoal extends LlmTaskGoal<MineBlockTaskRecord> {
             phase = Phase.SCAN;              // became air/unbreakable — skip
             return;
         }
+        // Stance discipline (Altoclef-style): never dig the block under your
+        // own feet — step one cell aside and dig it from there. No adjacent
+        // footing (1×1 pillar top, bridge end) → skip the target entirely;
+        // the explicit break_block tool remains the deliberate way down.
+        if (standingOn(targetBlock)) {
+            BlockPos side = adjacentStance();
+            if (side == null) {
+                skipBlock();
+                return;
+            }
+            stopNav();
+            nav = new Navigator(entity, side, MINE_WALK_SPEED,
+                    () -> withinReach(targetBlock) && !standingOn(targetBlock));
+            phase = Phase.PATH;
+            return;
+        }
         if (!mining.tryStart(targetBlock)) {
             phase = Phase.SCAN;
             return;
         }
         miningStarted = true;
         phase = Phase.MINE;
+    }
+
+    private boolean standingOn(BlockPos pos) {
+        return entity.blockPosition().below().equals(pos);
+    }
+
+    /** A standable cell horizontally adjacent to the feet, or null. */
+    private BlockPos adjacentStance() {
+        BlockPos feet = entity.blockPosition();
+        for (net.minecraft.core.Direction d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            BlockPos cand = feet.relative(d);
+            if (com.dwinovo.animus.pathing.util.BlockHelper.isStandable(entity.level(), cand)) {
+                return cand;
+            }
+        }
+        return null;
     }
 
     /** Begin driving the shared Navigator toward the current target block. */
@@ -275,13 +307,42 @@ public final class MineBlockTaskGoal extends LlmTaskGoal<MineBlockTaskRecord> {
     }
 
     /** Nearest target within the current radius that isn't in the skip set, or null. */
+    /**
+     * Best remaining target by {@link MiningEconomics#score} (distance plus a
+     * per-block penalty for depth below the feet — lateral deposits beat
+     * shaft-digging when both exist), excluding skip-listed positions, the
+     * pet's own placed scaffolding (the bridge it walked in on), and
+     * walkway-looking blocks floating over liquid at its own floor level
+     * (cold-start guard for bridges the ledger no longer remembers).
+     */
     private BlockScanner.Hit nearestUnskipped(Level level, BlockPos center, MineBlockTaskRecord r) {
+        BlockScanner.Hit best = null;
+        double bestScore = Double.MAX_VALUE;
         for (BlockScanner.Hit hit : BlockScanner.findWithin(level, center, currentRadius, r.targets)) {
-            if (!skipped.contains(hit.pos())) {
-                return hit;
+            // findWithin is distance-ascending and the penalty is non-negative,
+            // so once raw distance exceeds the best score nothing can win.
+            if (hit.distance() >= bestScore) break;
+            if (skipped.contains(hit.pos())) continue;
+            if (entity.scaffoldLedger().isOwnScaffold(hit.pos(), hit.state().getBlock())) continue;
+            if (looksLikeOwnWalkway(level, center, hit.pos())) continue;
+            double score = MiningEconomics.score(hit.distance(), center.getY(), hit.pos().getY());
+            if (score < bestScore) {
+                bestScore = score;
+                best = hit;
             }
         }
-        return null;
+        return best;
+    }
+
+    /**
+     * Cold-start bridge heuristic (the ledger forgets across restarts): a
+     * target sitting in the pet's own floor plane with liquid directly
+     * beneath is in all likelihood the walkway it is standing on — mining it
+     * cuts the way home and ends in a swim.
+     */
+    private static boolean looksLikeOwnWalkway(Level level, BlockPos feet, BlockPos target) {
+        return target.getY() == feet.getY() - 1
+                && !level.getBlockState(target.below()).getFluidState().isEmpty();
     }
 
     @Override
