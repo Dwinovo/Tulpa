@@ -20,18 +20,35 @@ import java.util.UUID;
  */
 public record AnimusLocationsPayload(List<Snapshot> snapshots) implements CustomPacketPayload {
 
-    /** Wire shape of one located (or not) companion. */
-    public record Snapshot(UUID uuid, boolean found, double x, double y, double z,
+    /**
+     * Wire shape of one located (or not) companion. {@code loaded=false} with
+     * {@code found=true} means "asleep in unloaded chunks at its last known
+     * position" — position/dimension are valid, vitals are not.
+     */
+    public record Snapshot(UUID uuid, boolean found, boolean loaded,
+                           double x, double y, double z,
                            String dimension, float hp, float maxHp) {
 
         public static Snapshot notFound(UUID uuid) {
-            return new Snapshot(uuid, false, 0, 0, 0, "", 0, 0);
+            return new Snapshot(uuid, false, false, 0, 0, 0, "", 0, 0);
+        }
+
+        /** A live, ticking companion. */
+        public static Snapshot live(UUID uuid, double x, double y, double z,
+                                    String dimension, float hp, float maxHp) {
+            return new Snapshot(uuid, true, true, x, y, z, dimension, hp, maxHp);
+        }
+
+        /** Unloaded — last known position from the persistent index. */
+        public static Snapshot lastSeen(UUID uuid, double x, double y, double z, String dimension) {
+            return new Snapshot(uuid, true, false, x, y, z, dimension, 0, 0);
         }
 
         static final StreamCodec<RegistryFriendlyByteBuf, Snapshot> CODEC =
                 StreamCodec.composite(
                         UUIDUtil.STREAM_CODEC, Snapshot::uuid,
                         ByteBufCodecs.BOOL, Snapshot::found,
+                        ByteBufCodecs.BOOL, Snapshot::loaded,
                         ByteBufCodecs.DOUBLE, Snapshot::x,
                         ByteBufCodecs.DOUBLE, Snapshot::y,
                         ByteBufCodecs.DOUBLE, Snapshot::z,
@@ -60,7 +77,7 @@ public record AnimusLocationsPayload(List<Snapshot> snapshots) implements Custom
         long now = System.currentTimeMillis();
         for (Snapshot s : p.snapshots()) {
             ClientAnimusLocations.update(s.uuid(), new ClientAnimusLocations.Snapshot(
-                    s.found(), s.x(), s.y(), s.z(), s.dimension(), s.hp(), s.maxHp(), now));
+                    s.found(), s.loaded(), s.x(), s.y(), s.z(), s.dimension(), s.hp(), s.maxHp(), now));
         }
     }
 }

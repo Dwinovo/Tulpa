@@ -16,8 +16,12 @@ import java.util.UUID;
  */
 public final class ClientAnimusLocations {
 
-    /** One locate answer. {@code found=false} means no dimension had the entity loaded. */
-    public record Snapshot(boolean found, double x, double y, double z,
+    /**
+     * One locate answer. {@code found=false} = the server knows nothing;
+     * {@code found && !loaded} = asleep in unloaded chunks at its last known
+     * position (vitals invalid, position trustworthy — a chat wakes it).
+     */
+    public record Snapshot(boolean found, boolean loaded, double x, double y, double z,
                            String dimension, float hp, float maxHp, long receivedAtMs) {}
 
     private static final Map<UUID, Snapshot> CACHE = new HashMap<>();

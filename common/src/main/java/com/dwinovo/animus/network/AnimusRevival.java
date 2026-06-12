@@ -54,6 +54,9 @@ public final class AnimusRevival {
         }
         AnimusLastSeen.Entry lastSeen = AnimusLastSeen.find(server, p.entityUuid());
         if (lastSeen == null) return false;
+        // The pet can't vouch for its owner while unloaded — the index does.
+        // Without this, anyone knowing a UUID could force-load foreign chunks.
+        if (!lastSeen.owner().equals(player.getUUID())) return false;
         ServerLevel level = server.getLevel(lastSeen.dimension());
         if (level == null) return false;
         level.getChunkSource().addTicketWithRadius(com.dwinovo.animus.init.InitTicketType.TASK,

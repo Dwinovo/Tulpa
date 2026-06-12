@@ -152,9 +152,14 @@ public final class RosterScreen extends Screen {
             return "HP " + fmt(live.getHealth()) + "/" + fmt(live.getMaxHealth()) + " · " + dist;
         }
         return ClientAnimusLocations.get(uuid).map(s -> {
-            if (!s.found()) return "offline / unloaded";
+            if (!s.found()) return "missing — dead, or from another world?";
             String pos = (int) s.x() + ", " + (int) s.y() + ", " + (int) s.z();
             String dim = shortDimension(s.dimension());
+            if (!s.loaded()) {
+                // Asleep in unloaded chunks: the position is the persistent
+                // last-seen record, vitals are unknown. Chatting revives it.
+                return "asleep · " + pos + " · " + dim + " — chat to wake";
+            }
             String base = "HP " + fmt(s.hp()) + "/" + fmt(s.maxHp()) + " · " + pos + " · " + dim;
             if (self != null && self.level().dimension().identifier().toString().equals(s.dimension())) {
                 int dist = (int) Math.sqrt(self.distanceToSqr(s.x(), s.y(), s.z()));

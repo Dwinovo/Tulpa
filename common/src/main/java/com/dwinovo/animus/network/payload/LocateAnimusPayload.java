@@ -50,14 +50,27 @@ public record LocateAnimusPayload(List<UUID> entityUuids) implements CustomPacke
         List<AnimusLocationsPayload.Snapshot> out = new ArrayList<>(p.entityUuids().size());
         for (UUID uuid : p.entityUuids()) {
             AnimusEntity animus = AnimusEntity.findByUuid(player.level().getServer(), uuid);
-            if (animus == null || !animus.isOwnedByPlayer(player.getUUID())) {
-                out.add(AnimusLocationsPayload.Snapshot.notFound(uuid));
+            if (animus != null && animus.isOwnedByPlayer(player.getUUID())) {
+                out.add(AnimusLocationsPayload.Snapshot.live(uuid,
+                        animus.getX(), animus.getY(), animus.getZ(),
+                        animus.level().dimension().identifier().toString(),
+                        animus.getHealth(), animus.getMaxHealth()));
                 continue;
             }
-            out.add(new AnimusLocationsPayload.Snapshot(uuid, true,
-                    animus.getX(), animus.getY(), animus.getZ(),
-                    animus.level().dimension().identifier().toString(),
-                    animus.getHealth(), animus.getMaxHealth()));
+            // Unloaded (idle past the ticket linger, or a fresh session): fall
+            // back to the persistent last-seen index so the roster can show
+            // WHERE it sleeps instead of a useless "offline". Owner-gated —
+            // the index carries ownership precisely because the entity can't.
+            var lastSeen = com.dwinovo.animus.entity.AnimusLastSeen.find(
+                    player.level().getServer(), uuid);
+            if (animus == null && lastSeen != null && lastSeen.owner().equals(player.getUUID())) {
+                var pos = lastSeen.pos();
+                out.add(AnimusLocationsPayload.Snapshot.lastSeen(uuid,
+                        pos.getX(), pos.getY(), pos.getZ(),
+                        lastSeen.dimension().identifier().toString()));
+                continue;
+            }
+            out.add(AnimusLocationsPayload.Snapshot.notFound(uuid));
         }
         Services.NETWORK.sendToPlayer(player, new AnimusLocationsPayload(out));
     }

@@ -33,11 +33,16 @@ import java.util.UUID;
  */
 public final class AnimusLastSeen extends SavedData {
 
-    /** One companion's last known whereabouts. */
-    public record Entry(ResourceKey<Level> dimension, BlockPos pos) {
+    /**
+     * One companion's last known whereabouts. Carries the owner so that
+     * consumers (roster locate, revival) can authorize reads while the pet
+     * itself — the usual source of ownership truth — is unloaded.
+     */
+    public record Entry(ResourceKey<Level> dimension, BlockPos pos, UUID owner) {
         static final Codec<Entry> CODEC = RecordCodecBuilder.create(i -> i.group(
                 ResourceKey.codec(Registries.DIMENSION).fieldOf("dimension").forGetter(Entry::dimension),
-                BlockPos.CODEC.fieldOf("pos").forGetter(Entry::pos)
+                BlockPos.CODEC.fieldOf("pos").forGetter(Entry::pos),
+                UUIDUtil.STRING_CODEC.fieldOf("owner").forGetter(Entry::owner)
         ).apply(i, Entry::new));
     }
 
@@ -70,8 +75,10 @@ public final class AnimusLastSeen extends SavedData {
 
     public static void update(AnimusEntity animus) {
         if (!(animus.level() instanceof ServerLevel sl)) return;
+        var ownerRef = animus.getOwnerReference();
+        if (ownerRef == null) return;   // wild pets are not revivable/rosterable
         AnimusLastSeen data = get(sl.getServer());
-        Entry next = new Entry(sl.dimension(), animus.blockPosition());
+        Entry next = new Entry(sl.dimension(), animus.blockPosition(), ownerRef.getUUID());
         Entry prev = data.entries.put(animus.getUUID(), next);
         if (prev == null || !prev.equals(next)) data.setDirty();
     }
