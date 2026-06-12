@@ -196,7 +196,7 @@ public final class FakePlayerUse {
      * <p>Consumption is accounted manually (exactly one item on success) —
      * dupe-proof regardless of the fake player's game mode.
      */
-    public static PlaceResult placeScaffold(AnimusEntity entity, int invSlot, BlockPos cell) {
+    public static PlaceResult placeBlockItem(AnimusEntity entity, int invSlot, BlockPos cell) {
         ServerLevel level = (ServerLevel) entity.level();
         BlockHitResult support = findSupportClick(level, cell, entity);
         if (support == null) {
@@ -253,6 +253,16 @@ public final class FakePlayerUse {
             return new BlockHitResult(hit, face, neighbour, false);
         }
         return null;
+    }
+
+    /** First inventory slot holding {@code item}, or -1 — companion to {@link #placeBlockItem}. */
+    public static int slotOf(AnimusEntity entity, net.minecraft.world.item.Item item) {
+        SimpleContainer inv = entity.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack s = inv.getItem(i);
+            if (!s.isEmpty() && s.getItem() == item) return i;
+        }
+        return -1;
     }
 
     /** Stand the fake player where the Animus is, facing the same way (placement orientation). */

@@ -303,7 +303,8 @@ public final class LoadFurnaceTaskGoal extends LlmTaskGoal<LoadFurnaceTaskRecord
     }
 
     private BlockPos placeFurnaceBeside() {
-        if (entity.getInventory().countItem(Items.FURNACE) <= 0) {
+        int slot = FakePlayerUse.slotOf(entity, Items.FURNACE);
+        if (slot < 0) {
             return null;
         }
         Level level = entity.level();
@@ -312,23 +313,16 @@ public final class LoadFurnaceTaskGoal extends LlmTaskGoal<LoadFurnaceTaskRecord
             BlockPos at = feet.relative(dir);
             if (BlockHelper.isReplaceableForPlacement(level, at)
                     && BlockHelper.canWalkOn(level, at.below())) {
-                if (!level.setBlock(at, Blocks.FURNACE.defaultBlockState(), 3)) {
-                    continue;
+                // Real player placement via the fake player: vanilla rules,
+                // place sound/events, consumption accounted inside — and the
+                // furnace FACES the placer instead of defaulting north.
+                if (FakePlayerUse.placeBlockItem(entity, slot, at)
+                        == FakePlayerUse.PlaceResult.PLACED) {
+                    return at;
                 }
-                entity.getInventory().removeItemType(Items.FURNACE, 1);
-                entity.getInventory().setChanged();
-                playPlaceSound(at);
-                return at;
             }
         }
         return null;
-    }
-
-    @SuppressWarnings("deprecation")
-    private void playPlaceSound(BlockPos at) {
-        SoundType sound = Blocks.FURNACE.defaultBlockState().getSoundType();
-        entity.level().playSound(null, at, sound.getPlaceSound(), SoundSource.BLOCKS,
-                (sound.getVolume() + 1.0F) / 2.0F, sound.getPitch() * 0.8F);
     }
 
     private void fail(String reason) {

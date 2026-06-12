@@ -283,6 +283,17 @@ public final class BlockMiningProgress {
                 ? Block.getDrops(state, sl, pos, blockEntity, entity, tool)
                 : List.of();
 
+        // Tool durability — vanilla Item.mineBlock semantics replicated for a
+        // Mob (the vanilla entry point is Player-typed): one wear point per
+        // real block, none for zero-hardness instabreaks, Unbreaking and the
+        // break animation/sound handled by hurtAndBreak through the entity's
+        // equipment pipeline. A tool that hits zero shatters; the next
+        // tryStart re-evaluates bare-handed and the harvest gate teaches.
+        // Mining used to be free; players pay, so do we.
+        if (!tool.isEmpty() && state.getDestroySpeed(level, pos) != 0.0F) {
+            tool.hurtAndBreak(1, entity, net.minecraft.world.entity.EquipmentSlot.MAINHAND);
+        }
+
         // dropResources=false: don't let vanilla spawn ItemEntities; we handle drops.
         level.destroyBlock(pos, false, entity);
 

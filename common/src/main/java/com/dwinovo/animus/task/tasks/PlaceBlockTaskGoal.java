@@ -32,14 +32,15 @@ import java.util.Map;
  *             pick a standable spot beside it. In reach → PLACE; else GOTO.
  *   GOTO    → time-sliced A* to the stand spot (bridging/digging like move_to);
  *             in reach of the target → PLACE.
- *   PLACE   → setBlock + consume one from inventory → SUCCESS.
+ *   PLACE   → fake-player right-click on the reference face → SUCCESS.
  * </pre>
  *
- * <p>Placement is server-authoritative ({@code level.setBlock} with the block's
- * default state), like {@link CraftTaskGoal}'s table placement — we don't
- * simulate a player right-click. We DO mirror Voyager's "no floating block"
- * rule via the solid-neighbour check, so the model gets taught real placement
- * sense.
+ * <p>Placement is a real player right-click through the shared fake player
+ * ({@link FakePlayerUse}): vanilla {@code BlockItem.place} derives the proper
+ * context state (stairs/log/chest facing, waterlogging), fires place events
+ * and enforces vanilla placement rules. The solid-neighbour pre-check mirrors
+ * Voyager's "no floating block" rule purely to TEACH — vanilla would refuse
+ * too, but with no reason the model could learn from.
  */
 public final class PlaceBlockTaskGoal extends LlmTaskGoal<PlaceBlockTaskRecord> {
 

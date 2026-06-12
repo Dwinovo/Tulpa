@@ -205,7 +205,8 @@ public final class CraftTaskGoal extends LlmTaskGoal<CraftTaskRecord> {
      * Returns the position placed, or {@code null} if we carry none / no spot.
      */
     private BlockPos placeTableBeside() {
-        if (entity.getInventory().countItem(Items.CRAFTING_TABLE) <= 0) {
+        int slot = FakePlayerUse.slotOf(entity, Items.CRAFTING_TABLE);
+        if (slot < 0) {
             return null;
         }
         Level level = entity.level();
@@ -214,24 +215,15 @@ public final class CraftTaskGoal extends LlmTaskGoal<CraftTaskRecord> {
             BlockPos at = feet.relative(dir);
             if (BlockHelper.isReplaceableForPlacement(level, at)
                     && BlockHelper.canWalkOn(level, at.below())) {
-                if (!level.setBlock(at, Blocks.CRAFTING_TABLE.defaultBlockState(), 3)) {
-                    continue;
+                // Real player placement via the fake player: vanilla rules,
+                // place sound/events, and consumption accounted inside.
+                if (FakePlayerUse.placeBlockItem(entity, slot, at)
+                        == FakePlayerUse.PlaceResult.PLACED) {
+                    return at;
                 }
-                entity.getInventory().removeItemType(Items.CRAFTING_TABLE, 1);
-                entity.getInventory().setChanged();
-                playPlaceSound(at);
-                return at;
             }
         }
         return null;
-    }
-
-    @SuppressWarnings("deprecation")  // BlockStateBase.getSoundType() is "deprecated for
-                                      // override" (Mojang convention), not phased out.
-    private void playPlaceSound(BlockPos at) {
-        SoundType sound = Blocks.CRAFTING_TABLE.defaultBlockState().getSoundType();
-        entity.level().playSound(null, at, sound.getPlaceSound(), SoundSource.BLOCKS,
-                (sound.getVolume() + 1.0F) / 2.0F, sound.getPitch() * 0.8F);
     }
 
     private void fail(String reason) {

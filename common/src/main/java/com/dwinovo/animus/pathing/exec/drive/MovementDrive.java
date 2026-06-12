@@ -207,7 +207,7 @@ public abstract class MovementDrive {
         int slot = scaffoldSlot();
         if (slot < 0) return ScaffoldOutcome.OUT_OF_BLOCKS;
         var block = ((BlockItem) entity.getInventory().getItem(slot).getItem()).getBlock();
-        return switch (FakePlayerUse.placeScaffold(entity, slot, cell)) {
+        return switch (FakePlayerUse.placeBlockItem(entity, slot, cell)) {
             case PLACED -> {
                 entity.pathTally().addPlaced(block);
                 // Ledger the placement: auto_mine must never loot our own bridge.
