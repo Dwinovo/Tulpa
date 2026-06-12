@@ -72,6 +72,13 @@ public final class ActionCosts {
      * above a deep target looked "already there" and the partial-path fallback
      * collapsed to the start node (empty path, spurious "no path" failures on
      * dig-down journeys).
+     *
+     * <p><b>COUPLED TO THE FALL CAP.</b> Admissibility holds only while
+     * {@code NavContext.maxFallHeight <= 3}: per-block fall cost shrinks with
+     * height ({@code fallCost(10)/10} ≈ 1.17 &lt; 1.5). If a water-bucket /
+     * extended-fall feature ever raises the cap to {@code n}, lower this to
+     * {@code fallCost(n)/n} in the same change or the heuristic silently
+     * over-estimates and partial paths degrade.
      */
     public static final double DESCEND_ONE_BLOCK = 1.5;
 

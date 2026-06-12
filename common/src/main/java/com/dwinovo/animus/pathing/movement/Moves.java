@@ -240,7 +240,11 @@ public final class Moves {
         cost += headBreak;
 
         if (BlockHelper.isHazard(level, dest) || BlockHelper.isHazard(level, newHead)) return null;
-        return new Movement(Movement.Kind.PILLAR, from, dest, cost, toBreak, from);
+        // toPlace deliberately null: placement is the PILLAR phase's own job,
+        // done mid-jump at the entity's LIVE base Y (which may differ from the
+        // plan by a block) — the generic PREPARE_PLACE phase never runs for
+        // pillars, so a toPlace here would be dead, misleading data.
+        return new Movement(Movement.Kind.PILLAR, from, dest, cost, toBreak, null);
     }
 
     // ---- DigDown: mine the floor underfoot and drop one ----

@@ -118,15 +118,25 @@ public final class Navigator {
                 // tick — left alive it keeps thrusting toward a (possibly
                 // submerged) node and fights the escape reflex's navigation;
                 // this was the actual "circles underwater until it drowns"
-                // mechanism. Drop the in-flight path too: once beached we
-                // re-plan from the shore instead of resyncing into the lake.
+                // mechanism. Drop the in-flight path AND any in-flight search
+                // (its root is the pre-water position — finishing it would
+                // yield a path the executor immediately re-plans away): once
+                // beached we plan fresh from the shore, not from the lake.
                 entity.getMoveControl().setWantedPosition(
                         entity.getX(), entity.getY(), entity.getZ(), 0.0);
                 if (current != null) {
                     current.stop();
                     current = null;
                 }
+                search = null;
+                searchCtx = null;
                 discardPrecompute();
+            }
+            // The escape reflex publishing a live swim path means we are NOT
+            // stranded — hold the clock while it works (a 32-block shore takes
+            // ~25s of swimming; failing at 10s would lie to the model).
+            if (entity.getNavigation().isInProgress()) {
+                submergedTicks = 1;
             }
             if (submergedTicks > SUBMERGED_FAIL_TICKS) {
                 failReason = "stranded in deep water — the swim-ashore reflex found no "
