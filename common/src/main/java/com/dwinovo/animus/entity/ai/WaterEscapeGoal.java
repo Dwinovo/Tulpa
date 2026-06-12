@@ -28,13 +28,19 @@ import java.util.EnumSet;
 public final class WaterEscapeGoal extends Goal {
 
     private static final int SEARCH_HORIZONTAL = 16;
+    /** Each failed shore search widens the net by this much, up to the max. */
+    private static final int SEARCH_EXPAND_STEP = 8;
+    private static final int MAX_SEARCH_HORIZONTAL = 32;
     private static final int SEARCH_VERTICAL = 6;
     /** Re-pick the shore target at most once a second. */
     private static final int RETARGET_INTERVAL_TICKS = 20;
     private static final double SWIM_SPEED = 1.2;
+    /** Upward acceleration per tick while the eyes are under water. */
+    private static final double SURFACE_THRUST = 0.04;
 
     private final AnimusEntity entity;
     private int retargetCooldown;
+    private int failedSearches;
 
     public WaterEscapeGoal(AnimusEntity entity) {
         this.entity = entity;
@@ -54,26 +60,39 @@ public final class WaterEscapeGoal extends Goal {
     @Override
     public void start() {
         retargetCooldown = 0;
+        failedSearches = 0;
     }
 
     @Override
     public void tick() {
+        // From depth, actively swim UP every tick. FloatGoal only bobs a body
+        // already at the surface; getting TO the surface — the breath bar —
+        // is this goal's job (a knockback can dunk the body metres deep).
+        if (entity.isUnderWater()) {
+            var d = entity.getDeltaMovement();
+            entity.setDeltaMovement(d.x, Math.min(d.y + SURFACE_THRUST, 0.25), d.z);
+        }
         if (--retargetCooldown > 0 && entity.getNavigation().isInProgress()) {
             return;
         }
         retargetCooldown = RETARGET_INTERVAL_TICKS;
+        // Widen the net on every miss: a fixed 16 misses the shore of any
+        // decent-sized lake, which used to mean "drift and drown on a timer".
+        int reach = Math.min(SEARCH_HORIZONTAL + failedSearches * SEARCH_EXPAND_STEP,
+                MAX_SEARCH_HORIZONTAL);
         BlockPos shore = BlockPos.findClosestMatch(
-                        entity.blockPosition(), SEARCH_HORIZONTAL, SEARCH_VERTICAL,
+                        entity.blockPosition(), reach, SEARCH_VERTICAL,
                         pos -> BlockHelper.isStandable(entity.level(), pos))
                 .orElse(null);
         if (shore != null) {
+            failedSearches = 0;
             // Vanilla ground navigation swims (water has a finite path malus);
             // FloatGoal keeps the head above water while it does.
             entity.getNavigation().moveTo(shore.getX() + 0.5, shore.getY(), shore.getZ() + 0.5,
                     SWIM_SPEED);
+        } else {
+            failedSearches++;
         }
-        // No shore within range: keep floating (FloatGoal) and retry — drifting
-        // beats diving.
     }
 
     @Override

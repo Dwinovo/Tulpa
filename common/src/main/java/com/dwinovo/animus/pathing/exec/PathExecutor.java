@@ -57,6 +57,21 @@ public final class PathExecutor {
     private static final int AWAY_BUDGET = 60;
     /** >3 blocks off the current movement → definitively shoved off, replan now. */
     private static final double HARD_DIST_SQR = 9.0;
+    /**
+     * Speed ceiling on/approaching descend-family moves, whatever the user
+     * asked for. The planner approves falls by HEIGHT only; momentum is the
+     * executor's problem, and at speed 2.0 a landing slides clean across the
+     * planned column into the next drop.
+     */
+    private static final double EDGE_SPEED_CAP = 0.7;
+    /** Per-tick horizontal velocity damping while airborne in a descent. */
+    private static final double FALL_BRAKE_FACTOR = 0.6;
+    /**
+     * Consecutive deep-water ticks before the executor stops waiting for the
+     * escape reflex and asks for a replan from wherever the swim took us
+     * (3s). Without a bound the task burns its whole deadline "RUNNING".
+     */
+    private static final int SUBMERGED_REPLAN_TICKS = 60;
 
     private final AnimusEntity entity;
     private final Path path;
@@ -74,6 +89,8 @@ public final class PathExecutor {
     private int ticksOnCurrent = 0;
     /** Consecutive ticks the feet matched no nearby movement (off-path). */
     private int ticksAway = 0;
+    /** Consecutive deep-water ticks (swim-yield state). */
+    private int submergedTicks = 0;
 
     // Pillar sub-state: each cycle pillars from the entity's ACTUAL feet height,
     // robust to having landed a block off from the plan. MAX_VALUE = no cycle
@@ -101,10 +118,20 @@ public final class PathExecutor {
     public Status tick() {
         if (entity.isDeepInWater()) {
             // Swimming: ground movement can't progress and the stall/off-path
-            // counters would misfire. Yield to the float/escape reflexes; the
-            // re-localization (or a replan) picks the path back up ashore.
-            return Status.RUNNING;
+            // counters would misfire. Yield to the float/escape reflexes — but
+            // FIRST kill our stale MoveControl target (it would keep thrusting
+            // toward a submerged node and fight the escape), and don't yield
+            // forever: past the budget, ask for a replan from wherever the
+            // swim took us. (Navigator normally intercepts the swim before us;
+            // this is defence in depth for direct executor drivers.)
+            if (submergedTicks++ == 0) {
+                entity.getMoveControl().setWantedPosition(
+                        entity.getX(), entity.getY(), entity.getZ(), 0.0);
+            }
+            return submergedTicks > SUBMERGED_REPLAN_TICKS
+                    ? Status.NEEDS_REPLAN : Status.RUNNING;
         }
+        submergedTicks = 0;
         if (path.isEmpty()) {
             // Nothing to walk; the path was already at (or couldn't leave) start.
             return path.partial ? Status.NEEDS_REPLAN : Status.ARRIVED;
@@ -348,7 +375,21 @@ public final class PathExecutor {
     private Status tickMove(Movement mv) {
         Level level = entity.level();
         Vec3 steer = steerTarget(mv);
-        entity.getMoveControl().setWantedPosition(steer.x, steer.y, steer.z, speed);
+        if (descendFamily(mv.kind) && !entity.onGround()) {
+            // Airborne mid-descent: kill horizontal thrust and damp drift —
+            // Baritone's sneak-brake. Without this, the momentum built before
+            // the edge carries the landing PAST the planned column and the
+            // entity walks off the far side into a fall the planner never
+            // approved (the "high-speed fall death" report). MoveControl is
+            // parked at speed 0 so it keeps the facing but adds no thrust.
+            Vec3 d = entity.getDeltaMovement();
+            if (Math.abs(d.x) + Math.abs(d.z) > 0.05) {
+                entity.setDeltaMovement(d.x * FALL_BRAKE_FACTOR, d.y, d.z * FALL_BRAKE_FACTOR);
+            }
+            entity.getMoveControl().setWantedPosition(steer.x, steer.y, steer.z, 0.0);
+        } else {
+            entity.getMoveControl().setWantedPosition(steer.x, steer.y, steer.z, effectiveSpeed(mv));
+        }
         entity.getLookControl().setLookAt(steer.x, steer.y + entity.getEyeHeight(), steer.z);
 
         // Step up onto an ASCEND's target block: jump only when grounded (one
@@ -399,6 +440,28 @@ public final class PathExecutor {
     private static boolean walkKind(Movement.Kind k) {
         return k == Movement.Kind.TRAVERSE || k == Movement.Kind.DESCEND
                 || k == Movement.Kind.FALL || k == Movement.Kind.DIAGONAL;
+    }
+
+    /** Moves whose execution involves leaving the ground over an edge. */
+    private static boolean descendFamily(Movement.Kind k) {
+        return k == Movement.Kind.DESCEND || k == Movement.Kind.FALL
+                || k == Movement.Kind.DIG_DOWN;
+    }
+
+    /**
+     * The user's speed, governed per movement type — Baritone's sprint gating
+     * in MoveControl terms. Full speed is only safe on flat steering; on a
+     * descend-family move (or while APPROACHING one — the edge is one node
+     * ahead and momentum doesn't stop at cell borders) the cap keeps the
+     * approach slow enough that the brake in {@link #tickMove} can hold the
+     * landing inside the planned column.
+     */
+    private double effectiveSpeed(Movement mv) {
+        boolean edgy = descendFamily(mv.kind);
+        if (!edgy && index + 1 < path.movements.size()) {
+            edgy = descendFamily(path.movements.get(index + 1).kind);
+        }
+        return edgy ? Math.min(speed, EDGE_SPEED_CAP) : speed;
     }
 
     // ---- PILLAR_UP: jump straight up, place the floor block beneath mid-rise ----

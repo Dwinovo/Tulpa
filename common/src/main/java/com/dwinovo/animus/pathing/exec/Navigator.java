@@ -80,6 +80,16 @@ public final class Navigator {
     private int replans = 0;
     private String failReason = "target unreachable";
 
+    /** Consecutive deep-water ticks (the swim-yield state). */
+    private int submergedTicks = 0;
+    /**
+     * Deep-water ticks before the task fails instead of waiting forever for
+     * the escape reflex (10s — the reflex beaches a body in 2-4s when a shore
+     * exists; far past that means there is no shore to find and the task
+     * would otherwise just burn its whole deadline "RUNNING").
+     */
+    private static final int SUBMERGED_FAIL_TICKS = 200;
+
     /** Stationary goal (move_to / auto_mine) — a fixed cell, no follow. */
     public Navigator(AnimusEntity entity, BlockPos goal, double speed, BooleanSupplier reached) {
         this(entity, () -> goal, speed, reached);
@@ -103,7 +113,36 @@ public final class Navigator {
             // Swimming: don't plan (a water start has no edges — the search
             // would fail the whole task mid-lake) and don't execute. The
             // WaterEscapeGoal beaches the body; we resume from dry land.
+            if (submergedTicks++ == 0) {
+                // Kill the stale MoveControl MOVE_TO from the last executor
+                // tick — left alive it keeps thrusting toward a (possibly
+                // submerged) node and fights the escape reflex's navigation;
+                // this was the actual "circles underwater until it drowns"
+                // mechanism. Drop the in-flight path too: once beached we
+                // re-plan from the shore instead of resyncing into the lake.
+                entity.getMoveControl().setWantedPosition(
+                        entity.getX(), entity.getY(), entity.getZ(), 0.0);
+                if (current != null) {
+                    current.stop();
+                    current = null;
+                }
+                discardPrecompute();
+            }
+            if (submergedTicks > SUBMERGED_FAIL_TICKS) {
+                failReason = "stranded in deep water — the swim-ashore reflex found no "
+                        + "nearby shore. The route or target crosses open water; move_to "
+                        + "solid ground near the water's edge instead, or approach from "
+                        + "another direction";
+                return Status.FAILED;
+            }
             return Status.RUNNING;
+        }
+        if (submergedTicks > 0) {
+            // Just beached. Plan fresh from dry land.
+            submergedTicks = 0;
+            if (current == null && search == null) {
+                startFreshSearch();
+            }
         }
 
         // PLANNING mode: no path yet, spend this tick's budget on the fresh search.
