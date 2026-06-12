@@ -13,6 +13,14 @@ java {
     withJavadocJar()
 }
 
+// Javadoc comments here are written for source readers; strict doclint
+// (HTML-escaping every & and <, mandatory @param) fights that without
+// adding value to a mod jar. Standard practice: turn it off.
+tasks.withType(Javadoc).configureEach {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.encoding = 'UTF-8'
+}
+
 repositories {
     mavenCentral()
     // https://docs.gradle.org/current/userguide/declaring_repositories.html#declaring_content_exclusively_found_in_one_repository
