@@ -215,6 +215,11 @@ public final class BlockMiningProgress {
         return true;
     }
 
+    /** Dig budget computed by the last {@link #tryStart} (ticks). */
+    public int plannedTicks() {
+        return totalTicksNeeded;
+    }
+
     /** Advance one tick of mining. */
     public Outcome tick(BlockPos pos) {
         Level level = entity.level();

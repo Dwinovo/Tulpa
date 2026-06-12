@@ -285,6 +285,17 @@ public final class PathExecutor {
                 plog("REPLAN: obstruction " + target + " became unmineable");
                 return Status.NEEDS_REPLAN;
             }
+            // World changed under the plan (stone → obsidian, tool swapped):
+            // if just THIS dig would blow the whole movement's stall budget,
+            // replan now and let the search re-cost honestly instead of
+            // grinding toward a guaranteed stall (Baritone's cost-increase
+            // cancellation, done at the moment we'd start paying).
+            if (mining.plannedTicks() > (int) (mv.cost * 4) + 60) {
+                mining.cleanup(target);
+                plog("REPLAN: obstruction " + target + " now far more expensive than planned ("
+                        + mining.plannedTicks() + "t vs cost " + (int) mv.cost + ")");
+                return Status.NEEDS_REPLAN;
+            }
             miningStarted = true;
         }
 
@@ -630,8 +641,13 @@ public final class PathExecutor {
      * vanilla's placement check, which raw {@code setBlock} bypasses.
      */
     private boolean placementObstructed(BlockPos pos) {
-        AABB cell = new AABB(pos.getX(), pos.getY(), pos.getZ(),
-                pos.getX() + 1.0, pos.getY() + 1.0, pos.getZ() + 1.0);
+        // Inflated slightly beyond the cell: a box test against the exact cell
+        // passes when the entity is a rounding error away, and a block
+        // materializing flush against (or clipping) the body wedges it solid
+        // on landing — the pillar suffocation report. The margin makes "almost
+        // inside" count as inside.
+        AABB cell = new AABB(pos.getX() - 0.1, pos.getY() - 0.1, pos.getZ() - 0.1,
+                pos.getX() + 1.1, pos.getY() + 1.1, pos.getZ() + 1.1);
         if (entity.getBoundingBox().intersects(cell)) return true;
         return !entity.level().getEntities(entity, cell, e -> e.blocksBuilding).isEmpty();
     }
