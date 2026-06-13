@@ -7,6 +7,8 @@ import com.dwinovo.animus.task.tasks.MineBlockTaskRecord;
 import com.dwinovo.animus.task.tasks.MineCompanionTask;
 import com.dwinovo.animus.task.tasks.MoveToCompanionTask;
 import com.dwinovo.animus.task.tasks.MoveToTaskRecord;
+import com.dwinovo.animus.task.tasks.WaitCompanionTask;
+import com.dwinovo.animus.task.tasks.WaitTaskRecord;
 
 /**
  * Maps a queued {@link TaskRecord} to the {@link CompanionTask} that runs it on
@@ -22,6 +24,7 @@ public final class CompanionTaskFactory {
         if (record instanceof MoveToTaskRecord r) return new MoveToCompanionTask(player, r);
         if (record instanceof MineBlockTaskRecord r) return new MineCompanionTask(player, r);
         if (record instanceof EquipTaskRecord r) return new EquipCompanionTask(player, r);
+        if (record instanceof WaitTaskRecord r) return new WaitCompanionTask(player, r);
         return new UnsupportedCompanionTask(record);
     }
 }
