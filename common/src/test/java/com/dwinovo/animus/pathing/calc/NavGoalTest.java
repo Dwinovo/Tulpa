@@ -1,6 +1,7 @@
 package com.dwinovo.animus.pathing.calc;
 
 import com.dwinovo.animus.pathing.util.ActionCosts;
+import com.dwinovo.animus.pathing.util.PathSettings;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
@@ -51,13 +52,15 @@ class NavGoalTest {
     }
 
     @Test
-    void pointBoundIsConsistentWithMoveCosts() {
-        // One flat step: exactly one walk. One step up: walk + jump.
-        assertEquals(ActionCosts.WALK_ONE_BLOCK,
+    void pointBoundMatchesBaritoneGoalShape() {
+        // Baritone GoalXZ weights each flat block by costHeuristic (the heap key
+        // adds no further multiplier). One flat step = costHeuristic.
+        assertEquals(PathSettings.COST_HEURISTIC,
                 NavGoal.pointBound(GOAL, new BlockPos(9, 64, 10)), 1e-9);
-        assertEquals(ActionCosts.WALK_ONE_BLOCK + ActionCosts.JUMP_ONE_BLOCK,
+        // One flat + one up = costHeuristic + jump (GoalYLevel up term).
+        assertEquals(PathSettings.COST_HEURISTIC + ActionCosts.JUMP_ONE_BLOCK,
                 NavGoal.pointBound(GOAL, new BlockPos(9, 63, 10)), 1e-9);
-        // Descending must cost something but stay a lower bound.
+        // Three blocks of descent = 3 × DESCEND (GoalYLevel down term, fall[2]/2).
         double down = NavGoal.pointBound(GOAL, new BlockPos(10, 67, 10));
         assertEquals(3 * ActionCosts.DESCEND_ONE_BLOCK, down, 1e-9);
     }

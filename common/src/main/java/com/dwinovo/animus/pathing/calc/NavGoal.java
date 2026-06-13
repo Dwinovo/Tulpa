@@ -1,6 +1,7 @@
 package com.dwinovo.animus.pathing.calc;
 
 import com.dwinovo.animus.pathing.util.ActionCosts;
+import com.dwinovo.animus.pathing.util.PathSettings;
 import net.minecraft.core.BlockPos;
 
 /**
@@ -38,13 +39,17 @@ public interface NavGoal {
     static double pointBound(BlockPos goal, BlockPos from) {
         double dx = Math.abs(goal.getX() - from.getX());
         double dz = Math.abs(goal.getZ() - from.getZ());
-        double octile = (Math.min(dx, dz) * ActionCosts.SQRT_2 + Math.abs(dx - dz))
-                * ActionCosts.WALK_ONE_BLOCK;
+        // Baritone GoalXZ: (diagonal·√2 + straight) × costHeuristic. costHeuristic
+        // (≈ sprint cost) IS the per-block weight here — the heap key adds no
+        // further multiplier (Baritone folds the weight into the heuristic itself).
+        double horizontal = (Math.min(dx, dz) * ActionCosts.SQRT_2 + Math.abs(dx - dz))
+                * PathSettings.COST_HEURISTIC;
+        // Baritone GoalYLevel: up costs JUMP per block, down costs DESCEND (fall[2]/2).
         int dy = goal.getY() - from.getY();
         double vertical = dy > 0
                 ? dy * ActionCosts.JUMP_ONE_BLOCK
                 : -dy * ActionCosts.DESCEND_ONE_BLOCK;
-        return octile + vertical;
+        return horizontal + vertical;
     }
 
     // ---- factories ----
@@ -77,7 +82,7 @@ public interface NavGoal {
                 // Stopping up to `radius` short: subtract the walkable slack,
                 // clamped — keeps the bound admissible for in-radius nodes.
                 return Math.max(0.0, pointBound(goal, from)
-                        - radius * ActionCosts.WALK_ONE_BLOCK);
+                        - radius * PathSettings.COST_HEURISTIC);
             }
             @Override public BlockPos center() {
                 return goal;
@@ -103,7 +108,7 @@ public interface NavGoal {
             @Override public double heuristic(BlockPos from) {
                 // One step + one jump of slack vs the point bound.
                 return Math.max(0.0, pointBound(goal, from)
-                        - ActionCosts.WALK_ONE_BLOCK - ActionCosts.JUMP_ONE_BLOCK);
+                        - PathSettings.COST_HEURISTIC - ActionCosts.JUMP_ONE_BLOCK);
             }
             @Override public BlockPos center() {
                 return goal;

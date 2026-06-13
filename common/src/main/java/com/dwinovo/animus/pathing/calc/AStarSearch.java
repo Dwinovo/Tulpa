@@ -49,8 +49,14 @@ public final class AStarSearch {
     private final Long2ObjectOpenHashMap<PathNode> nodes = new Long2ObjectOpenHashMap<>();
     private final BinaryHeapOpenSet open = new BinaryHeapOpenSet();
 
-    private PathNode best;             // closest-to-goal seen, for partial fallback
-    private double bestDist;           // its raw heuristic
+    // Baritone's 7-coefficient best-so-far: one candidate endpoint per coefficient,
+    // scored h + g/coeff. A large coefficient ≈ ignores travel cost → greediest
+    // (gets closest to the goal); a small one ≈ near-optimal. On failure we return
+    // the LEAST-greedy candidate that still made real progress — the local-minima
+    // escape. Replaces a single closest-by-heuristic node, which collapsed in
+    // concave terrain.
+    private final double[] bestHeuristicSoFar = new double[PathSettings.COEFFICIENTS.length];
+    private final PathNode[] bestSoFar = new PathNode[PathSettings.COEFFICIENTS.length];
     private int expansions = 0;
 
     private State state = State.COMPUTING;
@@ -64,11 +70,15 @@ public final class AStarSearch {
 
         PathNode startNode = new PathNode(this.start, heuristic(this.start));
         startNode.cost = 0;
-        startNode.combinedCost = startNode.estimatedCostToGoal * PathSettings.COST_HEURISTIC;
+        // h is already weighted (costHeuristic lives inside the goal's XZ term),
+        // so the heap key is plain g + h — no second multiplier.
+        startNode.combinedCost = startNode.estimatedCostToGoal;
         nodes.put(this.start.asLong(), startNode);
         open.insert(startNode);
-        best = startNode;
-        bestDist = startNode.estimatedCostToGoal;
+        for (int i = 0; i < PathSettings.COEFFICIENTS.length; i++) {
+            bestHeuristicSoFar[i] = startNode.estimatedCostToGoal;
+            bestSoFar[i] = startNode;
+        }
     }
 
     /** Current search state. */
@@ -106,11 +116,6 @@ public final class AStarSearch {
                 return state;
             }
 
-            if (current.estimatedCostToGoal < bestDist) {
-                bestDist = current.estimatedCostToGoal;
-                best = current;
-            }
-
             for (Movement mv : Moves.generate(ctx, current.pos)) {
                 if (mv.cost >= ActionCosts.COST_INF) continue;
                 double tentativeG = current.cost + mv.cost;
@@ -124,10 +129,22 @@ public final class AStarSearch {
                 if (tentativeG >= neighbor.cost) continue;   // not an improvement
 
                 neighbor.cost = tentativeG;
-                neighbor.combinedCost =
-                        tentativeG + neighbor.estimatedCostToGoal * PathSettings.COST_HEURISTIC;
+                neighbor.combinedCost = tentativeG + neighbor.estimatedCostToGoal;
                 neighbor.previous = current;
                 neighbor.via = mv;
+
+                // Update each coefficient's best-so-far candidate (Baritone's
+                // local-minima escape). Small coeff weights travel cost heavily
+                // (near-optimal); large coeff almost ignores it (greedy-to-goal).
+                for (int i = 0; i < PathSettings.COEFFICIENTS.length; i++) {
+                    double scored = neighbor.estimatedCostToGoal
+                            + neighbor.cost / PathSettings.COEFFICIENTS[i];
+                    if (bestHeuristicSoFar[i] - scored > PathSettings.MIN_IMPROVEMENT) {
+                        bestHeuristicSoFar[i] = scored;
+                        bestSoFar[i] = neighbor;
+                    }
+                }
+
                 if (neighbor.isOpen()) {
                     open.update(neighbor);
                 } else {
@@ -139,12 +156,35 @@ public final class AStarSearch {
         // Terminated (open exhausted or node cap hit) vs. just out of this tick's
         // budget. Only the former produces a result; otherwise resume next tick.
         if (open.isEmpty() || expansions >= maxNodes) {
-            result = (best.via == null)
-                    ? new Path(start, start, Collections.emptyList(), true)
-                    : reconstruct(best, true);
+            result = bestEffort();
             state = State.DONE;
         }
         return state;
+    }
+
+    /**
+     * Baritone's {@code bestSoFar()}: walk the coefficients small→large and return
+     * the first candidate that travelled farther than {@code MIN_DIST_PATH²} from
+     * the start — the least-greedy partial that made genuine progress. An empty
+     * path if none did (so the caller reports a clean "no path").
+     */
+    private Path bestEffort() {
+        double minDistSq = PathSettings.MIN_DIST_PATH * PathSettings.MIN_DIST_PATH;
+        for (int i = 0; i < PathSettings.COEFFICIENTS.length; i++) {
+            PathNode candidate = bestSoFar[i];
+            if (candidate != null && candidate.via != null
+                    && distFromStartSq(candidate) > minDistSq) {
+                return reconstruct(candidate, true);
+            }
+        }
+        return new Path(start, start, Collections.emptyList(), true);
+    }
+
+    private double distFromStartSq(PathNode node) {
+        double dx = node.pos.getX() - start.getX();
+        double dy = node.pos.getY() - start.getY();
+        double dz = node.pos.getZ() - start.getZ();
+        return dx * dx + dy * dy + dz * dz;
     }
 
     private boolean isAtGoal(BlockPos pos) {
