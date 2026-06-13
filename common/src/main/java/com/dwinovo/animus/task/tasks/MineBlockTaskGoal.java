@@ -316,10 +316,9 @@ public final class MineBlockTaskGoal extends LlmTaskGoal<MineBlockTaskRecord> {
     /**
      * Best remaining target by {@link MiningEconomics#score} (distance plus a
      * per-block penalty for depth below the feet — lateral deposits beat
-     * shaft-digging when both exist), excluding skip-listed positions, the
-     * pet's own placed scaffolding (the bridge it walked in on), and
-     * walkway-looking blocks floating over liquid at its own floor level
-     * (cold-start guard for bridges the ledger no longer remembers).
+     * shaft-digging when both exist), excluding skip-listed positions and any
+     * block in the pet's own floor plane whose removal would drop it (its
+     * bridge or footing — see {@link #removingWouldDropMe}).
      */
     /** Fluid-adjacent candidates skipped in the last scan — for the teaching message. */
     private int skippedFluid;
@@ -333,8 +332,7 @@ public final class MineBlockTaskGoal extends LlmTaskGoal<MineBlockTaskRecord> {
             // so once raw distance exceeds the best score nothing can win.
             if (hit.distance() >= bestScore) break;
             if (skipped.contains(hit.pos())) continue;
-            if (entity.scaffoldLedger().isOwnScaffold(hit.pos(), hit.state().getBlock())) continue;
-            if (looksLikeOwnWalkway(level, center, hit.pos())) continue;
+            if (removingWouldDropMe(level, center, hit.pos())) continue;
             if (BlockMiningProgress.fluidBreakHazard(level, hit.pos()) != null) {
                 skippedFluid++;   // breaking it would flood/burn — counted for the teach
                 continue;
@@ -349,14 +347,18 @@ public final class MineBlockTaskGoal extends LlmTaskGoal<MineBlockTaskRecord> {
     }
 
     /**
-     * Cold-start bridge heuristic (the ledger forgets across restarts): a
-     * target sitting in the pet's own floor plane with liquid directly
-     * beneath is in all likelihood the walkway it is standing on — mining it
-     * cuts the way home and ends in a swim.
+     * Would mining this target drop the pet? True for a block in its own floor
+     * plane ({@code feet.Y - 1}) whose support below is not standable — air
+     * (a bridge over a ravine) or fluid (a bridge over water/lava). Memory-free
+     * geometry that replaces the old placed-scaffold ledger: it protects ANY
+     * load-bearing footing the pet is on, not just the blocks the pathfinder
+     * happened to place and still remembers. A floor block resting on solid
+     * ground isn't protected — and shouldn't be: mining it just steps you down
+     * one block. Baritone's stance: trust the live world, keep no side table.
      */
-    private static boolean looksLikeOwnWalkway(Level level, BlockPos feet, BlockPos target) {
+    private static boolean removingWouldDropMe(Level level, BlockPos feet, BlockPos target) {
         return target.getY() == feet.getY() - 1
-                && !level.getBlockState(target.below()).getFluidState().isEmpty();
+                && !com.dwinovo.animus.pathing.util.BlockHelper.canWalkOn(level, target.below());
     }
 
     @Override

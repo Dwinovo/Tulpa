@@ -200,8 +200,9 @@ public abstract class MovementDrive {
 
     /**
      * Place one scaffold block into {@code cell} through the fake player —
-     * vanilla placement rules (entity-collision rejection included), tally
-     * and ledger bookkeeping on success.
+     * vanilla placement rules (entity-collision rejection included) and tally
+     * bookkeeping on success. auto_mine protects this footing by geometry, not
+     * by a placement ledger (see {@code MineBlockTaskGoal.removingWouldDropMe}).
      */
     protected final ScaffoldOutcome placeScaffold(BlockPos cell) {
         int slot = scaffoldSlot();
@@ -210,8 +211,6 @@ public abstract class MovementDrive {
         return switch (FakePlayerUse.placeBlockItem(entity, slot, cell)) {
             case PLACED -> {
                 entity.pathTally().addPlaced(block);
-                // Ledger the placement: auto_mine must never loot our own bridge.
-                entity.scaffoldLedger().record(cell, block);
                 host.log("placed scaffold " + block + " @ " + cell);
                 yield ScaffoldOutcome.PLACED;
             }
