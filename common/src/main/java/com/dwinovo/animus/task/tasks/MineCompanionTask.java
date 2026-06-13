@@ -12,9 +12,7 @@ import com.dwinovo.animus.task.TaskResult;
 import com.dwinovo.animus.task.TaskState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -236,32 +234,13 @@ public final class MineCompanionTask implements CompanionTask {
 
     // ---- mining (progressive, tick-by-tick like Baritone / a real player) ----
 
-    /** Switch to the best tool for a fresh target, then advance the shared dig one
-     *  tick; on the tick it breaks, count it and drop it from the ore list. */
+    /** Advance the shared dig one tick (it switches to the best tool itself); on
+     *  the tick it breaks, count it and drop it from the ore list. */
     private void mineProgress(BlockPos pos) {
-        if (!pos.equals(digger.current())) {                 // first tick on this block
-            switchToBestTool(player.level().getBlockState(pos));
-        }
         if (digger.dig(pos)) {
             r.incrementMined();
             knownOres.remove(pos);
         }
-    }
-
-    /** Baritone switchToBestToolFor / ToolSet.getBestSlot: select the hotbar slot
-     *  whose item mines {@code state} fastest. */
-    private void switchToBestTool(BlockState state) {
-        Inventory inv = player.getInventory();
-        int best = inv.getSelectedSlot();
-        float bestSpeed = inv.getItem(best).getDestroySpeed(state);
-        for (int i = 0; i < Inventory.getSelectionSize(); i++) {
-            float s = inv.getItem(i).getDestroySpeed(state);
-            if (s > bestSpeed) {
-                bestSpeed = s;
-                best = i;
-            }
-        }
-        inv.setSelectedSlot(best);
     }
 
     // ---- ore list maintenance ----

@@ -3,7 +3,9 @@ package com.dwinovo.animus.pathing.exec;
 import com.dwinovo.animus.entity.AnimusPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -75,10 +77,31 @@ public final class BlockDigger {
         swingCd = 0;
         lastStage = -1;
         Level level = player.level();
-        // getDestroyProgress is the per-tick fraction (tool/enchant/haste/water/
-        // airborne folded in), so the dig takes ceil(1 / fraction) ticks.
-        float perTick = level.getBlockState(pos).getDestroyProgress(player, level, pos);
+        BlockState state = level.getBlockState(pos);
+        // Hold the best tool BEFORE timing the dig, so duration matches the pathing
+        // cost model (NavContext costs every break with the best hotbar tool —
+        // Baritone switchToBestToolFor). getDestroyProgress is then the per-tick
+        // fraction with that tool (enchant/haste/water/airborne folded in), so the
+        // dig takes ceil(1 / fraction) ticks.
+        switchToBestTool(state);
+        float perTick = state.getDestroyProgress(player, level, pos);
         total = perTick <= 0.0f ? 1 : Math.max(1, (int) Math.ceil(1.0f / perTick));
+    }
+
+    /** Select the hotbar slot whose item mines {@code state} fastest
+     *  (Baritone ToolSet.getBestSlot / switchToBestToolFor). */
+    private void switchToBestTool(BlockState state) {
+        Inventory inv = player.getInventory();
+        int best = inv.getSelectedSlot();
+        float bestSpeed = inv.getItem(best).getDestroySpeed(state);
+        for (int i = 0; i < Inventory.getSelectionSize(); i++) {
+            float s = inv.getItem(i).getDestroySpeed(state);
+            if (s > bestSpeed) {
+                bestSpeed = s;
+                best = i;
+            }
+        }
+        inv.setSelectedSlot(best);
     }
 
     /** Abandon any in-progress dig and clear its crack overlay. */
