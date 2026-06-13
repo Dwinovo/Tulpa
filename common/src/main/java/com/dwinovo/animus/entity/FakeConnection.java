@@ -1,6 +1,7 @@
 package com.dwinovo.animus.entity;
 
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.network.Connection;
 import net.minecraft.network.DisconnectionDetails;
 import net.minecraft.network.chat.Component;
@@ -19,17 +20,31 @@ import java.util.function.Consumer;
  * attached — a slow leak. So we subclass and DISCARD all outbound I/O.
  *
  * <p>{@code Connection} is non-final with a public {@code PacketFlow} ctor, so
- * this is pure common code — no reflection, access-wideners or mixins. We report
- * {@link #isConnected()} as {@code true} so vanilla treats the player as live and
- * ticks it normally, and we neutralise the keep-alive timeout: that path calls
- * {@link #disconnect(Component)} after 15s of no client reply, which we no-op so
- * the companion is never auto-removed. The body's lifecycle is governed
- * explicitly by {@code CompanionLifecycle}, not by connection state.
+ * this is pure common code — no reflection, access-wideners or mixins. Two
+ * details make {@code placeNewPlayer} accept it:
+ * <ul>
+ *   <li><b>SERVERBOUND</b> receiving flow — a server-side player connection
+ *       receives serverbound packets (the client sends them), so its listener
+ *       is serverbound; {@code validateListener} rejects a CLIENTBOUND mismatch.</li>
+ *   <li>a real (in-memory) {@link EmbeddedChannel} — {@code placeNewPlayer ->
+ *       setupInboundProtocol} configures the channel's pipeline, which NPEs on a
+ *       channel-less connection. Registering this Connection as the embedded
+ *       channel's handler fires {@code channelActive}, setting the channel.</li>
+ * </ul>
+ * Outbound packets are still discarded by the {@code send} override (the
+ * embedded channel is never written to, so it never buffers/leaks), and the
+ * keep-alive timeout is neutralised via the no-op {@code disconnect} (a fake
+ * player never answers keep-alive). Lifecycle is governed by
+ * {@code CompanionLifecycle}, not by connection state.
  */
 public final class FakeConnection extends Connection {
 
     public FakeConnection() {
-        super(PacketFlow.CLIENTBOUND);
+        super(PacketFlow.SERVERBOUND);
+        // Registering this Connection (a netty inbound handler) as the embedded
+        // channel's handler fires channelActive → sets this.channel, so the
+        // pipeline setup inside placeNewPlayer has a channel to work on.
+        new EmbeddedChannel(this);
     }
 
     /** Discard every outbound packet — there is no client to receive it.
