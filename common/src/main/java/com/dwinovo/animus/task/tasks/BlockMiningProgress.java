@@ -305,6 +305,12 @@ public final class BlockMiningProgress {
      * spawn ItemEntities in the world unless the inventory rejects them.
      * The LLM sees the new items through the server-side
      * {@code get_self_status} query.
+     *
+     * <p>Deliberately NOT routed through the fake player (unlike use/place):
+     * the fake player's {@code Player.Inventory} would capture the drops in the
+     * wrong container and apply ITS gear's enchantments, not the pet's. Mining
+     * is the one interaction the pet owns natively (it breaks with its own
+     * hand, into its own {@link SimpleContainer}), so the break stays here.
      */
     private void breakAndRouteDrops(Level level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);

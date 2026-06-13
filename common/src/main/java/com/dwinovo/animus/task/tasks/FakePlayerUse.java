@@ -51,23 +51,49 @@ public final class FakePlayerUse {
      * unaimed fallback).
      */
     public static InteractionResult useOnBlock(AnimusEntity entity, int invSlot, BlockHitResult hit) {
+        // Gaze-gated: a player couldn't click a face it can't see. No sneak —
+        // a plain right-click may open the support block's GUI, which is what a
+        // bare use_item wants (the place_block path sneaks; see placeBlockItem).
+        return interact(entity, invSlot, hit, /*sneak=*/false, /*requireLineOfSight=*/true);
+    }
+
+    /**
+     * The single block-targeted interaction: position, aim, optionally verify
+     * line of sight and sneak, then run the real {@code useItemOn} (falling
+     * through to the aimed air-use {@code useItem} when the block click PASSes —
+     * buckets/ender-eye pick from the eye), and reconcile the fake player's
+     * inventory back. The took/consume signal is vanilla's
+     * {@link InteractionResult#consumesAction()} — never a world re-probe:
+     * non-colliding placeables (torch, sapling, redstone, carpet) place with an
+     * EMPTY collision shape, so a shape probe would mis-report them REFUSED.
+     * Consumption is vanilla's too (the fake player is pinned to survival in
+     * {@code IFakePlayerBridge.reset}), so reconcile carries back stack-minus-one
+     * with no manual accounting.
+     */
+    private static InteractionResult interact(AnimusEntity entity, int invSlot, BlockHitResult hit,
+                                              boolean sneak, boolean requireLineOfSight) {
         ServerLevel level = (ServerLevel) entity.level();
         return Services.FAKE_PLAYER.withFakePlayer(level, fp -> {
             position(fp, entity);
             aimAt(fp, hit.getLocation());
-            if (!canSee(fp, level, hit)) {
+            if (requireLineOfSight && !canSee(fp, level, hit)) {
                 return InteractionResult.FAIL;   // occluded — a player couldn't click this
             }
-            ItemStack copy = entity.getInventory().getItem(invSlot).copy();
-            fp.setItemInHand(InteractionHand.MAIN_HAND, copy);
-            InteractionResult res = fp.gameMode.useItemOn(
-                    fp, level, fp.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND, hit);
-            if (!res.consumesAction()) {
-                res = fp.gameMode.useItem(
-                        fp, level, fp.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
+            if (sneak) fp.setShiftKeyDown(true);
+            try {
+                fp.setItemInHand(InteractionHand.MAIN_HAND,
+                        entity.getInventory().getItem(invSlot).copy());
+                InteractionResult res = fp.gameMode.useItemOn(
+                        fp, level, fp.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND, hit);
+                if (!res.consumesAction()) {
+                    res = fp.gameMode.useItem(
+                            fp, level, fp.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
+                }
+                reconcile(entity, invSlot, fp);
+                return res;
+            } finally {
+                if (sneak) fp.setShiftKeyDown(false);
             }
-            reconcile(entity, invSlot, fp);
-            return res;
         });
     }
 
@@ -120,20 +146,33 @@ public final class FakePlayerUse {
     public static ServerPlayer beginHold(AnimusEntity entity, int invSlot, Vec3 aimOrNull) {
         ServerLevel level = (ServerLevel) entity.level();
         ServerPlayer fp = Services.FAKE_PLAYER.acquireLease(level);
-        position(fp, entity);
-        if (aimOrNull != null) {
-            aimAt(fp, aimOrNull);
-        }
-        ItemStack copy = entity.getInventory().getItem(invSlot).copy();
-        fp.setItemInHand(InteractionHand.MAIN_HAND, copy);
-        lendProjectiles(entity, fp, copy);
-        fp.gameMode.useItem(fp, level, fp.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
-        if (!fp.isUsingItem()) {
+        try {
+            position(fp, entity);
+            if (aimOrNull != null) {
+                aimAt(fp, aimOrNull);
+            }
+            ItemStack copy = entity.getInventory().getItem(invSlot).copy();
+            fp.setItemInHand(InteractionHand.MAIN_HAND, copy);
+            // Lend ammo BEFORE the press: a bow's use() returns FAIL (no hold
+            // begins) unless the projectile is already in hand. The arrows ride
+            // in the fake player through the hold and come back via reconcile.
+            lendProjectiles(entity, fp, copy);
+            fp.gameMode.useItem(fp, level, fp.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
+            if (!fp.isUsingItem()) {
+                reconcile(entity, invSlot, fp);   // no hold behaviour — give the stack + any lent ammo back
+                Services.FAKE_PLAYER.releaseLease(fp);
+                return null;
+            }
+            return fp;
+        } catch (RuntimeException e) {
+            // A throw after the lease was taken (or after ammo was lent) must
+            // never strand the shared fake player or eat the entity's arrows:
+            // reconcile sweeps the fake player's inventory — held stack AND lent
+            // projectiles — back to the entity, then we release and rethrow.
             reconcile(entity, invSlot, fp);
             Services.FAKE_PLAYER.releaseLease(fp);
-            return null;
+            throw e;
         }
-        return fp;
     }
 
     /** Release after {@code heldTicks} of charge (fires the bow), reconcile, return the lease. */
@@ -191,10 +230,10 @@ public final class FakePlayerUse {
      *
      * <p>No line-of-sight gate, deliberately: scaffolding is point-blank work
      * against the block at the feet, mirroring the mining engine's stance on
-     * clearance digging.
-     *
-     * <p>Consumption is accounted manually (exactly one item on success) —
-     * dupe-proof regardless of the fake player's game mode.
+     * clearance digging. Success and consumption are vanilla's
+     * ({@link #interact}): a sneak {@code useItemOn} that consumes the action
+     * placed the block — including non-colliding placeables the old
+     * collision-shape probe wrongly reported as REFUSED.
      */
     public static PlaceResult placeBlockItem(AnimusEntity entity, int invSlot, BlockPos cell) {
         ServerLevel level = (ServerLevel) entity.level();
@@ -202,27 +241,8 @@ public final class FakePlayerUse {
         if (support == null) {
             return PlaceResult.NO_SUPPORT;
         }
-        return Services.FAKE_PLAYER.withFakePlayer(level, fp -> {
-            position(fp, entity);
-            aimAt(fp, support.getLocation());
-            fp.setShiftKeyDown(true);
-            try {
-                ItemStack original = entity.getInventory().getItem(invSlot);
-                fp.setItemInHand(InteractionHand.MAIN_HAND, original.copy());
-                fp.gameMode.useItemOn(fp, level,
-                        fp.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND, support);
-                // Judge by the WORLD, not the result code: did the cell fill?
-                boolean placed = !level.getBlockState(cell).getCollisionShape(level, cell).isEmpty();
-                if (placed) {
-                    original.shrink(1);
-                    entity.getInventory().setChanged();
-                    return PlaceResult.PLACED;
-                }
-                return PlaceResult.REFUSED;
-            } finally {
-                fp.setShiftKeyDown(false);
-            }
-        });
+        InteractionResult res = interact(entity, invSlot, support, /*sneak=*/true, /*requireLineOfSight=*/false);
+        return res.consumesAction() ? PlaceResult.PLACED : PlaceResult.REFUSED;
     }
 
     /**

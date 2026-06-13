@@ -2,6 +2,7 @@ package com.dwinovo.animus.platform.services;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.GameType;
 
 import java.util.function.Function;
 
@@ -68,9 +69,19 @@ public interface IFakePlayerBridge {
         reset(fp);
     }
 
-    /** Drop all held/used state so nothing leaks to the next task. */
+    /**
+     * Drop all held/used state so nothing leaks to the next task, and pin the
+     * fake player to SURVIVAL. The game mode is load-bearing: the placement /
+     * use primitives now trust vanilla to consume the stack (no manual
+     * book-keeping), which only holds in survival — a creative-default world
+     * would otherwise place a block AND keep the item, duping. The pin is
+     * idempotent: {@code changeGameModeForPlayer} no-ops (no packet) once the
+     * cached instance is already survival, so this costs a field compare after
+     * the first call.
+     */
     private static void reset(ServerPlayer fp) {
         fp.stopUsingItem();
         fp.getInventory().clearContent();
+        fp.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
     }
 }
