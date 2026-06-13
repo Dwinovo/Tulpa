@@ -1,8 +1,8 @@
 package com.dwinovo.animus.task.tasks;
 
-import com.dwinovo.animus.entity.AnimusEntity;
-import com.dwinovo.animus.pathing.exec.Navigator;
-import com.dwinovo.animus.task.LlmTaskGoal;
+import com.dwinovo.animus.entity.AnimusPlayer;
+import com.dwinovo.animus.pathing.exec.PlayerNav;
+import com.dwinovo.animus.task.CompanionTask;
 import com.dwinovo.animus.task.TaskResult;
 import com.dwinovo.animus.task.TaskState;
 import net.minecraft.core.BlockPos;
@@ -29,7 +29,7 @@ import java.util.Set;
  *              reach the spot without picking it up (skip), then re-SCAN.
  * </pre>
  */
-public final class CollectItemsTaskGoal extends LlmTaskGoal<CollectItemsTaskRecord> {
+public final class CollectItemsTaskGoal implements CompanionTask {
 
     private enum Phase { SCAN, APPROACH }
 
@@ -39,30 +39,35 @@ public final class CollectItemsTaskGoal extends LlmTaskGoal<CollectItemsTaskReco
 
     private Phase phase = Phase.SCAN;
     private ItemEntity target;
-    private Navigator nav;
+    private PlayerNav nav;
 
     /** Item-entity ids we reached but couldn't absorb, so SCAN won't loop on them. */
     private final Set<Integer> skipped = new HashSet<>();
 
-    public CollectItemsTaskGoal(AnimusEntity entity) {
-        super(entity, CollectItemsTaskRecord.TOOL_NAME, CollectItemsTaskRecord.class);
+    private final AnimusPlayer player;
+    private final CollectItemsTaskRecord r;
+
+    public CollectItemsTaskGoal(AnimusPlayer player, CollectItemsTaskRecord record) {
+        this.player = player;
+        this.r = record;
     }
 
     @Override
-    protected void onStart(CollectItemsTaskRecord r) {
+    public void start() {
         this.phase = Phase.SCAN;
     }
 
     @Override
-    protected void onTick(CollectItemsTaskRecord r) {
-        if (entity.isDeadOrDying()) {
+    public TaskState tick() {
+        if (player.isDeadOrDying()) {
             r.setState(TaskState.CANCELLED);
-            return;
+            return r.getState();
         }
         switch (phase) {
             case SCAN -> tickScan(r);
             case APPROACH -> tickApproach(r);
         }
+        return r.getState();
     }
 
     private void tickScan(CollectItemsTaskRecord r) {
@@ -74,7 +79,7 @@ public final class CollectItemsTaskGoal extends LlmTaskGoal<CollectItemsTaskReco
             return;
         }
         target = best;
-        nav = new Navigator(entity, this::targetCell, WALK_SPEED, this::picked);
+        nav = new PlayerNav(player, this::targetCell, WALK_SPEED, this::picked);
         phase = Phase.APPROACH;
     }
 
@@ -83,7 +88,7 @@ public final class CollectItemsTaskGoal extends LlmTaskGoal<CollectItemsTaskReco
             // Absorbed (by us or otherwise) — count it if it was ours to get.
             if (target != null) {
                 r.incrementCollected();
-                entity.setDebugTask(r.describe());
+                player.setDebugTask(r.describe());
             }
             stopNav();
             phase = Phase.SCAN;
@@ -117,18 +122,18 @@ public final class CollectItemsTaskGoal extends LlmTaskGoal<CollectItemsTaskReco
     /** Reached = absorbed, or close enough that auto-pickup should have fired. */
     private boolean picked() {
         return target == null || target.isRemoved()
-                || entity.distanceToSqr(target) <= PICKUP_REACH_SQR;
+                || player.distanceToSqr(target) <= PICKUP_REACH_SQR;
     }
 
     private ItemEntity nearestItem(CollectItemsTaskRecord r) {
-        AABB box = entity.getBoundingBox().inflate(r.radius);
+        AABB box = player.getBoundingBox().inflate(r.radius);
         ItemEntity best = null;
         double bestDistSq = Double.MAX_VALUE;
-        for (Entity e : entity.level().getEntities(entity, box)) {
+        for (Entity e : player.level().getEntities(player, box)) {
             if (!(e instanceof ItemEntity ie) || ie.isRemoved()) continue;
             if (skipped.contains(ie.getId())) continue;
             if (!r.filter.isEmpty() && !r.filter.contains(ie.getItem().getItem())) continue;
-            double d = entity.distanceToSqr(ie);
+            double d = player.distanceToSqr(ie);
             if (d < bestDistSq) {
                 bestDistSq = d;
                 best = ie;
@@ -145,9 +150,8 @@ public final class CollectItemsTaskGoal extends LlmTaskGoal<CollectItemsTaskReco
     }
 
     @Override
-    protected TaskResult buildResult(CollectItemsTaskRecord r, TaskState finalState) {
+    public TaskResult buildResult(TaskState finalState) {
         stopNav();
-        entity.getNavigation().stop();
 
         Map<String, Object> data = new HashMap<>();
         data.put("label", r.label);
