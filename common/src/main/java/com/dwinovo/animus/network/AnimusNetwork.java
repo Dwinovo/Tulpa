@@ -4,6 +4,7 @@ import com.dwinovo.animus.network.payload.AnimusDeathPayload;
 import com.dwinovo.animus.network.payload.AnimusLocationsPayload;
 import com.dwinovo.animus.network.payload.LocateAnimusPayload;
 import com.dwinovo.animus.network.payload.CancelTasksPayload;
+import com.dwinovo.animus.network.payload.CompanionListPayload;
 import com.dwinovo.animus.network.payload.ExecuteToolPayload;
 import com.dwinovo.animus.network.payload.TaskResultPayload;
 import com.dwinovo.animus.platform.Services;
@@ -45,6 +46,12 @@ public final class AnimusNetwork {
         Services.NETWORK.registerServerToClient(
                 AnimusDeathPayload.TYPE, AnimusDeathPayload.STREAM_CODEC,
                 AnimusDeathPayload::handle);
+
+        // S→C: the owner's companion roster (UUID + name), pushed on login + summon
+        // so the client panel knows which fake players are its companions.
+        Services.NETWORK.registerServerToClient(
+                CompanionListPayload.TYPE, CompanionListPayload.STREAM_CODEC,
+                CompanionListPayload::handle);
 
         // C→S: roster panel asks where its (possibly far / cross-dimension) pets are.
         Services.NETWORK.registerClientToServer(

@@ -108,7 +108,7 @@ public final class RosterScreen extends Screen {
 
         if (roster.isEmpty()) {
             g.text(font, Component.literal("No companions yet."), bodyX, bodyY + 4, 0xFF888888);
-            g.text(font, Component.literal("Right-click a tamed Animus to enroll it."),
+            g.text(font, Component.literal("Summon one with /animus_summon."),
                     bodyX, bodyY + 16, 0xFF606060);
             return;
         }

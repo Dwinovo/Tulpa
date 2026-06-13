@@ -1,10 +1,14 @@
 package com.dwinovo.animus.entity;
 
+import com.dwinovo.animus.network.payload.CompanionListPayload;
+import com.dwinovo.animus.platform.Services;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -49,6 +53,21 @@ public final class Companions {
         for (Map.Entry<UUID, CompanionRegistry.Entry> e : CompanionRegistry.get(server).ownedBy(ownerUuid)) {
             respawn(server, e.getKey());
         }
+    }
+
+    /**
+     * Push the owner's companion roster (UUID + name) to their client, so the
+     * roster panel knows which fake players are its companions — the replacement
+     * for the deleted right-click enrolment. Safe to call repeatedly; the client
+     * roster is a write-through upsert.
+     */
+    public static void syncRosterToOwner(MinecraftServer server, ServerPlayer owner) {
+        List<CompanionListPayload.Entry> list = new ArrayList<>();
+        for (Map.Entry<UUID, CompanionRegistry.Entry> e
+                : CompanionRegistry.get(server).ownedBy(owner.getUUID())) {
+            list.add(new CompanionListPayload.Entry(e.getKey(), e.getValue().name()));
+        }
+        Services.NETWORK.sendToPlayer(owner, new CompanionListPayload(list));
     }
 
     /** Save the companion to its {@code .dat} and remove it from the world (dormancy). */

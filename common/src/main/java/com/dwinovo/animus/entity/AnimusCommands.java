@@ -33,6 +33,8 @@ public final class AnimusCommands {
         ServerLevel level = (ServerLevel) owner.level();
         AnimusPlayer body = Companions.summon(
                 level.getServer(), owner.getUUID(), name, level, owner.position());
+        // Push the updated roster so the owner's panel can reach the new companion.
+        Companions.syncRosterToOwner(level.getServer(), owner);
         ctx.getSource().sendSuccess(() ->
                 Component.literal("Summoned companion '" + name + "' (" + body.getUUID() + ")"), false);
         return 1;

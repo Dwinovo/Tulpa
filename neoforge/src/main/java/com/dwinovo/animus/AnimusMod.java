@@ -64,6 +64,7 @@ public class AnimusMod {
         MinecraftServer server = player.level().getServer();
         if (server != null) {
             com.dwinovo.animus.entity.Companions.respawnAllOwnedBy(server, player.getUUID());
+            com.dwinovo.animus.entity.Companions.syncRosterToOwner(server, player);
         }
     }
 

@@ -38,6 +38,7 @@ public class AnimusMod implements ModInitializer {
                     ServerPlayer player = handler.getPlayer();
                     if (player instanceof com.dwinovo.animus.entity.AnimusPlayer) return;  // not the companion itself
                     com.dwinovo.animus.entity.Companions.respawnAllOwnedBy(server, player.getUUID());
+                    com.dwinovo.animus.entity.Companions.syncRosterToOwner(server, player);
                 });
 
         // Bring owned companions along when the owner crosses a dimension.
