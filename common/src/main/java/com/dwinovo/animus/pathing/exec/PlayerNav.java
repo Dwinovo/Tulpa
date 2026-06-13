@@ -4,7 +4,9 @@ import com.dwinovo.animus.entity.AnimusPlayer;
 import com.dwinovo.animus.pathing.calc.AStar;
 import com.dwinovo.animus.pathing.calc.AStarSearch;
 import com.dwinovo.animus.pathing.calc.NavContext;
+import com.dwinovo.animus.pathing.calc.NavGoal;
 import com.dwinovo.animus.pathing.calc.Path;
+import com.dwinovo.animus.pathing.util.BlockHelper;
 import com.dwinovo.animus.pathing.util.PathSettings;
 import net.minecraft.core.BlockPos;
 
@@ -18,6 +20,11 @@ import java.util.function.Supplier;
  * planning pause at a segment boundary; re-root on a moving goal or after an
  * off-path replan) but executing through {@link PlayerPathExecutor}. The A*
  * planner ({@link NavContext}/{@link AStar}) is body-neutral and reused as-is.
+ *
+ * <p>Internally the goal is a {@link NavGoal} so callers can target a single
+ * cell ({@link #PlayerNav(AnimusPlayer, BlockPos, double, BooleanSupplier)}) or
+ * a richer goal — a {@link NavGoal#composite composite} ore field, a mining
+ * stance — via {@link #toGoal}.
  */
 public final class PlayerNav {
 
@@ -28,12 +35,12 @@ public final class PlayerNav {
     private static final double GOAL_MOVED_SQR = 4.0;
 
     private final AnimusPlayer player;
-    private final Supplier<BlockPos> goalSupplier;
+    private final Supplier<NavGoal> goalSupplier;
     private final double speed;
     private final BooleanSupplier reached;
     private final AStar astar = new AStar();
 
-    private BlockPos plannedGoal;
+    private BlockPos plannedCenter;
     private PlayerPathExecutor current;
 
     private AStarSearch search;
@@ -43,17 +50,40 @@ public final class PlayerNav {
     private int replans = 0;
     private String failReason = "target unreachable";
 
+    /** Walk to a single cell. */
     public PlayerNav(AnimusPlayer player, BlockPos goal, double speed, BooleanSupplier reached) {
-        this(player, () -> goal, speed, reached);
+        this(player, () -> resolveBlockGoal(player, goal), speed, reached, true);
     }
 
+    /** Walk to a (possibly moving) single cell. */
     public PlayerNav(AnimusPlayer player, Supplier<BlockPos> goalSupplier, double speed,
                      BooleanSupplier reached) {
+        this(player, () -> {
+            BlockPos g = goalSupplier.get();
+            return g == null ? null : resolveBlockGoal(player, g);
+        }, speed, reached, true);
+    }
+
+    /** Walk toward an arbitrary {@link NavGoal} (composite ore field, mining stance, …). */
+    public static PlayerNav toGoal(AnimusPlayer player, Supplier<NavGoal> goalSupplier,
+                                   double speed, BooleanSupplier reached) {
+        return new PlayerNav(player, goalSupplier, speed, reached, true);
+    }
+
+    private PlayerNav(AnimusPlayer player, Supplier<NavGoal> goalSupplier, double speed,
+                      BooleanSupplier reached, boolean marker) {
         this.player = player;
         this.goalSupplier = goalSupplier;
         this.speed = speed;
         this.reached = reached;
         startFreshSearch();
+    }
+
+    /** A cell goal: exact if standable, else reach within 2 (mirrors move_to arrival). */
+    private static NavGoal resolveBlockGoal(AnimusPlayer player, BlockPos bp) {
+        return BlockHelper.canWalkThrough(player.level(), bp)
+                ? NavGoal.exact(bp)
+                : NavGoal.near(bp, 2.0);
     }
 
     public Status tick() {
@@ -63,12 +93,12 @@ public final class PlayerNav {
             return advanceFreshSearch();
         }
 
-        BlockPos liveGoal = goalSupplier.get();
+        NavGoal liveGoal = goalSupplier.get();
         if (liveGoal == null) {
             failReason = "target lost";
             return Status.FAILED;
         }
-        if (plannedGoal != null && liveGoal.distSqr(plannedGoal) > GOAL_MOVED_SQR) {
+        if (plannedCenter != null && liveGoal.center().distSqr(plannedCenter) > GOAL_MOVED_SQR) {
             discardPrecompute();
             return restartFresh(false);
         }
@@ -108,8 +138,8 @@ public final class PlayerNav {
     }
 
     private void startFreshSearch() {
-        BlockPos g = goalSupplier.get();
-        plannedGoal = g;
+        NavGoal g = goalSupplier.get();
+        plannedCenter = (g == null) ? null : g.center();
         search = (g == null) ? null : astar.newSearch(freshContext(), player.blockPosition(), g);
     }
 
@@ -150,9 +180,9 @@ public final class PlayerNav {
         // Baritone planAhead: start the next segment once the current one has
         // fewer than planningTickLookahead (150) ticks of travel left.
         if (current.remainingCost() > PathSettings.PLANNING_TICK_LOOKAHEAD) return;
-        BlockPos g = goalSupplier.get();
+        NavGoal g = goalSupplier.get();
         if (g == null) return;
-        plannedGoal = g;
+        plannedCenter = g.center();
         nextSearch = astar.newSearch(freshContext(), current.pathEnd(), g);
     }
 
