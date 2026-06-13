@@ -160,14 +160,7 @@ public final class PlayerPathExecutor {
         switch (mv.kind) {
             case TRAVERSE -> InputDriver.stepToward(player, dest, speed >= 1.0);
             case DIAGONAL -> InputDriver.stepToward(player, dest, speed >= 1.0);
-            case ASCEND -> {
-                InputDriver.stepToward(player, dest, false);
-                // Jump only once we're actually moving forward and on the ground —
-                // prevents the machine-gun hop that fires before alignment.
-                if (player.onGround() && horizontalSpeedSqr() > 0.006) {
-                    InputDriver.jump(player);
-                }
-            }
+            case ASCEND -> driveAscend(mv);
             case PARKOUR -> {
                 int gap = Math.max(Math.abs(mv.dest.getX() - mv.src.getX()),
                         Math.abs(mv.dest.getZ() - mv.src.getZ()));
@@ -180,16 +173,23 @@ public final class PlayerPathExecutor {
             }
             case PILLAR -> drivePillar(mv);
             case DESCEND, FALL -> {
-                // Baritone fakeDest: aim one block PAST dest for the first ~20 ticks
-                // to carry momentum off the ledge (a step-down stalls at the lip
-                // without forward push), then settle onto dest. Gravity does the rest.
-                Vec3 aim = (ticksOnCurrent < 20)
-                        ? Vec3.atBottomCenterOf(new BlockPos(
-                                2 * mv.dest.getX() - mv.src.getX(),
-                                mv.dest.getY(),
-                                2 * mv.dest.getZ() - mv.src.getZ()))
-                        : dest;
-                InputDriver.stepToward(player, aim, false);
+                // Baritone MovementDescend: aim one block past dest (fakeDest) for the
+                // first ~20 ticks WHILE still near the start (fromStart<1.25), to carry
+                // momentum off the ledge; then aim at dest. Stop pushing once we're
+                // horizontally on dest (ab<=0.25) so gravity settles us cleanly
+                // instead of overshooting the landing.
+                double ab = horizontalDistTo(mv.dest);
+                if (!player.blockPosition().equals(mv.dest) || ab > 0.25) {
+                    Vec3 aim = (ticksOnCurrent < 20 && horizontalDistTo(mv.src) < 1.25)
+                            ? Vec3.atBottomCenterOf(new BlockPos(
+                                    2 * mv.dest.getX() - mv.src.getX(),
+                                    mv.dest.getY(),
+                                    2 * mv.dest.getZ() - mv.src.getZ()))
+                            : dest;
+                    InputDriver.stepToward(player, aim, false);
+                } else {
+                    InputDriver.halt(player);
+                }
             }
             case DIG_DOWN -> InputDriver.halt(player);   // phase 1 breaks the floor; gravity drops us
             case SWIM -> {
@@ -199,6 +199,54 @@ public final class PlayerPathExecutor {
                 }
             }
         }
+    }
+
+    /**
+     * Step up one block (Baritone MovementAscend.updateState). Drive forward toward
+     * dest, then JUMP when the body is ALIGNED to the move axis (small lateral
+     * drift) and either the head is clear or we're close enough — critically NOT
+     * gated on forward speed, so hitting the step (which zeroes forward speed) still
+     * triggers the jump instead of stalling against the wall.
+     */
+    private void driveAscend(Movement mv) {
+        InputDriver.stepToward(player, Vec3.atBottomCenterOf(mv.dest), false);
+        if (player.blockPosition().equals(mv.src.above())) {
+            return;   // already airborne off the step
+        }
+        int xAxis = Math.abs(mv.src.getX() - mv.dest.getX()); // 0 or 1
+        int zAxis = Math.abs(mv.src.getZ() - mv.dest.getZ()); // 0 or 1
+        double px = player.getX();
+        double pz = player.getZ();
+        double flatDistToNext = xAxis * Math.abs((mv.dest.getX() + 0.5) - px)
+                + zAxis * Math.abs((mv.dest.getZ() + 0.5) - pz);
+        double sideDist = zAxis * Math.abs((mv.dest.getX() + 0.5) - px)
+                + xAxis * Math.abs((mv.dest.getZ() + 0.5) - pz);
+        var dm = player.getDeltaMovement();
+        double lateralMotion = xAxis * dm.z + zAxis * dm.x;   // drift perpendicular to the move axis
+        if (Math.abs(lateralMotion) > 0.1) {
+            return;   // still drifting sideways — wait until aligned
+        }
+        if (headBonkClear(mv.src)) {
+            InputDriver.jump(player);   // head's clear above — jump now (InputDriver gates onGround)
+            return;
+        }
+        if (flatDistToNext > 1.2 || sideDist > 0.2) {
+            return;   // too far / off-axis — would bonk an adjacent block
+        }
+        InputDriver.jump(player);
+    }
+
+    /** Baritone headBonkClear: the four horizontals above src+2 are passable, so a
+     *  jump won't smack the body's head into a ceiling block. */
+    private boolean headBonkClear(BlockPos src) {
+        BlockPos up2 = src.above(2);
+        for (Direction d : new Direction[]{
+                Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+            if (!BlockHelper.canWalkThrough(player.level(), up2.relative(d))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
