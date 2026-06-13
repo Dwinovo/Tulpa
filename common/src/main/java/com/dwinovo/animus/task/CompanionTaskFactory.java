@@ -1,6 +1,10 @@
 package com.dwinovo.animus.task;
 
 import com.dwinovo.animus.entity.AnimusPlayer;
+import com.dwinovo.animus.task.tasks.BreakBlockCompanionTask;
+import com.dwinovo.animus.task.tasks.BreakBlockTaskRecord;
+import com.dwinovo.animus.task.tasks.DropCompanionTask;
+import com.dwinovo.animus.task.tasks.DropItemsTaskRecord;
 import com.dwinovo.animus.task.tasks.EquipCompanionTask;
 import com.dwinovo.animus.task.tasks.EquipTaskRecord;
 import com.dwinovo.animus.task.tasks.MineBlockTaskRecord;
@@ -25,6 +29,8 @@ public final class CompanionTaskFactory {
         if (record instanceof MineBlockTaskRecord r) return new MineCompanionTask(player, r);
         if (record instanceof EquipTaskRecord r) return new EquipCompanionTask(player, r);
         if (record instanceof WaitTaskRecord r) return new WaitCompanionTask(player, r);
+        if (record instanceof DropItemsTaskRecord r) return new DropCompanionTask(player, r);
+        if (record instanceof BreakBlockTaskRecord r) return new BreakBlockCompanionTask(player, r);
         return new UnsupportedCompanionTask(record);
     }
 }
