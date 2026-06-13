@@ -3,9 +3,11 @@ package com.dwinovo.animus.pathing.movement;
 import com.dwinovo.animus.pathing.calc.NavContext;
 import com.dwinovo.animus.pathing.util.ActionCosts;
 import com.dwinovo.animus.pathing.util.BlockHelper;
+import com.dwinovo.animus.pathing.util.PathSettings;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -139,28 +141,39 @@ public final class Moves {
         BlockPos dest = from.relative(dir);
         BlockPos head = dest.above();
 
-        double cost = ActionCosts.WALK_ONE_BLOCK;
         List<BlockPos> toBreak = new ArrayList<>(2);
 
         // Clear the two body cells at the destination.
         double feetBreak = clearCost(ctx, dest, toBreak);
         if (feetBreak >= ActionCosts.COST_INF) return null;
-        cost += feetBreak;
         double headBreak = clearCost(ctx, head, toBreak);
         if (headBreak >= ActionCosts.COST_INF) return null;
-        cost += headBreak;
 
         // Floor under the destination.
         BlockPos floor = dest.below();
         BlockPos toPlace = null;
+        double placeCost = 0.0;
         if (!BlockHelper.canWalkOn(level, floor)) {
-            double placeCost = ctx.costOfPlacing(floor);
+            placeCost = ctx.costOfPlacing(floor);
             if (placeCost >= ActionCosts.COST_INF) return null;
-            cost += placeCost;
             toPlace = floor;
         }
 
         if (BlockHelper.isHazard(level, dest) || BlockHelper.isHazard(level, head)) return null;
+
+        // Baritone walk cost: base WALK + half soul-sand penalty per soul-sand floor.
+        double walk = ActionCosts.WALK_ONE_BLOCK;
+        if (level.getBlockState(floor).is(Blocks.SOUL_SAND)) {
+            walk += (ActionCosts.WALK_ONE_OVER_SOUL_SAND - ActionCosts.WALK_ONE_BLOCK) / 2.0;
+        }
+        // A clear walk (nothing to break or place) takes the sprint discount;
+        // otherwise base walk + mining + placement (Baritone MovementTraverse).
+        double cost;
+        if (feetBreak == 0.0 && headBreak == 0.0 && toPlace == null && ctx.canSprint) {
+            cost = walk * ActionCosts.SPRINT_MULTIPLIER;
+        } else {
+            cost = walk + feetBreak + headBreak + placeCost;
+        }
         return new Movement(Movement.Kind.TRAVERSE, from, dest, cost, toBreak, toPlace);
     }
 
@@ -172,7 +185,10 @@ public final class Moves {
         BlockPos destHead = dest.above();
         BlockPos jumpRoom = from.above(2);          // room to jump at the source column
 
-        double cost = ActionCosts.WALK_ONE_BLOCK + ActionCosts.JUMP_ONE_BLOCK;
+        // Baritone MovementAscend: max(JUMP, WALK) + jumpPenalty (the jump and the
+        // forward block overlap, so it's the larger of the two, not their sum).
+        double cost = Math.max(ActionCosts.JUMP_ONE_BLOCK, ActionCosts.WALK_ONE_BLOCK)
+                + PathSettings.JUMP_PENALTY;
         List<BlockPos> toBreak = new ArrayList<>(3);
 
         double jumpBreak = clearCost(ctx, jumpRoom, toBreak);
@@ -206,7 +222,8 @@ public final class Moves {
         BlockGetter level = ctx.view;
         BlockPos col = from.relative(dir); // horizontal cell we step into
 
-        double cost = ActionCosts.WALK_ONE_BLOCK;
+        // Baritone MovementDescend: walking off the edge is WALK_OFF_BLOCK.
+        double cost = ActionCosts.WALK_OFF_BLOCK;
         List<BlockPos> toBreak = new ArrayList<>(2);
 
         // Clear the two body cells of the column we step into at source height.
@@ -227,7 +244,12 @@ public final class Moves {
                 if (BlockHelper.isHazard(level, floor) || BlockHelper.isHazard(level, feet)) {
                     return null;
                 }
-                double total = cost + ActionCosts.fallCost(drop);
+                // Single-block descend pays max(fall(1), center-after-fall);
+                // deeper drops pay the fall table (Baritone MovementDescend/Fall).
+                double fall = (drop == 1)
+                        ? Math.max(ActionCosts.fallCost(1), ActionCosts.CENTER_AFTER_FALL)
+                        : ActionCosts.fallCost(drop);
+                double total = cost + fall;
                 Movement.Kind kind = drop == 1 ? Movement.Kind.DESCEND : Movement.Kind.FALL;
                 return new Movement(kind, from, feet, total, toBreak, null);
             }
@@ -270,7 +292,11 @@ public final class Moves {
 
         if (BlockHelper.isHazard(level, dest) || BlockHelper.isHazard(level, dest.above())) return null;
 
-        double cost = ActionCosts.WALK_ONE_BLOCK * ActionCosts.SQRT_2;
+        // Baritone MovementDiagonal: per-block walk cost (sprint-discounted on a
+        // clear diagonal) times the √2 corner distance.
+        double mult = ctx.canSprint ? ActionCosts.WALK_ONE_BLOCK * ActionCosts.SPRINT_MULTIPLIER
+                : ActionCosts.WALK_ONE_BLOCK;
+        double cost = mult * ActionCosts.SQRT_2;
         return new Movement(Movement.Kind.DIAGONAL, from, dest, cost, List.of(), null);
     }
 
@@ -289,7 +315,8 @@ public final class Moves {
         double placeCost = ctx.costOfPlacing(from);
         if (placeCost >= ActionCosts.COST_INF) return null;
 
-        double cost = ActionCosts.JUMP_ONE_BLOCK + placeCost;
+        // Baritone MovementPillar (block tower): jump + place-underfoot + jumpPenalty.
+        double cost = ActionCosts.JUMP_ONE_BLOCK + placeCost + PathSettings.JUMP_PENALTY;
         List<BlockPos> toBreak = new ArrayList<>(1);
         double headBreak = clearCost(ctx, newHead, toBreak);
         if (headBreak >= ActionCosts.COST_INF) return null;

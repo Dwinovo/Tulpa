@@ -49,6 +49,9 @@ public final class NavContext {
     /** Max blocks the entity may fall without taking dangerous damage. */
     public final int maxFallHeight;
 
+    /** Whether sprinting is allowed (Baritone {@code canSprint}); drives the sprint cost discount. */
+    public final boolean canSprint;
+
     /** Held main-hand tool snapshot, for tool-aware mining duration. */
     private final ItemStack tool;
 
@@ -67,6 +70,7 @@ public final class NavContext {
         // Survivable fall: Baritone's maxFallHeightNoWater (3) — vanilla fall
         // damage starts at 3.5 blocks; cap conservatively so the bot never hurts itself.
         this.maxFallHeight = PathSettings.MAX_FALL_HEIGHT_NO_WATER;
+        this.canSprint = PathSettings.ALLOW_SPRINT;
     }
 
     private static boolean hasAnyScaffold(Container inv) {
@@ -132,12 +136,16 @@ public final class NavContext {
     public double miningTicks(BlockPos pos) {
         BlockState state = view.getBlockState(pos);
         float hardness = state.getDestroySpeed(view, pos);
-        if (hardness <= 0.0f) return 1.0;
+        if (hardness <= 0.0f) return 0.0;   // instabreak — Baritone charges ~0 (the +penalty is added by the caller)
         boolean correct = !state.requiresCorrectToolForDrops() || tool.isCorrectToolForDrops(state);
         float toolSpeed = tool.getDestroySpeed(state);
         if (toolSpeed <= 0.0f) toolSpeed = 1.0f;
         float divisor = correct ? 30.0f : 100.0f;
-        return Math.max(1.0, Math.ceil(hardness * divisor / toolSpeed));
+        // Baritone: ticks = 1/strVsBlock = hardness*divisor/speed — a continuous
+        // value (no ceil). NOTE intentional Baritone parity: no underwater/airborne
+        // ÷5 penalty (it assumes best-case mining). Efficiency enchant (+eff²+1) is
+        // folded into vanilla getDestroySpeed where present.
+        return hardness * divisor / toolSpeed;
     }
 
     /**
