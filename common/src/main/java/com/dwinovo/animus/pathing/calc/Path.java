@@ -1,6 +1,7 @@
 package com.dwinovo.animus.pathing.calc;
 
 import com.dwinovo.animus.pathing.movement.Movement;
+import com.dwinovo.animus.pathing.util.PathSettings;
 import net.minecraft.core.BlockPos;
 
 import java.util.List;
@@ -28,5 +29,23 @@ public final class Path {
 
     public boolean isEmpty() {
         return movements.isEmpty();
+    }
+
+    /**
+     * Baritone's {@code staticCutoff}: trim the last {@code pathCutoffFactor}
+     * (10%) of a <em>partial</em> path beyond a {@code pathCutoffMinimumLength}
+     * floor, so the next segment is re-planned with fresher chunk data and the
+     * segments overlap cleanly. A full path that reaches the goal is never
+     * trimmed; short paths are kept whole.
+     */
+    public Path staticCutoff() {
+        if (!partial) return this;
+        int size = movements.size();
+        if (size < PathSettings.PATH_CUTOFF_MINIMUM_LENGTH) return this;
+        int newLength = (int) ((size - PathSettings.PATH_CUTOFF_MINIMUM_LENGTH)
+                * PathSettings.PATH_CUTOFF_FACTOR) + PathSettings.PATH_CUTOFF_MINIMUM_LENGTH - 1;
+        if (newLength >= size || newLength <= 0) return this;
+        List<Movement> trimmed = movements.subList(0, newLength);
+        return new Path(start, trimmed.get(trimmed.size() - 1).dest, trimmed, partial);
     }
 }

@@ -330,6 +330,15 @@ public final class PlayerPathExecutor {
         return Math.max(0, path.movements.size() - index);
     }
 
+    /** Estimated ticks left in this segment — Σ cost of the unplayed movements. */
+    public double remainingCost() {
+        double c = 0.0;
+        for (int i = Math.max(index, 0); i < path.movements.size(); i++) {
+            c += path.movements.get(i).cost;
+        }
+        return c;
+    }
+
     public void stop() {
         InputDriver.halt(player);
     }

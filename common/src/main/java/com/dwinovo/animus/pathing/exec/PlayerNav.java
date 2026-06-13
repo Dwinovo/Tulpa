@@ -5,6 +5,7 @@ import com.dwinovo.animus.pathing.calc.AStar;
 import com.dwinovo.animus.pathing.calc.AStarSearch;
 import com.dwinovo.animus.pathing.calc.NavContext;
 import com.dwinovo.animus.pathing.calc.Path;
+import com.dwinovo.animus.pathing.util.PathSettings;
 import net.minecraft.core.BlockPos;
 
 import java.util.function.BooleanSupplier;
@@ -24,7 +25,6 @@ public final class PlayerNav {
 
     private static final int NODES_PER_TICK = AStar.DEFAULT_NODES_PER_TICK;
     private static final int MAX_REPLANS = 40;
-    private static final int PRECOMPUTE_LOOKAHEAD = 3;
     private static final double GOAL_MOVED_SQR = 4.0;
 
     private final AnimusPlayer player;
@@ -124,7 +124,7 @@ public final class PlayerNav {
             failReason = "no path to target (obstructed or out of bridging blocks)";
             return reached.getAsBoolean() ? Status.ARRIVED : Status.FAILED;
         }
-        current = new PlayerPathExecutor(player, path, speed);
+        current = new PlayerPathExecutor(player, path.staticCutoff(), speed);
         return Status.RUNNING;
     }
 
@@ -144,7 +144,9 @@ public final class PlayerNav {
     private void maybePrecompute() {
         if (nextSearch != null || pendingNext != null) return;
         if (current == null || !current.isPartial()) return;
-        if (current.remainingMovements() > PRECOMPUTE_LOOKAHEAD) return;
+        // Baritone planAhead: start the next segment once the current one has
+        // fewer than planningTickLookahead (150) ticks of travel left.
+        if (current.remainingCost() > PathSettings.PLANNING_TICK_LOOKAHEAD) return;
         BlockPos g = goalSupplier.get();
         if (g == null) return;
         plannedGoal = g;
@@ -157,7 +159,7 @@ public final class PlayerNav {
         Path np = nextSearch.result();
         nextSearch = null;
         if (np != null && !np.isEmpty()) {
-            pendingNext = new PlayerPathExecutor(player, np, speed);
+            pendingNext = new PlayerPathExecutor(player, np.staticCutoff(), speed);
         }
     }
 
