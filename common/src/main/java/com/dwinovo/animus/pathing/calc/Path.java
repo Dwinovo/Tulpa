@@ -40,11 +40,13 @@ public final class Path {
      */
     public Path staticCutoff() {
         if (!partial) return this;
-        int size = movements.size();
-        if (size < PathSettings.PATH_CUTOFF_MINIMUM_LENGTH) return this;
-        int newLength = (int) ((size - PathSettings.PATH_CUTOFF_MINIMUM_LENGTH)
+        // Baritone counts path LENGTH in positions (= movements + 1); newLength is
+        // the last position to include == the movement count to keep.
+        int positions = movements.size() + 1;
+        if (positions < PathSettings.PATH_CUTOFF_MINIMUM_LENGTH) return this;
+        int newLength = (int) ((positions - PathSettings.PATH_CUTOFF_MINIMUM_LENGTH)
                 * PathSettings.PATH_CUTOFF_FACTOR) + PathSettings.PATH_CUTOFF_MINIMUM_LENGTH - 1;
-        if (newLength >= size || newLength <= 0) return this;
+        if (newLength >= movements.size() || newLength <= 0) return this;
         List<Movement> trimmed = movements.subList(0, newLength);
         return new Path(start, trimmed.get(trimmed.size() - 1).dest, trimmed, partial);
     }

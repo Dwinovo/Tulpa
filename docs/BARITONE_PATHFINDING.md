@@ -215,7 +215,7 @@ newLength = (length − 30) × pathCutoffFactor(0.9) + 30 − 1;  // 留前 30 +
 
 ## 8. 我们当前实现 vs Baritone — 对齐 checklist
 
-> **✅ 全部 6 步已完成**(commits `4892fea`→`4e7bc1d`)。下表为重写前的差距记录;现已逐项对齐 Baritone。**唯一保留的已知差异**:执行器的 `costVerificationLookahead`(提前重算前方 5 个 movement 的 cost)未做——需要 `Movement.recalculateCost` + 新鲜 `NavContext` 基础设施,靠 movement timeout(估算+100)+ obstruction 检查 + relocalize 反应式兜底。
+> **✅ 全部 6 步 + cost 重验已完成**(commits `4892fea`→`7ecf742`),**无已知差异**——完整 1:1 Baritone 移植。下表为重写前的差距记录。cost 重验(`costVerificationLookahead`)实现方式:`recost()` 用新鲜 `NavContext` 从 movement 的 src 重新 `Moves.generate`、匹配同 kind+dest 取新 cost(找不到=失效 COST_INF);每 tick 重算当前 movement,推进到新 movement 时重算前方 5 个;失效或当前涨价 >`maxCostIncrease`(10)就重规划。
 
 | 区域 | 我们现状 | Baritone | 待对齐 |
 |---|---|---|---|

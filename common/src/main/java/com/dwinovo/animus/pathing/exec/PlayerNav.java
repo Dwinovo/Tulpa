@@ -82,7 +82,10 @@ public final class PlayerNav {
                 replans = 0;
                 if (reached.getAsBoolean()) return Status.ARRIVED;
                 if (pendingNext != null) {
-                    current.stop();
+                    // Hand off to the precomputed segment WITHOUT halting — calling
+                    // current.stop() zeroes the inputs for a tick and causes a visible
+                    // hitch at every segment boundary. pendingNext takes over the
+                    // inputs on its first tick, so motion stays continuous.
                     current = pendingNext;
                     pendingNext = null;
                     return Status.RUNNING;

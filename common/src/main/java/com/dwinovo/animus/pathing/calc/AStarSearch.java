@@ -118,6 +118,9 @@ public final class AStarSearch {
 
             for (Movement mv : Moves.generate(ctx, current.pos)) {
                 if (mv.cost >= ActionCosts.COST_INF) continue;
+                // Plausibility (Baritone asserts this): a 0 / negative / NaN edge
+                // cost would silently corrupt the search — drop it rather than trust it.
+                if (mv.cost <= 0.0 || Double.isNaN(mv.cost)) continue;
                 double tentativeG = current.cost + mv.cost;
                 long key = mv.dest.asLong();
 
@@ -126,7 +129,10 @@ public final class AStarSearch {
                     neighbor = new PathNode(mv.dest.immutable(), heuristic(mv.dest));
                     nodes.put(key, neighbor);
                 }
-                if (tentativeG >= neighbor.cost) continue;   // not an improvement
+                // Baritone repropagation margin: ignore sub-0.01-tick improvements
+                // (FP noise from traverse/diagonal combos over flat ground) to avoid
+                // pointless decrease-key churn. Same threshold as the best-so-far loop.
+                if (neighbor.cost - tentativeG <= PathSettings.MIN_IMPROVEMENT) continue;
 
                 neighbor.cost = tentativeG;
                 neighbor.combinedCost = tentativeG + neighbor.estimatedCostToGoal;

@@ -200,10 +200,12 @@ public final class PlayerPathExecutor {
         } else {
             InputDriver.halt(player);
         }
-        if (player.onGround()) {
+        // Baritone MovementPillar: only jump when nearly horizontally still (so we
+        // don't slide off the column), and only place once risen ABOVE the target
+        // foot height (dest.y + 0.1 — the apex, after the src cell is vacated).
+        if (player.onGround() && horizontalSpeedSqr() < 0.0025) {
             InputDriver.jump(player);
-        } else if (player.getY() > mv.dest.getY() - 0.1) {
-            // Near the top of the jump — place the scaffold block underfoot.
+        } else if (player.getY() > mv.dest.getY() + 0.1) {
             tryPlaceScaffold(mv.src);
         }
     }
@@ -219,24 +221,42 @@ public final class PlayerPathExecutor {
     private Status verifyCosts() {
         NavContext fresh = ctxSupplier.get();
         Movement cur = path.movements.get(index);
-        double liveCur = recost(fresh, cur);
-        if (liveCur >= ActionCosts.COST_INF) {
-            return Status.NEEDS_REPLAN;
-        }
-        if (liveCur - cur.cost > PathSettings.MAX_COST_INCREASE) {
-            return Status.NEEDS_REPLAN;
+        // Movements whose OWN execution mutates the world — pillar places a block
+        // underfoot, dig-down breaks the floor, swim dips below the surface — would
+        // self-trigger COST_INF the instant they act (regeneration no longer emits
+        // them). Skip live re-costing for those; the movement timeout still guards
+        // a genuine stall. Movements that only consume the world (break an
+        // obstruction) get cheaper, never INF, so they're safe to verify.
+        if (!selfMutating(cur.kind)) {
+            double liveCur = recost(fresh, cur);
+            if (liveCur >= ActionCosts.COST_INF) {
+                return Status.NEEDS_REPLAN;
+            }
+            if (liveCur - cur.cost > PathSettings.MAX_COST_INCREASE) {
+                return Status.NEEDS_REPLAN;
+            }
         }
         if (costCheckIndex != index) {
             costCheckIndex = index;
             int last = path.movements.size() - 1;
             int end = Math.min(last, index + PathSettings.COST_VERIFICATION_LOOKAHEAD);
             for (int i = index + 1; i <= end; i++) {
-                if (recost(fresh, path.movements.get(i)) >= ActionCosts.COST_INF) {
+                Movement ahead = path.movements.get(i);
+                if (!selfMutating(ahead.kind)
+                        && recost(fresh, ahead) >= ActionCosts.COST_INF) {
                     return Status.NEEDS_REPLAN;
                 }
             }
         }
         return null;
+    }
+
+    /** Kinds whose execution changes the world such that regenerating them mid-move
+     *  would spuriously report them gone (place-under / break-floor / swim-dip). */
+    private static boolean selfMutating(Movement.Kind kind) {
+        return kind == Movement.Kind.PILLAR
+                || kind == Movement.Kind.DIG_DOWN
+                || kind == Movement.Kind.SWIM;
     }
 
     /**
@@ -345,10 +365,15 @@ public final class PlayerPathExecutor {
             }
         }
         // Off-path watchdog: Baritone's two bands — >3 blocks cancels immediately,
-        // >2 blocks counts toward MAX_TICKS_AWAY (~10 s) before giving up.
-        double distSqr = Math.min(
-                player.distanceToSqr(Vec3.atBottomCenterOf(cur.src)),
-                player.distanceToSqr(Vec3.atBottomCenterOf(cur.dest)));
+        // >2 blocks counts toward MAX_TICKS_AWAY (~10 s) before giving up. Distance
+        // is to the CLOSEST of this movement's valid cells (mirrors Baritone's
+        // closestPathPos), not just src/dest — so a fall's airborne column or a
+        // landing knock-back isn't mistaken for going off-path.
+        double distSqr = Double.MAX_VALUE;
+        for (BlockPos vp : cur.validPositions()) {
+            double d = player.distanceToSqr(Vec3.atBottomCenterOf(vp));
+            if (d < distSqr) distSqr = d;
+        }
         if (distSqr > HARD_DIST_SQR) {
             return Status.NEEDS_REPLAN;
         }
