@@ -2,6 +2,7 @@ package com.dwinovo.animus.task.tasks;
 
 import com.dwinovo.animus.entity.AnimusPlayer;
 import com.dwinovo.animus.pathing.calc.NavGoal;
+import com.dwinovo.animus.pathing.exec.BlockDigger;
 import com.dwinovo.animus.pathing.exec.InputDriver;
 import com.dwinovo.animus.pathing.exec.PlayerNav;
 import com.dwinovo.animus.pathing.util.BlockScanner;
@@ -10,7 +11,6 @@ import com.dwinovo.animus.task.CompanionTask;
 import com.dwinovo.animus.task.TaskResult;
 import com.dwinovo.animus.task.TaskState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.Level;
@@ -85,16 +85,14 @@ public final class MineCompanionTask implements CompanionTask {
     /** Game time by which the in-flight scan must finish or be abandoned. */
     private long scanDeadline;
 
-    // Progressive dig state (Baritone mines tick-by-tick, not instabreak).
-    private BlockPos digPos;
-    private int digTicks;
-    private int digTotal;
-    private int swingCd;
-    private int lastStage = -1;
+    // Progressive dig (Baritone mines tick-by-tick, not instabreak) — shared with
+    // the path executor so all breaking reads the same.
+    private final BlockDigger digger;
 
     public MineCompanionTask(AnimusPlayer player, MineBlockTaskRecord record) {
         this.player = player;
         this.r = record;
+        this.digger = new BlockDigger(player);
     }
 
     @Override
@@ -113,11 +111,12 @@ public final class MineCompanionTask implements CompanionTask {
 
         // 0) Continue an in-progress dig, locked onto its block (no re-selection)
         //    until it breaks or drifts out of reach.
-        if (digPos != null) {
-            if (level.getBlockState(digPos).isAir() || !withinReach(digPos)) {
-                clearDigProgress();
+        BlockPos digging = digger.current();
+        if (digging != null) {
+            if (level.getBlockState(digging).isAir() || !withinReach(digging)) {
+                digger.cancel();
             } else {
-                mineTick();
+                mineProgress(digging);
                 return TaskState.RUNNING;
             }
         }
@@ -138,8 +137,7 @@ public final class MineCompanionTask implements CompanionTask {
         BlockPos shaft = shaftTarget();
         if (shaft != null) {
             stopNav();
-            startDig(shaft);
-            mineTick();
+            mineProgress(shaft);
             return TaskState.RUNNING;
         }
 
@@ -238,60 +236,15 @@ public final class MineCompanionTask implements CompanionTask {
 
     // ---- mining (progressive, tick-by-tick like Baritone / a real player) ----
 
-    /** Begin breaking {@code pos}: switch to the best tool and compute how many
-     *  ticks the dig will take from the real vanilla mining speed. */
-    private void startDig(BlockPos pos) {
-        clearDigProgress();
-        switchToBestTool(player.level().getBlockState(pos));
-        digPos = pos.immutable();
-        digTicks = 0;
-        swingCd = 0;
-        lastStage = -1;
-        digTotal = vanillaMiningTicks(pos);
-    }
-
-    /** Advance the current dig one tick: face it, swing, push the crack overlay,
-     *  and break it once enough ticks have elapsed. */
-    private void mineTick() {
-        Level level = player.level();
-        InputDriver.halt(player);
-        InputDriver.lookAt(player, Vec3.atCenterOf(digPos));
-        if (swingCd-- <= 0) {
-            player.swing(InteractionHand.MAIN_HAND);
-            swingCd = 5;                       // vanilla swings ~every 6 ticks while mining
+    /** Switch to the best tool for a fresh target, then advance the shared dig one
+     *  tick; on the tick it breaks, count it and drop it from the ore list. */
+    private void mineProgress(BlockPos pos) {
+        if (!pos.equals(digger.current())) {                 // first tick on this block
+            switchToBestTool(player.level().getBlockState(pos));
         }
-        digTicks++;
-        int stage = Math.min(9, (int) ((digTicks / (float) digTotal) * 10.0f));
-        if (stage != lastStage) {                 // a real player only re-broadcasts on stage change
-            level.destroyBlockProgress(player.getId(), digPos, stage);
-            lastStage = stage;
-        }
-        if (digTicks >= digTotal) {
-            BlockPos done = digPos;
-            player.gameMode.destroyBlock(done);
-            if (level.getBlockState(done).isAir()) {
-                r.incrementMined();
-                knownOres.remove(done);
-            }
-            clearDigProgress();
-        }
-    }
-
-    /** Real vanilla dig duration in ticks: getDestroyProgress is the per-tick
-     *  fraction (tool/enchant/haste/in-water/airborne all folded in), so the dig
-     *  takes ceil(1 / fraction) ticks — exactly what a player would experience. */
-    private int vanillaMiningTicks(BlockPos pos) {
-        Level level = player.level();
-        float perTick = level.getBlockState(pos).getDestroyProgress(player, level, pos);
-        if (perTick <= 0.0f) return 1;
-        return Math.max(1, (int) Math.ceil(1.0f / perTick));
-    }
-
-    /** Clear the crack overlay and forget the in-progress dig. */
-    private void clearDigProgress() {
-        if (digPos != null) {
-            player.level().destroyBlockProgress(player.getId(), digPos, -1);
-            digPos = null;
+        if (digger.dig(pos)) {
+            r.incrementMined();
+            knownOres.remove(pos);
         }
     }
 
@@ -404,7 +357,7 @@ public final class MineCompanionTask implements CompanionTask {
     @Override
     public TaskResult buildResult(TaskState finalState) {
         stopNav();
-        clearDigProgress();
+        digger.cancel();
         if (scan != null) {
             scan.cancel(false);
             scan = null;

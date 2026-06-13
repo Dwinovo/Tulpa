@@ -42,8 +42,6 @@ public final class PlayerPathExecutor {
             PathSettings.MAX_DIST_FROM_PATH * PathSettings.MAX_DIST_FROM_PATH;
     private static final double HARD_DIST_SQR =
             PathSettings.MAX_MAX_DIST_FROM_PATH * PathSettings.MAX_MAX_DIST_FROM_PATH;
-    /** Break at most one obstruction every few ticks so it reads as work, not teleport-mining. */
-    private static final int BREAK_INTERVAL = 4;
 
     private final AnimusPlayer player;
     private final Path path;
@@ -54,8 +52,9 @@ public final class PlayerPathExecutor {
     private int index = 0;
     private int ticksOnCurrent = 0;
     private int ticksAway = 0;
-    private int breakCooldown = 0;
     private boolean placedThisMove = false;
+    /** Progressive break of path obstructions (shared model with auto-mine). */
+    private final BlockDigger digger;
     /** The index whose original cost estimate we cached (Baritone costEstimateIndex). */
     private int costCheckIndex = -1;
 
@@ -65,6 +64,7 @@ public final class PlayerPathExecutor {
         this.path = path;
         this.speed = speed;
         this.ctxSupplier = ctxSupplier;
+        this.digger = new BlockDigger(player);
     }
 
     public Status tick() {
@@ -98,15 +98,12 @@ public final class PlayerPathExecutor {
             return Status.NEEDS_REPLAN;
         }
 
-        // 1) Clear obstructions for this move (one at a time, paced).
+        // 1) Clear obstructions for this move (one at a time), breaking each
+        //    progressively over its real hardness time — Baritone holds the dig,
+        //    it doesn't pop the block instantly.
         BlockPos obstruction = nextObstruction(mv);
         if (obstruction != null) {
-            InputDriver.halt(player);
-            InputDriver.lookAt(player, Vec3.atCenterOf(obstruction));
-            if (breakCooldown-- <= 0) {
-                breakCooldown = BREAK_INTERVAL;
-                player.gameMode.destroyBlock(obstruction);
-            }
+            digger.dig(obstruction);
             return Status.RUNNING;
         }
 
@@ -487,7 +484,7 @@ public final class PlayerPathExecutor {
     private void resetMoveState() {
         ticksAway = 0;
         ticksOnCurrent = 0;
-        breakCooldown = 0;
+        digger.cancel();          // a partial dig belongs to the move we just left
         placedThisMove = false;
     }
 
@@ -513,6 +510,7 @@ public final class PlayerPathExecutor {
     }
 
     public void stop() {
+        digger.cancel();
         InputDriver.halt(player);
     }
 }
