@@ -7,6 +7,7 @@ import com.dwinovo.animus.pathing.calc.NavContext;
 import com.dwinovo.animus.pathing.calc.NavGoal;
 import com.dwinovo.animus.pathing.calc.Path;
 import com.dwinovo.animus.pathing.util.BlockHelper;
+import com.dwinovo.animus.pathing.viz.PathVizPublisher;
 import com.dwinovo.animus.pathing.util.PathSettings;
 import net.minecraft.core.BlockPos;
 
@@ -46,6 +47,7 @@ public final class PlayerNav {
     private AStarSearch search;
     private AStarSearch nextSearch;
     private PlayerPathExecutor pendingNext;
+    private Path pendingPathForViz;
 
     private int replans = 0;
     private String failReason = "target unreachable";
@@ -118,6 +120,10 @@ public final class PlayerNav {
                     // inputs on its first tick, so motion stays continuous.
                     current = pendingNext;
                     pendingNext = null;
+                    if (pendingPathForViz != null) {
+                        PathVizPublisher.publish(player, pendingPathForViz, plannedCenter);
+                        pendingPathForViz = null;
+                    }
                     return Status.RUNNING;
                 }
                 return restartFresh(true);
@@ -157,7 +163,9 @@ public final class PlayerNav {
             failReason = "no path to target (obstructed or out of bridging blocks)";
             return reached.getAsBoolean() ? Status.ARRIVED : Status.FAILED;
         }
-        current = new PlayerPathExecutor(player, path.staticCutoff(), speed, this::freshContext);
+        Path cut = path.staticCutoff();
+        current = new PlayerPathExecutor(player, cut, speed, this::freshContext);
+        PathVizPublisher.publish(player, cut, plannedCenter);
         return Status.RUNNING;
     }
 
@@ -192,12 +200,15 @@ public final class PlayerNav {
         Path np = nextSearch.result();
         nextSearch = null;
         if (np != null && !np.isEmpty()) {
-            pendingNext = new PlayerPathExecutor(player, np.staticCutoff(), speed, this::freshContext);
+            Path cut = np.staticCutoff();
+            pendingNext = new PlayerPathExecutor(player, cut, speed, this::freshContext);
+            pendingPathForViz = cut;
         }
     }
 
     private void discardPrecompute() {
         nextSearch = null;
+        pendingPathForViz = null;
         if (pendingNext != null) {
             pendingNext.stop();
             pendingNext = null;
@@ -216,5 +227,6 @@ public final class PlayerNav {
         discardPrecompute();
         search = null;
         InputDriver.halt(player);
+        PathVizPublisher.clear(player);
     }
 }

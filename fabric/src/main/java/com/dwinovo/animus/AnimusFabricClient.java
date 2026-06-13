@@ -46,5 +46,10 @@ public class AnimusFabricClient implements ClientModInitializer {
         KeyMappingHelper.registerKeyMapping(com.dwinovo.animus.client.AnimusKeys.OPEN_ROSTER);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
                 .register(client -> com.dwinovo.animus.client.AnimusKeys.tick());
+
+        // In-world path overlay for every companion (Baritone PathRenderer port),
+        // drawn after translucent terrain so it sits over the world.
+        net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES
+                .register(ctx -> com.dwinovo.animus.client.path.PathVizRenderer.render(ctx.poseStack()));
     }
 }

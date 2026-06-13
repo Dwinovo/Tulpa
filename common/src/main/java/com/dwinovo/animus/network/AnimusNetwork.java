@@ -7,6 +7,7 @@ import com.dwinovo.animus.network.payload.CancelTasksPayload;
 import com.dwinovo.animus.network.payload.ClientUiActionPayload;
 import com.dwinovo.animus.network.payload.CompanionListPayload;
 import com.dwinovo.animus.network.payload.ExecuteToolPayload;
+import com.dwinovo.animus.network.payload.PathVizPayload;
 import com.dwinovo.animus.network.payload.TaskResultPayload;
 import com.dwinovo.animus.platform.Services;
 
@@ -53,6 +54,12 @@ public final class AnimusNetwork {
         Services.NETWORK.registerServerToClient(
                 CompanionListPayload.TYPE, CompanionListPayload.STREAM_CODEC,
                 CompanionListPayload::handle);
+
+        // S→C: the companion's current pathfinding plan, for the in-world path
+        // overlay (Baritone PathRenderer, ported to our server-authored path).
+        Services.NETWORK.registerServerToClient(
+                PathVizPayload.TYPE, PathVizPayload.STREAM_CODEC,
+                PathVizPayload::handle);
 
         // S→C: server `/animus` verbs that must act on the caller's own client
         // (open settings GUI / reset conversations).

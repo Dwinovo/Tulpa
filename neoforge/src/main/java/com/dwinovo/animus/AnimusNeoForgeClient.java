@@ -29,6 +29,12 @@ public class AnimusNeoForgeClient {
     }
 
     @SubscribeEvent
+    static void onRenderLevel(net.neoforged.neoforge.client.event.RenderLevelStageEvent.AfterTranslucentFeatures event) {
+        // In-world path overlay for every companion (Baritone PathRenderer port).
+        com.dwinovo.animus.client.path.PathVizRenderer.render(event.getPoseStack());
+    }
+
+    @SubscribeEvent
     static void registerReloadListeners(AddClientReloadListenersEvent event) {
         Path animusConfigRoot = Minecraft.getInstance().gameDirectory.toPath()
                 .resolve("config").resolve(Constants.MOD_ID);
