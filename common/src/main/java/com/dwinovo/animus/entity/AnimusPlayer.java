@@ -1,11 +1,18 @@
 package com.dwinovo.animus.entity;
 
+import com.dwinovo.animus.pathing.exec.PathTally;
+import com.dwinovo.animus.task.TaskQueue;
+import com.dwinovo.animus.task.TaskRecord;
+import com.dwinovo.animus.task.TaskState;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
@@ -35,6 +42,14 @@ public final class AnimusPlayer extends ServerPlayer {
     /** Owner's player UUID. Null only transiently before the first assignment. */
     private UUID ownerUuid;
 
+    // ---- task hosting (lifted from the old AnimusEntity Mob) ----
+    private TaskQueue taskQueue;
+    private final PathTally pathTally = new PathTally();
+    private TaskRecord activeTask;
+    private String debugTask;
+    /** Game time of the last owner-liveness heartbeat (see KeepLoadedPayload). */
+    private long lastOwnerHeartbeatTime = Long.MIN_VALUE;
+
     public AnimusPlayer(MinecraftServer server, ServerLevel level, GameProfile profile,
                         ClientInformation clientInformation) {
         super(server, level, profile, clientInformation);
@@ -61,6 +76,69 @@ public final class AnimusPlayer extends ServerPlayer {
     /** The owner as an online player, server-wide; null when offline. */
     public ServerPlayer resolveOwnerPlayer() {
         return ownerUuid == null ? null : level().getServer().getPlayerList().getPlayer(ownerUuid);
+    }
+
+    // ---- task hosting ----
+
+    public TaskQueue getTaskQueue() {
+        if (taskQueue == null) taskQueue = new TaskQueue();
+        return taskQueue;
+    }
+
+    /** The record currently executing (polled out of the queue), for owner-interrupt. */
+    public TaskRecord getActiveTask() {
+        return activeTask;
+    }
+
+    public void setActiveTask(TaskRecord record) {
+        this.activeTask = record;
+    }
+
+    /** Cancel queued records AND the running one (its state flips off RUNNING). */
+    public void cancelAllTasks(String reason) {
+        getTaskQueue().cancelAll(reason);
+        if (activeTask != null && activeTask.getState() == TaskState.RUNNING) {
+            activeTask.setState(TaskState.CANCELLED);
+        }
+    }
+
+    public PathTally pathTally() {
+        return pathTally;
+    }
+
+    public void setDebugTask(String description) {
+        this.debugTask = description;
+    }
+
+    public String getDebugTask() {
+        return debugTask;
+    }
+
+    /** A task running or queued. Reflex/lifecycle gating reads this. */
+    public boolean hasTaskWork() {
+        return (activeTask != null && activeTask.getState() == TaskState.RUNNING)
+                || (taskQueue != null && taskQueue.pendingCount() > 0);
+    }
+
+    /** True if {@code item} sits anywhere in the inventory (hotbar/main/offhand all count). */
+    public boolean ensureInInventory(Item item) {
+        var inv = getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            if (inv.getItem(i).is(item)) return true;
+        }
+        return false;
+    }
+
+    // ---- owner liveness (heartbeat lease) ----
+
+    private static final int OWNER_HEARTBEAT_GRACE_TICKS = 100;
+
+    public void markOwnerHeartbeat() {
+        this.lastOwnerHeartbeatTime = level().getGameTime();
+    }
+
+    public boolean isOwnerLoopLive() {
+        return level().getGameTime() - lastOwnerHeartbeatTime <= OWNER_HEARTBEAT_GRACE_TICKS;
     }
 
     @Override
