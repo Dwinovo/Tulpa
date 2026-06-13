@@ -161,7 +161,7 @@ public final class CollectFurnaceTaskGoal extends LlmTaskGoal<CollectFurnaceTask
     private boolean startPlanning(BlockPos pos) {
         stopExecutor();
         if (replans++ >= MAX_REPLANS) return false;
-        NavContext ctx = new NavContext(entity);
+        NavContext ctx = new NavContext(entity.level(), entity.getMainHandItem(), entity.getInventory());
         search = astar.newSearch(ctx, entity.blockPosition(), pos);
         return true;
     }

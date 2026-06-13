@@ -277,7 +277,7 @@ public final class UseItemTaskGoal extends LlmTaskGoal<UseItemTaskRecord> {
     private boolean startPlanning() {
         stopExecutor();
         if (replans++ >= MAX_REPLANS) return false;
-        NavContext ctx = new NavContext(entity);
+        NavContext ctx = new NavContext(entity.level(), entity.getMainHandItem(), entity.getInventory());
         search = astar.newSearch(ctx, entity.blockPosition(), standSpot);
         return true;
     }

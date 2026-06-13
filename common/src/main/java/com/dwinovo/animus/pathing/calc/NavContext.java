@@ -1,6 +1,5 @@
 package com.dwinovo.animus.pathing.calc;
 
-import com.dwinovo.animus.entity.AnimusEntity;
 import com.dwinovo.animus.init.InitTag;
 import com.dwinovo.animus.pathing.util.ActionCosts;
 import com.dwinovo.animus.pathing.util.BlockHelper;
@@ -8,7 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.FluidTags;
-import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -35,7 +34,6 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class NavContext {
 
     public final Level level;
-    public final AnimusEntity entity;
 
     /**
      * Memoizing read-through view of {@link #level} for this search. All
@@ -53,20 +51,24 @@ public final class NavContext {
     /** Held main-hand tool snapshot, for tool-aware mining duration. */
     private final ItemStack tool;
 
-    public NavContext(AnimusEntity entity) {
-        this.entity = entity;
-        this.level = entity.level();
-        this.view = new NavSnapshot(this.level);
-        this.tool = entity.getMainHandItem().copy();
-
-        this.hasScaffold = hasAnyScaffold(entity.getInventory());
+    /**
+     * Snapshot the world + the body's capabilities for one A* search. Decoupled
+     * from any specific entity type: callers pass the level, a copy of the held
+     * tool, and the inventory to gate scaffolding on (a {@link Container}, so a
+     * Mob's {@code SimpleContainer} or a player's {@code Inventory} both work).
+     */
+    public NavContext(Level level, ItemStack mainHandTool, Container inventory) {
+        this.level = level;
+        this.view = new NavSnapshot(level);
+        this.tool = mainHandTool.copy();
+        this.hasScaffold = hasAnyScaffold(inventory);
 
         // Survivable fall: vanilla fall damage starts at 3.5 blocks (1 block
         // damage at 4). Cap conservatively at 3 so the bot never hurts itself.
         this.maxFallHeight = 3;
     }
 
-    private static boolean hasAnyScaffold(SimpleContainer inv) {
+    private static boolean hasAnyScaffold(Container inv) {
         for (int i = 0; i < inv.getContainerSize(); i++) {
             if (isScaffold(inv.getItem(i))) {
                 return true;
@@ -221,7 +223,7 @@ public final class NavContext {
     }
 
     /** Pick a scaffolding stack the entity currently holds, or null. */
-    public static ItemStack firstScaffoldItem(SimpleContainer inv) {
+    public static ItemStack firstScaffoldItem(Container inv) {
         for (int i = 0; i < inv.getContainerSize(); i++) {
             ItemStack s = inv.getItem(i);
             if (isScaffold(s)) {

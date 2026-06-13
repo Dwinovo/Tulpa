@@ -158,7 +158,7 @@ public final class Navigator {
     private void startFreshSearch() {
         BlockPos g = goalSupplier.get();
         plannedGoal = g;
-        searchCtx = new NavContext(entity);
+        searchCtx = new NavContext(entity.level(), entity.getMainHandItem(), entity.getInventory());
         search = (g == null) ? null : astar.newSearch(searchCtx, entity.blockPosition(), g);
         if (PathExecutor.VERBOSE) {
             com.dwinovo.animus.Constants.LOG.info(
@@ -234,7 +234,7 @@ public final class Navigator {
         BlockPos g = goalSupplier.get();
         if (g == null) return;
         plannedGoal = g;
-        nextCtx = new NavContext(entity);
+        nextCtx = new NavContext(entity.level(), entity.getMainHandItem(), entity.getInventory());
         nextSearch = astar.newSearch(nextCtx, current.pathEnd(), g);
     }
 
