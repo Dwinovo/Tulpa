@@ -61,6 +61,10 @@ public final class MineCompanionTask implements CompanionTask {
     private static final double MINE_SPEED = 1.0;
     /** Give up branch-mining after this many ticks with no ore found (~30 s). */
     private static final int MAX_BRANCH_TICKS = 600;
+    /** Abandon an in-flight scan after this long so a wedged future can't stop
+     *  rescanning forever (scans finish in well under a tick; this only fires if
+     *  something is truly stuck). */
+    private static final int SCAN_TIMEOUT_TICKS = 200;
 
     private final AnimusPlayer player;
     private final MineBlockTaskRecord r;
@@ -78,6 +82,8 @@ public final class MineCompanionTask implements CompanionTask {
     private String doneReason = "done";
     /** In-flight background ore scan (Baritone runs its rescan off the tick thread). */
     private CompletableFuture<List<BlockScanner.Hit>> scan;
+    /** Game time by which the in-flight scan must finish or be abandoned. */
+    private long scanDeadline;
 
     // Progressive dig state (Baritone mines tick-by-tick, not instabreak).
     private BlockPos digPos;
@@ -322,11 +328,19 @@ public final class MineCompanionTask implements CompanionTask {
         if (chunks.isEmpty()) return;
         scan = ScanExecutor.submit(
                 () -> BlockScanner.scanLoaded(level, chunks, center, r.maxRadius, r.targets));
+        scanDeadline = level.getGameTime() + SCAN_TIMEOUT_TICKS;
     }
 
     /** Merge a finished background scan into knownOres on the main thread. */
     private void drainScan() {
-        if (scan == null || !scan.isDone()) return;
+        if (scan == null) return;
+        if (!scan.isDone()) {
+            if (player.level().getGameTime() > scanDeadline) {   // wedged — drop it, re-kick later
+                scan.cancel(false);
+                scan = null;
+            }
+            return;
+        }
         List<BlockScanner.Hit> hits;
         try {
             hits = scan.getNow(List.of());
