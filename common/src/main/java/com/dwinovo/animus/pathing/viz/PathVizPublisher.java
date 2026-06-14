@@ -10,7 +10,6 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Server side of the path overlay: turns a computed {@link Path} into a {@link
@@ -23,8 +22,13 @@ public final class PathVizPublisher {
 
     private PathVizPublisher() {}
 
-    /** Push the current path + the goal it's heading for. */
-    public static void publish(AnimusPlayer player, Path path, BlockPos goal) {
+    /**
+     * Push the current path plus the {@code targets} to highlight — for mining,
+     * EVERY known ore/log cell (Baritone boxes every {@code GoalComposite}
+     * member, so the owner sees the whole field it will work through); for a
+     * plain move, just the destination cell.
+     */
+    public static void publish(AnimusPlayer player, Path path, List<BlockPos> targets) {
         ServerPlayer owner = player.resolveOwnerPlayer();
         if (owner == null || path == null || path.isEmpty()) return;
 
@@ -41,17 +45,16 @@ public final class PathVizPublisher {
 
         Services.NETWORK.sendToPlayer(owner, new PathVizPayload(
                 player.getUUID(), player.level().dimension().identifier(),
-                cap(nodes), cap(toBreak), cap(toPlace),
-                Optional.ofNullable(goal)));
+                cap(nodes), cap(toBreak), cap(toPlace), cap(targets)));
     }
 
-    /** Clear the overlay (empty lists, no goal). */
+    /** Clear the overlay (all lists empty). */
     public static void clear(AnimusPlayer player) {
         ServerPlayer owner = player.resolveOwnerPlayer();
         if (owner == null) return;
         Services.NETWORK.sendToPlayer(owner, new PathVizPayload(
                 player.getUUID(), player.level().dimension().identifier(),
-                List.of(), List.of(), List.of(), Optional.empty()));
+                List.of(), List.of(), List.of(), List.of()));
     }
 
     private static List<BlockPos> cap(List<BlockPos> list) {

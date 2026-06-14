@@ -19,21 +19,22 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ClientPathViz {
 
-    /** One companion's overlay snapshot. {@code goal} may be null. */
+    /** One companion's overlay snapshot. */
     public record Viz(Identifier dimension, List<BlockPos> nodes, List<BlockPos> toBreak,
-                      List<BlockPos> toPlace, BlockPos goal) {}
+                      List<BlockPos> toPlace, List<BlockPos> targets) {}
 
     private static final Map<UUID, Viz> ACTIVE = new ConcurrentHashMap<>();
 
     private ClientPathViz() {}
 
     public static void accept(PathVizPayload p) {
-        if (p.nodes().isEmpty() && p.toBreak().isEmpty() && p.toPlace().isEmpty()) {
+        if (p.nodes().isEmpty() && p.toBreak().isEmpty()
+                && p.toPlace().isEmpty() && p.targets().isEmpty()) {
             ACTIVE.remove(p.companion());
             return;
         }
         ACTIVE.put(p.companion(),
-                new Viz(p.dimension(), p.nodes(), p.toBreak(), p.toPlace(), p.goal().orElse(null)));
+                new Viz(p.dimension(), p.nodes(), p.toBreak(), p.toPlace(), p.targets()));
     }
 
     public static Collection<Viz> all() {

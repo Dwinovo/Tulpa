@@ -54,7 +54,10 @@ public final class PathVizRenderer {
             drawPathLine(vc, pose, v.nodes(), cam);
             for (BlockPos b : v.toBreak()) drawBox(vc, pose, b, cam, BREAK_COLOR);
             for (BlockPos p : v.toPlace()) drawBox(vc, pose, p, cam, PLACE_COLOR);
-            if (v.goal() != null) drawBox(vc, pose, v.goal(), cam, GOAL_COLOR);
+            // Every target the body will work through — for mining, the whole ore
+            // field (Baritone boxes every GoalComposite member); for a move, the
+            // single destination. Real cells, never a floating goal-centroid.
+            for (BlockPos t : v.targets()) drawBox(vc, pose, t, cam, GOAL_COLOR);
         }
         // Flush only our line batch (not endLastBatch, which could flush a foreign
         // open batch in the shared buffer source at this render stage).

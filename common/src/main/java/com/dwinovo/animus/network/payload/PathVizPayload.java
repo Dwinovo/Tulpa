@@ -11,7 +11,6 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -34,7 +33,7 @@ public record PathVizPayload(UUID companion,
                              List<BlockPos> nodes,
                              List<BlockPos> toBreak,
                              List<BlockPos> toPlace,
-                             Optional<BlockPos> goal) implements CustomPacketPayload {
+                             List<BlockPos> targets) implements CustomPacketPayload {
 
     /** Cap per list — paths are trimmed well below this; defends against absurd input. */
     public static final int MAX = 512;
@@ -49,7 +48,7 @@ public record PathVizPayload(UUID companion,
                     BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::nodes,
                     BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::toBreak,
                     BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::toPlace,
-                    ByteBufCodecs.optional(BlockPos.STREAM_CODEC), PathVizPayload::goal,
+                    BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::targets,
                     PathVizPayload::new);
 
     @Override

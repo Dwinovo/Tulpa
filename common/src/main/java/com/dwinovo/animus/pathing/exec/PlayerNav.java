@@ -49,6 +49,22 @@ public final class PlayerNav {
     private PlayerPathExecutor pendingNext;
     private Path pendingPathForViz;
 
+    /** Cells to highlight in the overlay; null → just the path's destination.
+     *  The mining task sets this to its whole known-ore field (Baritone boxes
+     *  every GoalComposite member). */
+    private Supplier<java.util.List<BlockPos>> highlights;
+
+    /** Highlight these cells in the path overlay (e.g. the full ore field). */
+    public void setHighlights(Supplier<java.util.List<BlockPos>> highlights) {
+        this.highlights = highlights;
+    }
+
+    private void publishViz(Path cut) {
+        java.util.List<BlockPos> targets =
+                highlights != null ? highlights.get() : java.util.List.of(cut.end);
+        PathVizPublisher.publish(player, cut, targets);
+    }
+
     private int replans = 0;
     private String failReason = "target unreachable";
 
@@ -121,7 +137,7 @@ public final class PlayerNav {
                     current = pendingNext;
                     pendingNext = null;
                     if (pendingPathForViz != null) {
-                        PathVizPublisher.publish(player, pendingPathForViz, plannedCenter);
+                        publishViz(pendingPathForViz);
                         pendingPathForViz = null;
                     }
                     return Status.RUNNING;
@@ -165,7 +181,7 @@ public final class PlayerNav {
         }
         Path cut = path.staticCutoff();
         current = new PlayerPathExecutor(player, cut, speed, this::freshContext);
-        PathVizPublisher.publish(player, cut, plannedCenter);
+        publishViz(cut);
         return Status.RUNNING;
     }
 
