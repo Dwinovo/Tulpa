@@ -7,6 +7,7 @@ import com.dwinovo.animus.pathing.exec.InputDriver;
 import com.dwinovo.animus.pathing.exec.PlayerNav;
 import com.dwinovo.animus.pathing.util.BlockScanner;
 import com.dwinovo.animus.pathing.util.ScanExecutor;
+import com.dwinovo.animus.pathing.viz.PathVizPublisher;
 import com.dwinovo.animus.task.CompanionTask;
 import com.dwinovo.animus.task.TaskResult;
 import com.dwinovo.animus.task.TaskState;
@@ -62,6 +63,14 @@ public final class MineCompanionTask implements CompanionTask {
     private static final double MINE_SPEED = 1.0;
     /** Give up branch-mining after this many ticks with no ore found (~30 s). */
     private static final int MAX_BRANCH_TICKS = 600;
+    /**
+     * Baritone {@code MineProcess.updateGoal}: with {@code exploreForBlocks} (default
+     * FALSE) and {@code legitMine} (default FALSE) both off, "no ore known" returns
+     * null → the process CANCELS — it does NOT wander off hunting for more. Only with
+     * {@code exploreForBlocks} does it branch-mine outward. We mirror the default:
+     * stop. Flip this to re-enable Baritone's opt-in explore mode (the branch-mine
+     * below). */
+    private static final boolean EXPLORE_FOR_BLOCKS = false;
     /** Abandon an in-flight scan after this long so a wedged future can't stop
      *  rescanning forever (scans finish in well under a tick; this only fires if
      *  something is truly stuck). */
@@ -138,6 +147,12 @@ public final class MineCompanionTask implements CompanionTask {
         BlockPos reachable = reachableTarget();
         if (reachable != null) {
             stopNav();
+            // Baritone keeps the goal box rendered while it mines in place (the path
+            // executor is paused, but drawGoal(behavior.getGoal()) still runs). stopNav
+            // cleared the overlay, so re-publish the ore field boxes — otherwise the
+            // boxes vanish the instant shaft-mining starts (the "boxes disappear after
+            // two logs" bug). No path line while shaft-mining, just the goal.
+            PathVizPublisher.publishTargets(player, new ArrayList<>(knownOres));
             mineProgress(reachable);
             return TaskState.RUNNING;
         }
@@ -164,7 +179,18 @@ public final class MineCompanionTask implements CompanionTask {
             }
         }
 
-        // 3) No ore known — branch-mine outward to expose more (bounded).
+        // 3) No ore known and nothing dropped nearby. Baritone's default stops here
+        //    (cancel); only its opt-in explore mode branch-mines. Match the default:
+        //    finish with whatever we gathered (the tool's contract: "fewer than count
+        //    in range still succeeds"), rather than running off across the world.
+        if (!EXPLORE_FOR_BLOCKS) {
+            doneReason = r.getMined() > 0
+                    ? "mined " + r.getMined() + "/" + r.count + ", no more " + r.label + " in range"
+                    : "no reachable " + r.label + " found within " + r.maxRadius + " blocks";
+            return r.getMined() > 0 ? TaskState.SUCCESS : TaskState.FAILED;
+        }
+
+        // 3b) Opt-in explore (Baritone exploreForBlocks) — branch-mine outward (bounded).
         if (branchPoint == null) {
             branchPoint = player.blockPosition();
             branchY = branchPoint.getY();
@@ -196,12 +222,56 @@ public final class MineCompanionTask implements CompanionTask {
     private NavGoal oreFieldGoal() {
         List<NavGoal> goals = new ArrayList<>(knownOres.size() + drops.size());
         for (BlockPos ore : knownOres) {
-            goals.add(NavGoal.mine(ore));
+            goals.add(coalesce(ore));
         }
         for (BlockPos drop : drops) {
             goals.add(NavGoal.near(drop, 1.0));   // walk over it; native pickup grabs it
         }
         return goals.isEmpty() ? NavGoal.exact(player.blockPosition()) : NavGoal.composite(goals);
+    }
+
+    /**
+     * Baritone {@code MineProcess.coalesce} with {@code forceInternalMining=true}
+     * (its DEFAULT) — pick the mining-stance goal for one ore so the body never
+     * stands BELOW the bottom of a vein/trunk. The blind {@code GoalThreeBlocks}
+     * (feet up to two below every ore) was our divergence: it made a tree's
+     * bottom log's −2 cell a valid stance, and bare-handed (logs dear, dirt
+     * cheap) A* dug under to it. Baritone instead asks "is the block above / below
+     * this one ALSO something I'm mining?": the bottom of a vertical run (target
+     * above, plain ground below) gets {@code GoalBlock} — feet EXACTLY at the ore,
+     * mined where you stand, never dug under.
+     */
+    private NavGoal coalesce(BlockPos loc) {
+        boolean assumeVerticalShaftMine =
+                !(player.level().getBlockState(loc.above()).getBlock()
+                        instanceof net.minecraft.world.level.block.FallingBlock);
+        boolean upwardGoal = internalMiningGoal(loc.above());
+        boolean downwardGoal = internalMiningGoal(loc.below());
+        boolean doubleDownwardGoal = internalMiningGoal(loc.below(2));
+        if (upwardGoal == downwardGoal) {                       // symmetric vertically
+            return (doubleDownwardGoal && assumeVerticalShaftMine)
+                    ? NavGoal.mineColumn(loc, 2)                // GoalThreeBlocks
+                    : NavGoal.mineColumn(loc, 1);              // GoalTwoBlocks
+        }
+        if (upwardGoal) {                                       // bottom of a run: stand in it
+            return NavGoal.mineColumn(loc, 0);                 // GoalBlock — feet exactly here
+        }
+        return (doubleDownwardGoal && assumeVerticalShaftMine) // top of a run, more below
+                ? NavGoal.mineColumn(loc.below(), 1)           // GoalTwoBlocks(below)
+                : NavGoal.mineColumn(loc.below(), 0);          // GoalBlock(below)
+    }
+
+    /**
+     * Baritone {@code MineProcess.internalMiningGoal}: is {@code pos} also part of
+     * what we're mining — a known target, a filter match, or (the air exception,
+     * default on) already-broken air continuing the shaft? Used by {@link #coalesce}
+     * to read the run a block sits in.
+     */
+    private boolean internalMiningGoal(BlockPos pos) {
+        if (knownOres.contains(pos)) return true;
+        net.minecraft.world.level.block.state.BlockState state = player.level().getBlockState(pos);
+        if (state.isAir()) return true;                         // internalMiningAirException
+        return r.targets.contains(state.getBlock());
     }
 
     /** Nearby dropped items (Baritone droppedItemsScan). Tight radius — mining drops
@@ -217,27 +287,29 @@ public final class MineCompanionTask implements CompanionTask {
     }
 
     /**
-     * The nearest known target the body can mine FROM WHERE IT STANDS — within
-     * reach and with a clear line of sight — like a player punching a tree from
-     * the side. This is what stops the companion pathing INTO an ore's column
-     * (Baritone's vertical-shaft stance), which for a surface tree meant digging
-     * down UNDER the trunk; here it just mines the trunk from beside. Buried ore
-     * has no line of sight until the path tunnels up to it, so this returns null
-     * and normal pathing exposes it first.
+     * Baritone's MineProcess "shaft" — EXACT port: a known target in the body's
+     * OWN feet column (x/z match), at or above feet, still solid, and reachable
+     * (within reach + clear sight = {@code RotationUtils.reachable}). Mined in
+     * place, no pathing. The A* (GoalThreeBlocks) is what gets the body INTO the
+     * column; this only fires once it's there. No reach-from-the-side shortcut.
      */
     private BlockPos reachableTarget() {
         if (!player.onGround()) return null;
         Level level = player.level();
+        BlockPos feet = player.blockPosition();
         Vec3 eyes = player.getEyePosition();
         BlockPos best = null;
         double bestD = Double.MAX_VALUE;
         for (BlockPos ore : knownOres) {
+            if (ore.getX() != feet.getX() || ore.getZ() != feet.getZ()) continue;   // same column
+            if (ore.getY() < feet.getY()) continue;                                  // at or above feet
             if (level.getBlockState(ore).isAir()) continue;
-            double d = player.distanceToSqr(Vec3.atCenterOf(ore));
-            if (d > REACH_SQR || d >= bestD) continue;
-            if (!hasLineOfSight(eyes, ore)) continue;
-            bestD = d;
-            best = ore;
+            if (!withinReach(ore) || !hasLineOfSight(eyes, ore)) continue;           // reachable
+            double d = ore.distSqr(feet.above());
+            if (d < bestD) {
+                bestD = d;
+                best = ore;
+            }
         }
         return best;
     }
@@ -355,6 +427,10 @@ public final class MineCompanionTask implements CompanionTask {
     @Override
     public TaskResult buildResult(TaskState finalState) {
         stopNav();
+        // stopNav only clears the overlay when a nav exists; if we finished while
+        // shaft-mining (nav == null) the goal boxes would otherwise linger, so clear
+        // explicitly. Idempotent with stopNav's own clear.
+        PathVizPublisher.clear(player);
         digger.cancel();
         if (scan != null) {
             scan.cancel(false);

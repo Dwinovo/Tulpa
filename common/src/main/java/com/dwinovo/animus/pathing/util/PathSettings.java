@@ -31,14 +31,10 @@ public final class PathSettings {
     /** Skip re-propagating cost improvements smaller than this (FP-noise guard). */
     public static final double MIN_IMPROVEMENT = 0.01;
 
-    /** Stop the initial search this long after the first usable path is found. */
-    public static final long PRIMARY_TIMEOUT_MS = 500L;
-    /** Hard cap on the initial search when no path is found yet. */
-    public static final long FAILURE_TIMEOUT_MS = 2000L;
-    /** Plan-ahead (next segment) variant of the primary timeout. */
-    public static final long PLAN_AHEAD_PRIMARY_TIMEOUT_MS = 4000L;
-    /** Plan-ahead variant of the failure timeout. */
-    public static final long PLAN_AHEAD_FAILURE_TIMEOUT_MS = 5000L;
+    // The search terminates on a NODE BUDGET ({@link com.dwinovo.animus.pathing.calc.AStar}
+    // DEFAULT_MAX_NODES, time-sliced per tick), NOT Baritone's wall-clock primary/failure
+    // timeouts: it runs on the server tick thread, so a deterministic node cap is the right
+    // bound (the timeout model needs a background search thread we deliberately don't use).
 
     // ---- cost penalties ----
 

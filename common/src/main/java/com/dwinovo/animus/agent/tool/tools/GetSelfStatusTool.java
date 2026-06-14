@@ -5,11 +5,14 @@ import com.dwinovo.animus.entity.AnimusPlayer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.SimpleContainer;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.levelgen.structure.Structure;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,11 +44,12 @@ public final class GetSelfStatusTool implements AnimusTool {
 
     @Override
     public String description() {
-        return "Read your complete status in one call: HP / max HP, position, "
-                + "dimension, equipment (hands + armor — an equipped item leaves "
-                + "the backpack, it is NOT lost), your full backpack inventory, "
-                + "current attack target, and movement state. ALWAYS call this "
-                + "before combat or planning decisions and periodically during "
+        return "Read your complete status in one call: name, game mode, HP / max HP, "
+                + "hunger / saturation, position, dimension, biome, the structures you "
+                + "are standing in (village, mineshaft, …), equipment (hands + armor — "
+                + "an equipped item leaves the backpack, it is NOT lost), your full "
+                + "backpack inventory, current attack target, and movement state. ALWAYS "
+                + "call this before combat or planning decisions and periodically during "
                 + "long tasks. No arguments.";
     }
 
@@ -73,8 +77,12 @@ public final class GetSelfStatusTool implements AnimusTool {
     public String executeQuery(JsonObject args, AnimusPlayer entity) {
         JsonObject root = new JsonObject();
         root.addProperty("entity_id", entity.getId());
+        root.addProperty("name", entity.getName().getString());
+        root.addProperty("game_mode", entity.gameMode.getGameModeForPlayer().getName());
         root.addProperty("hp", entity.getHealth());
         root.addProperty("max_hp", entity.getMaxHealth());
+        root.addProperty("hunger", entity.getFoodData().getFoodLevel());
+        root.addProperty("saturation", entity.getFoodData().getSaturationLevel());
 
         JsonObject pos = new JsonObject();
         pos.addProperty("x", entity.getX());
@@ -83,6 +91,18 @@ public final class GetSelfStatusTool implements AnimusTool {
         root.add("position", pos);
 
         root.addProperty("dimension", entity.level().dimension().identifier().toString());
+        root.addProperty("biome", entity.level().getBiome(entity.blockPosition())
+                .unwrapKey().map(k -> k.identifier().toString()).orElse("unknown"));
+        // Structures whose bounding box contains us right now (e.g. village, mineshaft).
+        JsonArray structures = new JsonArray();
+        if (entity.level() instanceof ServerLevel sl) {
+            Registry<Structure> reg = sl.registryAccess().lookupOrThrow(Registries.STRUCTURE);
+            for (Structure s : sl.structureManager().getAllStructuresAt(entity.blockPosition()).keySet()) {
+                Identifier key = reg.getKey(s);
+                if (key != null) structures.add(key.toString());
+            }
+        }
+        root.add("structures", structures);
 
         // Equipment: hands + armor. Lives OUTSIDE the backpack container.
         JsonObject equipment = new JsonObject();

@@ -45,6 +45,11 @@ public final class AStarSearch {
     private final BlockPos start;
     private final NavGoal goal;
     private final int maxNodes;
+    /** Baritone {@code Favoring}: packed positions of the PREVIOUS path. An edge into
+     *  one of these is discounted (× {@link PathSettings#BACKTRACK_COST_FAVORING_COEFFICIENT})
+     *  so a replan reuses the prior route instead of flip-flopping between near-equal
+     *  paths. Empty for the first search (no previous path). */
+    private final it.unimi.dsi.fastutil.longs.LongSet favored;
 
     private final Long2ObjectOpenHashMap<PathNode> nodes = new Long2ObjectOpenHashMap<>();
     private final BinaryHeapOpenSet open = new BinaryHeapOpenSet();
@@ -62,11 +67,13 @@ public final class AStarSearch {
     private State state = State.COMPUTING;
     private Path result;
 
-    AStarSearch(NavContext ctx, BlockPos start, NavGoal goal, int maxNodes) {
+    AStarSearch(NavContext ctx, BlockPos start, NavGoal goal, int maxNodes,
+               it.unimi.dsi.fastutil.longs.LongSet favored) {
         this.ctx = ctx;
         this.start = start.immutable();
         this.goal = goal;
         this.maxNodes = maxNodes;
+        this.favored = favored;
 
         PathNode startNode = new PathNode(this.start, heuristic(this.start));
         startNode.cost = 0;
@@ -121,8 +128,13 @@ public final class AStarSearch {
                 // Plausibility (Baritone asserts this): a 0 / negative / NaN edge
                 // cost would silently corrupt the search — drop it rather than trust it.
                 if (mv.cost <= 0.0 || Double.isNaN(mv.cost)) continue;
-                double tentativeG = current.cost + mv.cost;
                 long key = mv.dest.asLong();
+                // Baritone Favoring: discount an edge whose destination sits on the
+                // previous path, so a replan reuses the old route (damps oscillation).
+                double edgeCost = favored.contains(key)
+                        ? mv.cost * PathSettings.BACKTRACK_COST_FAVORING_COEFFICIENT
+                        : mv.cost;
+                double tentativeG = current.cost + edgeCost;
 
                 PathNode neighbor = nodes.get(key);
                 if (neighbor == null) {

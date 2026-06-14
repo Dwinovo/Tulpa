@@ -19,9 +19,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ClientPathViz {
 
-    /** One companion's overlay snapshot. */
-    public record Viz(Identifier dimension, List<BlockPos> nodes, List<BlockPos> toBreak,
-                      List<BlockPos> toPlace, List<BlockPos> targets) {}
+    /** One companion's overlay snapshot. {@code companion} is the body UUID so the
+     *  renderer can resolve its live position and draw the path line from where it
+     *  currently is (Baritone's per-frame renderBegin — the line shrinks as it walks). */
+    public record Viz(UUID companion, Identifier dimension, List<BlockPos> nodes,
+                      List<BlockPos> toBreak, List<BlockPos> toPlace, List<BlockPos> targets) {}
 
     private static final Map<UUID, Viz> ACTIVE = new ConcurrentHashMap<>();
 
@@ -34,7 +36,7 @@ public final class ClientPathViz {
             return;
         }
         ACTIVE.put(p.companion(),
-                new Viz(p.dimension(), p.nodes(), p.toBreak(), p.toPlace(), p.targets()));
+                new Viz(p.companion(), p.dimension(), p.nodes(), p.toBreak(), p.toPlace(), p.targets()));
     }
 
     public static Collection<Viz> all() {

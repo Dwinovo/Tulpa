@@ -305,6 +305,13 @@ public final class PlayerPathExecutor {
     private Status verifyCosts() {
         NavContext fresh = ctxSupplier.get();
         Movement cur = path.movements.get(index);
+        // Baritone gates EVERY cost-based cancel on canCancel = movement.safeToCancel():
+        // a movement mid-commit (airborne, mid-jump, mid-place, bridging over air) must
+        // not be abandoned to a replan, or the body is dropped into a bad state. While
+        // not cancellable, let the move finish; the movement timeout still bounds a stall.
+        if (!safeToCancel(cur)) {
+            return null;
+        }
         // Movements whose OWN execution mutates the world — pillar places a block
         // underfoot, dig-down breaks the floor, swim dips below the surface — would
         // self-trigger COST_INF the instant they act (regeneration no longer emits
@@ -333,6 +340,35 @@ public final class PlayerPathExecutor {
             }
         }
         return null;
+    }
+
+    /**
+     * Baritone PathExecutor's {@code canCancel = movement.safeToCancel()} gate, mapped
+     * to our movement kinds + live body state. A movement that is mid-commit must not
+     * be cancelled (replanned) — doing so drops the body off a fall, fails a jump, or
+     * strands it mid-bridge. Mirrors each Baritone Movement.safeToCancel override:
+     * <ul>
+     *   <li>FALL — safe only before stepping off the edge (still at {@code src});</li>
+     *   <li>PARKOUR — only on the takeoff (0th) tick, no momentum knowledge after;</li>
+     *   <li>ASCEND — not while a step block was just placed;</li>
+     *   <li>TRAVERSE — a sneak-bridge over air can't be abandoned until its floor exists;</li>
+     *   <li>others (DIAGONAL/DESCEND/PILLAR/DIG_DOWN/SWIM) — base {@code true}.</li>
+     * </ul>
+     */
+    private boolean safeToCancel(Movement mv) {
+        switch (mv.kind) {
+            case FALL:
+                return player.blockPosition().equals(mv.src);
+            case PARKOUR:
+                return ticksOnCurrent == 0;
+            case ASCEND:
+                return !placedThisMove;
+            case TRAVERSE:
+                return mv.toPlace == null
+                        || BlockHelper.canWalkOn(player.level(), mv.dest.below());
+            default:
+                return true;
+        }
     }
 
     /** Kinds whose execution changes the world such that regenerating them mid-move

@@ -29,7 +29,10 @@ public final class PathVizRenderer {
     private static final int BREAK_COLOR = 0xFFFF0000; // red
     private static final int PLACE_COLOR = 0xFF00FF00; // green
     private static final int GOAL_COLOR  = 0xFF00FF00; // green
-    private static final float LINE_WIDTH = 2.0F;
+    private static final float LINE_WIDTH = 5.0F;   // Baritone pathRenderLineWidthPixels default
+    /** Baritone renderPathAsLine=false: the path is a thin vertical ribbon, the line
+     *  plus a parallel edge 0.03 above it, joined at each segment's ends. */
+    private static final double RIBBON = 0.03;
     /** Box inset so the wireframe hugs faces without z-fighting (Baritone uses .002). */
     private static final double BOX_INSET = 0.002;
 
@@ -51,7 +54,7 @@ public final class PathVizRenderer {
             // Baritone skips paths for bots in another dimension; ours are at world
             // coords that only make sense in their own dimension.
             if (!here.equals(v.dimension())) continue;
-            drawPathLine(vc, pose, v.nodes(), cam);
+            drawPathLine(vc, pose, v.nodes(), cam, v.companion());
             for (BlockPos b : v.toBreak()) drawBox(vc, pose, b, cam, BREAK_COLOR);
             for (BlockPos p : v.toPlace()) drawBox(vc, pose, p, cam, PLACE_COLOR);
             // Every target the body will work through — for mining, the whole ore
@@ -64,16 +67,52 @@ public final class PathVizRenderer {
         buffers.endBatch(RenderTypes.lines());
     }
 
-    /** Poly-line through block centres (Baritone drawPath). */
-    private static void drawPathLine(VertexConsumer vc, PoseStack.Pose pose, List<BlockPos> nodes, Vec3 cam) {
-        for (int i = 1; i < nodes.size(); i++) {
+    /**
+     * Poly-line through block centres (Baritone drawPath), drawn from the body's
+     * CURRENT position onward — Baritone redraws every frame starting at the
+     * executor's path index, so the walked-over portion vanishes and the line
+     * shrinks as the body advances. We approximate that index with the path node
+     * nearest the body's live position; the already-travelled prefix isn't drawn.
+     */
+    private static void drawPathLine(VertexConsumer vc, PoseStack.Pose pose, List<BlockPos> nodes,
+                                     Vec3 cam, java.util.UUID companion) {
+        int start = renderBegin(nodes, companion);
+        for (int i = start + 1; i < nodes.size(); i++) {
             BlockPos a = nodes.get(i - 1);
             BlockPos b = nodes.get(i);
-            line(vc, pose,
-                    a.getX() + 0.5 - cam.x, a.getY() + 0.5 - cam.y, a.getZ() + 0.5 - cam.z,
-                    b.getX() + 0.5 - cam.x, b.getY() + 0.5 - cam.y, b.getZ() + 0.5 - cam.z,
-                    PATH_COLOR);
+            double ax = a.getX() + 0.5 - cam.x, ay = a.getY() + 0.5 - cam.y, az = a.getZ() + 0.5 - cam.z;
+            double bx = b.getX() + 0.5 - cam.x, by = b.getY() + 0.5 - cam.y, bz = b.getZ() + 0.5 - cam.z;
+            // Baritone emitPathLine (renderPathAsLine=false): the segment plus a 3-sided
+            // ribbon — vertical up at the far end, a parallel edge RIBBON above back to
+            // the near end, vertical down — so the path reads as a thin standing band.
+            line(vc, pose, ax, ay, az, bx, by, bz, PATH_COLOR);
+            line(vc, pose, bx, by, bz, bx, by + RIBBON, bz, PATH_COLOR);
+            line(vc, pose, bx, by + RIBBON, bz, ax, ay + RIBBON, az, PATH_COLOR);
+            line(vc, pose, ax, ay + RIBBON, az, ax, ay, az, PATH_COLOR);
         }
+    }
+
+    /** The node nearest the body's live position — our stand-in for Baritone's
+     *  per-frame {@code renderBegin} (the executor's current path index). 0 if the
+     *  body can't be resolved (just drawn the whole path, as before). */
+    private static int renderBegin(List<BlockPos> nodes, java.util.UUID companion) {
+        var body = com.dwinovo.animus.client.agent.ClientAnimusLookup.resolve(companion);
+        if (body == null) return 0;
+        Vec3 p = body.position();
+        int best = 0;
+        double bestSq = Double.MAX_VALUE;
+        for (int i = 0; i < nodes.size(); i++) {
+            BlockPos n = nodes.get(i);
+            double dx = n.getX() + 0.5 - p.x;
+            double dy = n.getY() + 0.5 - p.y;
+            double dz = n.getZ() + 0.5 - p.z;
+            double sq = dx * dx + dy * dy + dz * dz;
+            if (sq < bestSq) {
+                bestSq = sq;
+                best = i;
+            }
+        }
+        return best;
     }
 
     /** The 12 edges of a unit block at {@code pos} (Baritone drawManySelectionBoxes). */

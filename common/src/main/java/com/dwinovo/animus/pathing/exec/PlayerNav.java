@@ -49,6 +49,12 @@ public final class PlayerNav {
     private PlayerPathExecutor pendingNext;
     private Path pendingPathForViz;
 
+    /** Packed positions of the path we're currently executing — fed to the next
+     *  search as Baritone's {@code Favoring} so a replan reuses this route (damps
+     *  the flip-flopping a from-scratch replan would otherwise cause). */
+    private it.unimi.dsi.fastutil.longs.LongSet previousPathHashes =
+            it.unimi.dsi.fastutil.longs.LongSets.emptySet();
+
     /** Cells to highlight in the overlay; null → just the path's destination.
      *  The mining task sets this to its whole known-ore field (Baritone boxes
      *  every GoalComposite member). */
@@ -162,7 +168,18 @@ public final class PlayerNav {
     private void startFreshSearch() {
         NavGoal g = goalSupplier.get();
         plannedCenter = (g == null) ? null : g.center();
-        search = (g == null) ? null : astar.newSearch(freshContext(), player.blockPosition(), g);
+        search = (g == null) ? null
+                : astar.newSearch(freshContext(), player.blockPosition(), g, previousPathHashes);
+    }
+
+    /** Packed positions (start + every movement dest) of a path — its Favoring set. */
+    private static it.unimi.dsi.fastutil.longs.LongSet pathHashes(Path p) {
+        var set = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(p.movements.size() + 1);
+        set.add(p.start.asLong());
+        for (com.dwinovo.animus.pathing.movement.Movement m : p.movements) {
+            set.add(m.dest.asLong());
+        }
+        return set;
     }
 
     private Status advanceFreshSearch() {
@@ -181,6 +198,7 @@ public final class PlayerNav {
         }
         Path cut = path.staticCutoff();
         current = new PlayerPathExecutor(player, cut, speed, this::freshContext);
+        previousPathHashes = pathHashes(cut);   // favor this route on the next replan
         publishViz(cut);
         return Status.RUNNING;
     }
@@ -207,7 +225,7 @@ public final class PlayerNav {
         NavGoal g = goalSupplier.get();
         if (g == null) return;
         plannedCenter = g.center();
-        nextSearch = astar.newSearch(freshContext(), current.pathEnd(), g);
+        nextSearch = astar.newSearch(freshContext(), current.pathEnd(), g, previousPathHashes);
     }
 
     private void advancePrecompute() {
@@ -219,6 +237,7 @@ public final class PlayerNav {
             Path cut = np.staticCutoff();
             pendingNext = new PlayerPathExecutor(player, cut, speed, this::freshContext);
             pendingPathForViz = cut;
+            previousPathHashes = pathHashes(cut);   // the next segment becomes the favored route
         }
     }
 

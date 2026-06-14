@@ -136,8 +136,6 @@ public final class NavContext {
      *       a fluid flow;</li>
      *   <li>{@link BlockHelper#shouldAvoidBreaking} — a player-placed functional
      *       block (chest, furnace, bed, …): don't grief it;</li>
-     *   <li>{@link BlockHelper#breakReleasesFallingBlock} — sand/gravel above
-     *       would cave in on the bot;</li>
      *   <li><b>ineffective break</b> — the block needs the correct tool for drops
      *       and the entity's held tool isn't it. We refuse the slow, drop-less
      *       bare-hand/wrong-tool grind: the bot only digs through what its current
@@ -147,17 +145,37 @@ public final class NavContext {
      * </ul>
      */
     public double costOfBreaking(BlockPos pos) {
+        return costOfBreaking(pos, false);
+    }
+
+    /**
+     * As {@link #costOfBreaking(BlockPos)} but, when {@code includeFalling}, folds in
+     * the cost of the FallingBlock (sand/gravel) stack directly above {@code pos} —
+     * Baritone's {@code getMiningDurationTicks(includeFalling=true)}. Passed for the
+     * TOP cell a move breaks: breaking under sand makes it cascade down and we break
+     * each one as it lands. We no longer VETO breaking under sand (Baritone never did);
+     * we pay for the cascade, so paths through sand/gravel terrain match Baritone.
+     */
+    public double costOfBreaking(BlockPos pos, boolean includeFalling) {
         if (!BlockHelper.isBreakable(view, pos)) return ActionCosts.COST_INF;
         if (BlockHelper.isHazard(view, pos)) return ActionCosts.COST_INF;
         if (BlockHelper.breakWouldCreateFlow(view, pos)) return ActionCosts.COST_INF;
         if (BlockHelper.shouldAvoidBreaking(view, pos)) return ActionCosts.COST_INF;
-        if (BlockHelper.breakReleasesFallingBlock(view, pos)) return ActionCosts.COST_INF;
 
         BlockState state = view.getBlockState(pos);
         if (state.requiresCorrectToolForDrops() && !bestTool(state).canHarvest()) {
             return ActionCosts.COST_INF;   // no hotbar tool can harvest it — route around / teach
         }
-        return miningTicks(pos) + PathSettings.BLOCK_BREAK_ADDITIONAL_PENALTY;
+        double cost = miningTicks(pos) + PathSettings.BLOCK_BREAK_ADDITIONAL_PENALTY;
+        if (includeFalling) {
+            BlockPos above = pos.above();
+            while (view.getBlockState(above).getBlock()
+                    instanceof net.minecraft.world.level.block.FallingBlock) {
+                cost += miningTicks(above) + PathSettings.BLOCK_BREAK_ADDITIONAL_PENALTY;
+                above = above.above();
+            }
+        }
+        return cost;
     }
 
     /**
@@ -236,9 +254,6 @@ public final class NavContext {
         }
         if (BlockHelper.shouldAvoidBreaking(view, pos)) {
             return blockId(state) + " (a functional block I won't destroy)";
-        }
-        if (BlockHelper.breakReleasesFallingBlock(view, pos)) {
-            return blockId(state) + " (sand/gravel above it would collapse on me)";
         }
         if (state.requiresCorrectToolForDrops() && !bestTool(state).canHarvest()) {
             return blockId(state) + " (needs the correct tool and I have none in my "

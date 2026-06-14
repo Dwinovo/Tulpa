@@ -146,42 +146,81 @@ public final class Moves {
         // Clear the two body cells at the destination.
         double feetBreak = clearCost(ctx, dest, toBreak);
         if (feetBreak >= ActionCosts.COST_INF) return null;
-        double headBreak = clearCost(ctx, head, toBreak);
+        double headBreak = clearCost(ctx, head, toBreak, true);   // top cell: fold falling stack
         if (headBreak >= ActionCosts.COST_INF) return null;
-
-        // Floor under the destination.
-        BlockPos floor = dest.below();
-        BlockPos toPlace = null;
-        double placeCost = 0.0;
-        if (!BlockHelper.canWalkOn(level, floor)) {
-            placeCost = ctx.costOfPlacing(floor);
-            if (placeCost >= ActionCosts.COST_INF) return null;
-            toPlace = floor;
-        }
 
         if (BlockHelper.isHazard(level, dest) || BlockHelper.isHazard(level, head)) return null;
 
-        // Baritone walk cost: base WALK + half soul-sand penalty per soul-sand floor
-        // touched — BOTH the destination floor and the source floor (Baritone
-        // MovementTraverse adds destOn and srcDownBlock separately).
-        double walk = ActionCosts.WALK_ONE_BLOCK;
-        double soulSandHalf =
-                (ActionCosts.WALK_ONE_OVER_SOUL_SAND - ActionCosts.WALK_ONE_BLOCK) / 2.0;
-        if (level.getBlockState(floor).is(Blocks.SOUL_SAND)) {
-            walk += soulSandHalf;
+        BlockPos floor = dest.below();
+        if (BlockHelper.canWalkOn(level, floor)) {
+            // WALK branch: base WALK + half soul-sand penalty per soul-sand floor touched
+            // (Baritone adds destOn and srcDown separately). Sprint when nothing to break.
+            double walk = ActionCosts.WALK_ONE_BLOCK;
+            double soulSandHalf =
+                    (ActionCosts.WALK_ONE_OVER_SOUL_SAND - ActionCosts.WALK_ONE_BLOCK) / 2.0;
+            if (level.getBlockState(floor).is(Blocks.SOUL_SAND)) walk += soulSandHalf;
+            if (level.getBlockState(from.below()).is(Blocks.SOUL_SAND)) walk += soulSandHalf;
+            double cost = (feetBreak == 0.0 && headBreak == 0.0 && ctx.canSprint)
+                    ? walk * ActionCosts.SPRINT_MULTIPLIER
+                    : walk + feetBreak + headBreak;
+            return new Movement(Movement.Kind.TRAVERSE, from, dest, cost, toBreak, null);
         }
-        if (level.getBlockState(from.below()).is(Blocks.SOUL_SAND)) {
-            walk += soulSandHalf;
+
+        // BRIDGE branch (Baritone MovementTraverse): the dest floor is missing, so place
+        // one. Needs a face to place against — a side face lets us walk-place; if only
+        // the block we're standing on backs it, we must sneak-backplace (× SNEAK/WALK);
+        // with no support at all (or off a ladder/vine / soul sand) it's impossible.
+        // Baritone uses a plain WALK here (no soul-sand term in the bridge branch).
+        if (isLadderOrVine(level.getBlockState(from.below()))) return null;
+        double placeCost = ctx.costOfPlacing(floor);   // INF if non-replaceable / no scaffold / hazard
+        if (placeCost >= ActionCosts.COST_INF) return null;
+        double walkMult = bridgeSupport(ctx, from, floor);
+        if (walkMult >= ActionCosts.COST_INF) return null;
+        double cost = ActionCosts.WALK_ONE_BLOCK * walkMult + feetBreak + headBreak + placeCost;
+        return new Movement(Movement.Kind.TRAVERSE, from, dest, cost, toBreak, floor);
+    }
+
+    /** The 5 faces of the dest floor a bridge can place against (Baritone's
+     *  HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP). */
+    private static final Direction[] SUPPORT_DIRS = {
+            Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST, Direction.DOWN};
+
+    /**
+     * Baritone MovementTraverse bridge support scan: walk-cost MULTIPLIER for placing
+     * the floor block. A side face (any of the 5 except the block we stand on) that we
+     * can place against → 1.0 (normal walk-place). Otherwise we must backplace against
+     * the block under our feet → {@code SNEAK/WALK} (≈3.3, a slow sneak place), vetoed
+     * on soul sand (can't sneak-backplace off it). No placeable face → {@code COST_INF}.
+     */
+    private static double bridgeSupport(NavContext ctx, BlockPos from, BlockPos floor) {
+        BlockGetter level = ctx.view;
+        BlockPos sourceBelow = from.below();
+        for (Direction d : SUPPORT_DIRS) {
+            BlockPos against = floor.relative(d);
+            if (against.equals(sourceBelow)) continue;   // that's the backplace face, handled below
+            if (canPlaceAgainst(level, against)) return 1.0;
         }
-        // A clear walk (nothing to break or place) takes the sprint discount;
-        // otherwise base walk + mining + placement (Baritone MovementTraverse).
-        double cost;
-        if (feetBreak == 0.0 && headBreak == 0.0 && toPlace == null && ctx.canSprint) {
-            cost = walk * ActionCosts.SPRINT_MULTIPLIER;
-        } else {
-            cost = walk + feetBreak + headBreak + placeCost;
+        if (!canPlaceAgainst(level, sourceBelow)) return ActionCosts.COST_INF;
+        if (level.getBlockState(sourceBelow).is(Blocks.SOUL_SAND)) return ActionCosts.COST_INF;
+        return ActionCosts.SNEAK_ONE_BLOCK / ActionCosts.WALK_ONE_BLOCK;
+    }
+
+    /** Baritone canPlaceAgainst: a full solid cube (or glass) presents a face to place
+     *  against. {@code isCollisionShapeFullBlock} captures normal cubes + glass. */
+    private static boolean canPlaceAgainst(BlockGetter level, BlockPos pos) {
+        return level.getBlockState(pos).isCollisionShapeFullBlock(level, pos);
+    }
+
+    /** Baritone MovementAscend place support: a face to place the step block against,
+     *  excluding our own source column (no backplace mid-jump). */
+    private static boolean ascendPlaceSupported(NavContext ctx, BlockPos from, BlockPos step) {
+        BlockGetter level = ctx.view;
+        for (Direction d : SUPPORT_DIRS) {
+            BlockPos against = step.relative(d);
+            if (against.getX() == from.getX() && against.getZ() == from.getZ()) continue;
+            if (canPlaceAgainst(level, against)) return true;
         }
-        return new Movement(Movement.Kind.TRAVERSE, from, dest, cost, toBreak, toPlace);
+        return false;
     }
 
     // ---- Ascend: up one block, dig head-room, place step if needed ----
@@ -191,11 +230,31 @@ public final class Moves {
         BlockPos dest = from.relative(dir).above(); // feet one up & over
         BlockPos destHead = dest.above();
         BlockPos jumpRoom = from.above(2);          // room to jump at the source column
+        BlockPos step = dest.below();               // == from.relative(dir): floor we stand on after the step
+
+        // Baritone MovementAscend suffocation veto: a FallingBlock at y+3 (above the
+        // jump apex) would fall onto us once we clear the stack over our head. Refuse,
+        // unless y+1 is already solid AND y+2 is itself falling (then we'd have had to
+        // clear the whole stack to even stand here, so nothing is left to fall).
+        if (level.getBlockState(from.above(3)).getBlock()
+                    instanceof net.minecraft.world.level.block.FallingBlock
+                && (BlockHelper.canWalkThrough(level, from.above(1))
+                    || !(level.getBlockState(jumpRoom).getBlock()
+                            instanceof net.minecraft.world.level.block.FallingBlock))) {
+            return null;
+        }
+        // Can't jump-ascend off a ladder/vine (Baritone srcDown check).
+        if (isLadderOrVine(level.getBlockState(from.below()))) return null;
 
         // Baritone MovementAscend: max(JUMP, WALK) + jumpPenalty (the jump and the
-        // forward block overlap, so it's the larger of the two, not their sum).
-        double cost = Math.max(ActionCosts.JUMP_ONE_BLOCK, ActionCosts.WALK_ONE_BLOCK)
-                + PathSettings.JUMP_PENALTY;
+        // forward block overlap, so it's the larger of the two, not their sum) —
+        // EXCEPT stepping ONTO soul sand costs the soul-sand walk instead, matching
+        // how traverse/descend already price soul sand. (Bottom-slab ascend special
+        // cases are not modelled — slabs aren't modelled anywhere in our move set.)
+        double base = level.getBlockState(step).is(Blocks.SOUL_SAND)
+                ? ActionCosts.WALK_ONE_OVER_SOUL_SAND
+                : Math.max(ActionCosts.JUMP_ONE_BLOCK, ActionCosts.WALK_ONE_BLOCK);
+        double cost = base + PathSettings.JUMP_PENALTY;
         List<BlockPos> toBreak = new ArrayList<>(3);
 
         double jumpBreak = clearCost(ctx, jumpRoom, toBreak);
@@ -205,16 +264,18 @@ public final class Moves {
         double feetBreak = clearCost(ctx, dest, toBreak);
         if (feetBreak >= ActionCosts.COST_INF) return null;
         cost += feetBreak;
-        double headBreak = clearCost(ctx, destHead, toBreak);
+        double headBreak = clearCost(ctx, destHead, toBreak, true);   // top cell: fold falling stack
         if (headBreak >= ActionCosts.COST_INF) return null;
         cost += headBreak;
 
-        // The block we stand ON after the step (floor under dest).
-        BlockPos step = dest.below(); // == from.relative(dir)
+        // The block we stand ON after the step (floor under dest) — `step` above.
         BlockPos toPlace = null;
         if (!BlockHelper.canWalkOn(level, step)) {
             double placeCost = ctx.costOfPlacing(step);
             if (placeCost >= ActionCosts.COST_INF) return null;
+            // Baritone MovementAscend: the step block needs SOME face to place against
+            // other than our own source column — we can't backplace mid-jump.
+            if (!ascendPlaceSupported(ctx, from, step)) return null;
             cost += placeCost;
             toPlace = step;
         }
@@ -227,50 +288,61 @@ public final class Moves {
 
     private static Movement descend(NavContext ctx, BlockPos from, Direction dir) {
         BlockGetter level = ctx.view;
-        BlockPos col = from.relative(dir); // horizontal cell we step into
+        BlockPos col = from.relative(dir);          // (destX, y, destZ)
+        BlockPos landing = col.below();             // (destX, y-1): single-descend feet
 
-        // Baritone MovementDescend: walking off the edge is WALK_OFF_BLOCK, scaled
-        // by the soul-sand ratio when stepping off soul sand.
-        double cost = ActionCosts.WALK_OFF_BLOCK;
-        if (level.getBlockState(from.below()).is(Blocks.SOUL_SAND)) {
-            cost *= ActionCosts.WALK_ONE_OVER_SOUL_SAND / ActionCosts.WALK_ONE_BLOCK;
+        // Baritone MovementDescend breaks THREE cells of the dest column — the
+        // landing-foot cell (y-1) plus the two body cells at source height (y, y+1)
+        // — and that "frontBreak" applies to a single step-down AND to a longer fall.
+        List<BlockPos> toBreak = new ArrayList<>(3);
+        double frontBreak = 0;
+        BlockPos[] frontCells = {landing, col, col.above()};   // col.above() is the top cell
+        for (int i = 0; i < frontCells.length; i++) {
+            double b = clearCost(ctx, frontCells[i], toBreak, i == frontCells.length - 1);
+            if (b >= ActionCosts.COST_INF) return null;
+            frontBreak += b;
         }
-        List<BlockPos> toBreak = new ArrayList<>(2);
+        // Can't descend off a ladder/vine — you'd climb it instead (Baritone fromDown check).
+        if (isLadderOrVine(level.getBlockState(from.below()))) return null;
 
-        // Clear the two body cells of the column we step into at source height.
-        double feetBreak = clearCost(ctx, col, toBreak);
-        if (feetBreak >= ActionCosts.COST_INF) return null;
-        cost += feetBreak;
-        double headBreak = clearCost(ctx, col.above(), toBreak);
-        if (headBreak >= ActionCosts.COST_INF) return null;
-        cost += headBreak;
+        BlockPos belowLanding = col.below(2);       // (destX, y-2)
+        if (BlockHelper.canWalkOn(level, belowLanding)) {
+            // Single-block descend: solid floor right below the landing. Walk off the
+            // edge (soul-sand-scaled) + max(fall(1), center-after-fall).
+            if (isLadderOrVine(level.getBlockState(landing))) return null;
+            if (BlockHelper.isHazard(level, landing) || BlockHelper.isHazard(level, belowLanding)) return null;
+            double walk = ActionCosts.WALK_OFF_BLOCK;
+            if (level.getBlockState(from.below()).is(Blocks.SOUL_SAND)) {
+                walk *= ActionCosts.WALK_ONE_OVER_SOUL_SAND / ActionCosts.WALK_ONE_BLOCK;
+            }
+            double total = frontBreak + walk
+                    + Math.max(ActionCosts.fallCost(1), ActionCosts.CENTER_AFTER_FALL);
+            return new Movement(Movement.Kind.DESCEND, from, landing, total, toBreak, null);
+        }
 
-        // Scan downward for the first solid floor within the fall cap.
-        for (int drop = 1; drop <= ctx.maxFallHeight; drop++) {
-            BlockPos feet = col.below(drop);
-            BlockPos floor = feet.below();
-            if (BlockHelper.canWalkOn(level, floor)
-                    && BlockHelper.canWalkThrough(level, feet)
-                    && BlockHelper.canWalkThrough(level, feet.above())) {
-                if (BlockHelper.isHazard(level, floor) || BlockHelper.isHazard(level, feet)) {
-                    return null;
-                }
-                // Single-block descend pays max(fall(1), center-after-fall);
-                // deeper drops pay the fall table (Baritone MovementDescend/Fall).
-                double fall = (drop == 1)
-                        ? Math.max(ActionCosts.fallCost(1), ActionCosts.CENTER_AFTER_FALL)
-                        : ActionCosts.fallCost(drop);
-                double total = cost + fall;
-                Movement.Kind kind = drop == 1 ? Movement.Kind.DESCEND : Movement.Kind.FALL;
-                return new Movement(kind, from, feet, total, toBreak, null);
-            }
-            // If the cell we'd pass through is itself an obstruction we can't
-            // clear, stop scanning this column.
-            if (!BlockHelper.canWalkThrough(level, feet)) {
-                break;
-            }
+        // Longer fall (Baritone dynamicFallCost, dry-land subset). The landing cell
+        // must be air to fall through; scan down for the first floor. Feet land one
+        // above the floor at y-fallHeight+1, and the fall is charged FALL_N[fallHeight]
+        // — note this is fallHeight, NOT (blocks dropped): a fall to y-2 is fallHeight 3.
+        // (Water/lava landings and bucket MLG are intentionally out of scope; vine/
+        // ladder fall-speed resets are not modelled, so such columns cost the full
+        // height.) Bound: unprotectedFallHeight <= maxFallHeightNoWater + 1.
+        if (!BlockHelper.canWalkThrough(level, belowLanding)) return null;
+        for (int fallHeight = 3; fallHeight <= ctx.maxFallHeight + 1; fallHeight++) {
+            BlockPos onto = col.below(fallHeight);   // (destX, y-fallHeight): floor candidate
+            if (BlockHelper.canWalkThrough(level, onto)) continue;   // still air — keep falling
+            if (!BlockHelper.canWalkOn(level, onto)) return null;    // not standable — abort
+            BlockPos feet = onto.above();                            // (destX, y-fallHeight+1)
+            if (BlockHelper.isHazard(level, onto) || BlockHelper.isHazard(level, feet)) return null;
+            double total = ActionCosts.WALK_OFF_BLOCK + ActionCosts.fallCost(fallHeight) + frontBreak;
+            return new Movement(Movement.Kind.FALL, from, feet, total, toBreak, null);
         }
         return null;
+    }
+
+    /** A ladder or vine — you climb these, so they block stepping off / can reset a fall. */
+    private static boolean isLadderOrVine(net.minecraft.world.level.block.state.BlockState state) {
+        return state.is(Blocks.LADDER) || state.is(Blocks.VINE);
     }
 
     // ---- Diagonal: same-Y corner step over EXISTING ground only ----
@@ -325,11 +397,16 @@ public final class Moves {
         // Need a scaffold block to drop under our feet (the current feet cell).
         double placeCost = ctx.costOfPlacing(from);
         if (placeCost >= ActionCosts.COST_INF) return null;
+        // Baritone MovementPillar: +0.1 tick when what's below our feet is currently
+        // air — slightly penalise pillaring on air vs on solid ground.
+        if (level.getBlockState(from.below()).isAir()) {
+            placeCost += 0.1;
+        }
 
         // Baritone MovementPillar (block tower): jump + place-underfoot + jumpPenalty.
         double cost = ActionCosts.JUMP_ONE_BLOCK + placeCost + PathSettings.JUMP_PENALTY;
         List<BlockPos> toBreak = new ArrayList<>(1);
-        double headBreak = clearCost(ctx, newHead, toBreak);
+        double headBreak = clearCost(ctx, newHead, toBreak, true);   // top cell: fold falling stack
         if (headBreak >= ActionCosts.COST_INF) return null;
         cost += headBreak;
 
@@ -417,8 +494,15 @@ public final class Moves {
      * {@link ActionCosts#COST_INF} if unbreakable.
      */
     private static double clearCost(NavContext ctx, BlockPos cell, List<BlockPos> toBreak) {
+        return clearCost(ctx, cell, toBreak, false);
+    }
+
+    /** {@code includeFalling}: this is the TOP cell the move breaks, so fold in the
+     *  cost of the FallingBlock stack above it (it cascades down as we dig). */
+    private static double clearCost(NavContext ctx, BlockPos cell, List<BlockPos> toBreak,
+                                    boolean includeFalling) {
         if (BlockHelper.canWalkThrough(ctx.view, cell)) return 0.0;
-        double breakCost = ctx.costOfBreaking(cell);
+        double breakCost = ctx.costOfBreaking(cell, includeFalling);
         if (breakCost >= ActionCosts.COST_INF) return ActionCosts.COST_INF;
         toBreak.add(cell.immutable());
         return breakCost;

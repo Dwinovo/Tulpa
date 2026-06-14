@@ -48,6 +48,22 @@ public final class PathVizPublisher {
                 cap(nodes), cap(toBreak), cap(toPlace), cap(targets)));
     }
 
+    /**
+     * Publish ONLY the goal boxes, with no path line — Baritone keeps the goal
+     * box rendered while the path executor is paused (e.g. mining a block in
+     * place / shaft-mining), and only the path LINE comes and goes. During
+     * shaft mining we hold no path but must keep the ore field boxed, exactly
+     * like Baritone's {@code drawGoal(behavior.getGoal())} surviving a
+     * {@code REQUEST_PAUSE}.
+     */
+    public static void publishTargets(AnimusPlayer player, List<BlockPos> targets) {
+        ServerPlayer owner = player.resolveOwnerPlayer();
+        if (owner == null) return;
+        Services.NETWORK.sendToPlayer(owner, new PathVizPayload(
+                player.getUUID(), player.level().dimension().identifier(),
+                List.of(), List.of(), List.of(), cap(targets)));
+    }
+
     /** Clear the overlay (all lists empty). */
     public static void clear(AnimusPlayer player) {
         ServerPlayer owner = player.resolveOwnerPlayer();

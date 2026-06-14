@@ -37,7 +37,15 @@ public final class AStar {
 
     /** Begin a resumable, time-sliced search toward an explicit {@link NavGoal}. */
     public AStarSearch newSearch(NavContext ctx, BlockPos start, NavGoal goal) {
-        return new AStarSearch(ctx, start, goal, maxNodes);
+        return newSearch(ctx, start, goal, it.unimi.dsi.fastutil.longs.LongSets.emptySet());
+    }
+
+    /** As {@link #newSearch(NavContext, BlockPos, NavGoal)} but biasing the search
+     *  toward {@code favored} packed positions (the previous path — Baritone Favoring),
+     *  so a replan reuses the prior route rather than oscillating. */
+    public AStarSearch newSearch(NavContext ctx, BlockPos start, NavGoal goal,
+                                 it.unimi.dsi.fastutil.longs.LongSet favored) {
+        return new AStarSearch(ctx, start, goal, maxNodes, favored);
     }
 
     /**

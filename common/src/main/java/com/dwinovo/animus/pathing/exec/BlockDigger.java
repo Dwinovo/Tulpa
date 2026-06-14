@@ -9,24 +9,32 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Progressive, tick-by-tick block breaking — a real player's dig, not an instant
- * pop. Shared by both path-obstruction clearing ({@code PlayerPathExecutor}) and
- * auto-mine ({@code MineCompanionTask}) so breaking always reads the same way and
- * stays aligned with Baritone, which holds {@code CLICK_LEFT} over the block's
- * real hardness time: face the block, swing the arm, push the crack-overlay
- * stages, and break it once enough ticks have elapsed.
+ * Progressive block breaking that replicates the VANILLA CLIENT mining loop
+ * ({@code MultiPlayerGameMode.continueDestroyBlock}) for a server fake player —
+ * because a fake player has no client to run it and the server's
+ * {@code ServerPlayerGameMode} does NOT self-complete a survival break (it waits
+ * for the client's {@code STOP_DESTROY_BLOCK} packet, which never arrives). So we
+ * BE the client:
+ * <ul>
+ *   <li><b>creative</b> ({@code abilities.instabuild}) → break instantly;</li>
+ *   <li><b>survival</b> → accumulate the block's real per-tick destroy fraction
+ *       {@link BlockState#getDestroyProgress} (which folds in the held tool /
+ *       enchants / haste / hardness / on-ground+in-water) until it reaches 1.0,
+ *       broadcasting the crack overlay as it goes.</li>
+ * </ul>
+ * The actual break is the NATIVE {@code gameMode.destroyBlock} (drops, durability,
+ * break events). This is exactly the timing a real survival player gets — and how
+ * Baritone mines too: it just holds left-click and the vanilla client accumulates
+ * {@code getDestroyProgress}; it never hand-rolls a tick count.
  *
- * <p>Duration is the true vanilla dig time of the CURRENTLY-HELD tool
- * ({@link net.minecraft.world.level.block.state.BlockState#getDestroyProgress})
- * — callers that want a specific tool (auto-mine switches to the best one) do so
- * before the first {@link #dig} tick of a block.
+ * <p>Shared by path-obstruction clearing ({@code PlayerPathExecutor}) and
+ * auto-mine ({@code MineCompanionTask}).
  */
 public final class BlockDigger {
 
     private final AnimusPlayer player;
     private BlockPos pos;
-    private int ticks;
-    private int total;
+    private float progress;       // accumulated 0..1, like MultiPlayerGameMode.destroyProgress
     private int swingCd;
     private int lastStage = -1;
 
@@ -41,51 +49,60 @@ public final class BlockDigger {
 
     /**
      * Advance the dig of {@code target} by one tick (restarting cleanly if the
-     * target changed). Halts, faces the block, swings, pushes crack stages, and
-     * breaks it on time.
+     * target changed): face it, swing, accumulate destroy progress, break on time.
      *
      * @return {@code true} on the tick the block breaks.
      */
     public boolean dig(BlockPos target) {
         Level level = player.level();
-        if (pos == null || !pos.equals(target)) start(target);
+        if (pos == null || !pos.equals(target)) {
+            start(target);
+        }
         InputDriver.halt(player);
         InputDriver.lookAt(player, Vec3.atCenterOf(pos));
         if (swingCd-- <= 0) {
             player.swing(InteractionHand.MAIN_HAND);
             swingCd = 5;                          // vanilla swings ~every 6 ticks while mining
         }
-        ticks++;
-        int stage = Math.min(9, (int) ((ticks / (float) total) * 10.0f));
-        if (stage != lastStage) {                 // a real player re-broadcasts only on stage change
+
+        // Creative: instant break (the vanilla client special-cases this — it does NOT
+        // wait out getDestroyProgress in creative).
+        if (player.getAbilities().instabuild) {
+            return finish(level);
+        }
+
+        // Survival: accumulate the real per-tick destroy fraction.
+        BlockState state = level.getBlockState(pos);
+        progress += state.getDestroyProgress(player, level, pos);
+        int stage = Math.min(9, (int) (progress * 10.0f));
+        if (stage != lastStage) {                 // re-broadcast the crack only on stage change
             level.destroyBlockProgress(player.getId(), pos, stage);
             lastStage = stage;
         }
-        if (ticks >= total) {
-            BlockPos done = pos;
-            player.gameMode.destroyBlock(done);
-            cancel();
-            return level.getBlockState(done).isAir();
+        if (progress >= 1.0f) {
+            return finish(level);
         }
         return false;
+    }
+
+    /** Native break + clear our dig state. */
+    private boolean finish(Level level) {
+        BlockPos done = pos;
+        cancel();                                 // clears the crack overlay, resets state
+        player.gameMode.destroyBlock(done);       // native: drops / durability / break events
+        return level.getBlockState(done).isAir();
     }
 
     private void start(BlockPos target) {
         cancel();
         pos = target.immutable();
-        ticks = 0;
+        progress = 0.0f;
         swingCd = 0;
         lastStage = -1;
-        Level level = player.level();
-        BlockState state = level.getBlockState(pos);
-        // Hold the best tool BEFORE timing the dig, so duration matches the pathing
-        // cost model (NavContext costs every break with the best hotbar tool —
-        // Baritone switchToBestToolFor). getDestroyProgress is then the per-tick
-        // fraction with that tool (enchant/haste/water/airborne folded in), so the
-        // dig takes ceil(1 / fraction) ticks.
-        switchToBestTool(state);
-        float perTick = state.getDestroyProgress(player, level, pos);
-        total = perTick <= 0.0f ? 1 : Math.max(1, (int) Math.ceil(1.0f / perTick));
+        // Hold the best tool BEFORE timing the dig — getDestroyProgress reads the held
+        // item, and the pathing cost model prices every break with the best hotbar tool
+        // (Baritone switchToBestToolFor).
+        switchToBestTool(player.level().getBlockState(pos));
     }
 
     /** Select the hotbar slot whose item mines {@code state} fastest
@@ -110,5 +127,7 @@ public final class BlockDigger {
             player.level().destroyBlockProgress(player.getId(), pos, -1);
             pos = null;
         }
+        progress = 0.0f;
+        lastStage = -1;
     }
 }

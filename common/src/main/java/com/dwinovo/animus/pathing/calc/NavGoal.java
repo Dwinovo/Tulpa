@@ -163,36 +163,52 @@ public interface NavGoal {
     }
 
     /**
-     * Stand in the ore's own column to mine it — Baritone {@code GoalThreeBlocks}:
-     * the feet may be at the ore's y, y-1, or y-2 (same x/z), so the body can break
-     * the ore straight up. The vertical-shaft mining stance; combined with the
-     * "shaft" check (mine the ore directly above your feet) it gives Baritone's
-     * mining loop.
+     * Stand in the ore's own column to mine it — the family of Baritone mining
+     * stance goals, parameterised by how far BELOW the ore the feet may be:
+     * <ul>
+     *   <li>{@code maxBelow == 0} → {@code GoalBlock}: feet exactly at the ore;</li>
+     *   <li>{@code maxBelow == 1} → {@code GoalTwoBlocks}: feet at the ore or one below;</li>
+     *   <li>{@code maxBelow == 2} → {@code GoalThreeBlocks}: feet at the ore, one, or two below.</li>
+     * </ul>
+     * Which one a given ore gets is decided by {@code MineCompanionTask.coalesce}
+     * (Baritone {@code MineProcess.coalesce}, forceInternalMining=true): the bottom
+     * of a vertical run gets {@code GoalBlock} so the body mines it in place rather
+     * than tunnelling under it. The vertical term in the heuristic folds the whole
+     * accepted band to zero cost (matching {@code GoalBlock.calculate}'s y-fold).
      */
-    static NavGoal mine(BlockPos ore) {
+    static NavGoal mineColumn(BlockPos ore, int maxBelow) {
         BlockPos o = ore.immutable();
         return new NavGoal() {
             @Override public boolean isAt(BlockPos feet) {
                 return feet.getX() == o.getX() && feet.getZ() == o.getZ()
-                        && feet.getY() <= o.getY() && feet.getY() >= o.getY() - 2;
+                        && feet.getY() <= o.getY() && feet.getY() >= o.getY() - maxBelow;
             }
             @Override public double heuristic(BlockPos from) {
                 double dx = Math.abs(o.getX() - from.getX());
                 double dz = Math.abs(o.getZ() - from.getZ());
                 double horizontal = (Math.min(dx, dz) * ActionCosts.SQRT_2 + Math.abs(dx - dz))
                         * PathSettings.COST_HEURISTIC;
-                // y in {ore.y, ore.y-1, ore.y-2} all count as arrived (GoalThreeBlocks).
+                // Feet anywhere in {o.y .. o.y-maxBelow} count as arrived: fold that
+                // band to zero, mirroring Goal{Block,Two,Three}Blocks.heuristic.
                 int yDiff = from.getY() - o.getY();
-                int adj = yDiff < -1 ? yDiff + 2 : (yDiff == -1 ? 0 : yDiff);
+                int adj = yDiff >= 0 ? yDiff : Math.min(0, yDiff + maxBelow);
+                // GoalYLevel.calculate(0, adj): above the goal (adj>0) we DESCEND to it,
+                // below it (adj<0) we ASCEND. (The old mine() had these two swapped,
+                // overestimating descents — an inadmissible heuristic.)
                 double vertical = adj > 0
-                        ? adj * ActionCosts.JUMP_ONE_BLOCK
-                        : -adj * ActionCosts.DESCEND_ONE_BLOCK;
+                        ? adj * ActionCosts.DESCEND_ONE_BLOCK
+                        : -adj * ActionCosts.JUMP_ONE_BLOCK;
                 return horizontal + vertical;
             }
             @Override public BlockPos center() {
                 return o;
             }
         };
+    }
+
+    /** GoalThreeBlocks shorthand (feet at the ore, one, or two below). */
+    static NavGoal mine(BlockPos ore) {
+        return mineColumn(ore, 2);
     }
 
     /**
@@ -209,13 +225,18 @@ public interface NavGoal {
                 return false;   // never done — keep exploring outward
             }
             @Override public double heuristic(BlockPos fromPos) {
-                double dx = fromPos.getX() - f0.getX();
-                double dz = fromPos.getZ() - f0.getZ();
-                // Farther = lower heuristic (A* minimizes), so it heads outward.
-                double horizontal = -Math.sqrt(dx * dx + dz * dz) * PathSettings.COST_HEURISTIC;
-                double yPenalty = Math.abs(fromPos.getY() - maintainY)
-                        * ActionCosts.JUMP_ONE_BLOCK * 1.5;
-                return horizontal + yPenalty;
+                // Baritone GoalRunAway.heuristic: −GoalXZ.calculate(dx,dz) (octile×weight,
+                // negated so farther = lower h = preferred), then, with a maintainY,
+                // min*0.6 + GoalYLevel.calculate(maintainY, y)*1.5.
+                double dx = Math.abs(f0.getX() - fromPos.getX());
+                double dz = Math.abs(f0.getZ() - fromPos.getZ());
+                double xz = (Math.min(dx, dz) * ActionCosts.SQRT_2 + Math.abs(dx - dz))
+                        * PathSettings.COST_HEURISTIC;
+                double min = -xz;
+                int cy = fromPos.getY();
+                double yLevel = cy > maintainY ? (cy - maintainY) * ActionCosts.DESCEND_ONE_BLOCK
+                        : cy < maintainY ? (maintainY - cy) * ActionCosts.JUMP_ONE_BLOCK : 0.0;
+                return min * 0.6 + yLevel * 1.5;
             }
             @Override public BlockPos center() {
                 return f0;
