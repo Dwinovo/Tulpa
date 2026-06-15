@@ -407,9 +407,18 @@ public final class Moves {
 
     private static Movement pillar(NavContext ctx, BlockPos from) {
         BlockGetter level = ctx.view;
-        // Never pillar out of water: the jump cycle needs onGround, which a
-        // floating body never has — the move would just stall and churn
-        // replans. Height from water is "swim to shore first" by design.
+        // Baritone MovementPillar water branch (verbatim): swim straight up a water
+        // column we're ALREADY in — the feet cell (y), the head (y+1) and the cell above
+        // the head (y+2) are all water — at ladder cost, no scaffold, no break. The final
+        // block to the surface is left to buoyancy, exactly as Baritone does it.
+        if (BlockHelper.isWater(level, from.above(2)) && BlockHelper.isWater(level, from)
+                && BlockHelper.isWater(level, from.above())) {
+            return new Movement(Movement.Kind.PILLAR, from, from.above(),
+                    ActionCosts.LADDER_UP_ONE, List.of(), null);
+        }
+        // Never place-pillar out of water: the place/jump cycle needs onGround, which a
+        // floating body never has — the move would just stall and churn replans. Rising
+        // from the water SURFACE is "swim to shore first" by design.
         if (BlockHelper.isWater(level, from)) return null;
         BlockPos dest = from.above();      // feet end one block up
         BlockPos newHead = from.above(2);  // head room while standing on the new block

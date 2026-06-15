@@ -83,11 +83,14 @@ public final class PlayerPathExecutor {
 
         Movement mv = path.movements.get(index);
 
-        // Submerged = off-plan: the route only ever runs the water SURFACE plane
-        // (Baritone canWalkThrough = surface water only), so being underwater means
-        // we were knocked under. Replan from a valid surface cell (buoyancy floats
-        // us up); Baritone likewise treats underwater as off-path.
-        if (player.isUnderWater()) {
+        // Submerged = off-plan, EXCEPT when the current move is a swim-up: the surface
+        // plane is where traverse/ascend live, so being underwater on one of those means
+        // we were knocked under → replan from a valid surface cell. But a water-column
+        // swim-up (PILLAR out of a water cell) is *meant* to run submerged — exempt it,
+        // or the replan would pre-empt the only move that climbs back to the surface.
+        boolean swimmingUp = mv.kind == Movement.Kind.PILLAR
+                && BlockHelper.isWater(player.level(), mv.src);
+        if (player.isUnderWater() && !swimmingUp) {
             return Status.NEEDS_REPLAN;
         }
 
@@ -392,6 +395,20 @@ public final class PlayerPathExecutor {
      * the cell we just left so we land one higher.
      */
     private void drivePillar(Movement mv) {
+        // Swim straight up a water column (Baritone MovementPillar water branch, verbatim):
+        // aim at the destination cell's centre and press forward ONLY when off-centre by
+        // >0.2 (just to recentre) — buoyancy does the actual rising. No sneak, no place.
+        if (BlockHelper.isWater(player.level(), mv.src)) {
+            player.setShiftKeyDown(false);
+            InputDriver.lookAt(player, Vec3.atCenterOf(mv.dest));
+            double cx = mv.dest.getX() + 0.5;
+            double cz = mv.dest.getZ() + 0.5;
+            player.zza = (Math.abs(player.getX() - cx) > 0.2 || Math.abs(player.getZ() - cz) > 0.2)
+                    ? 1.0f : 0.0f;
+            player.xxa = 0.0f;
+            player.setSprinting(false);
+            return;
+        }
         player.setShiftKeyDown(true);   // sneak: never step off the column
         // Recentre on the column rather than walking off it.
         if (horizontalDistTo(mv.src) > 0.17) {
