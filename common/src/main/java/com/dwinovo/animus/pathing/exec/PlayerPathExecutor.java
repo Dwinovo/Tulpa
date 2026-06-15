@@ -158,6 +158,15 @@ public final class PlayerPathExecutor {
             return Status.RUNNING;
         }
         drive(mv);
+        // Baritone Movement.update universal liquid float (runs after EVERY movement's
+        // updateState): if our feet cell is liquid and we're below dest.y+0.6, press jump
+        // (→ jumpInLiquid buoyancy). This is the single framework-level mechanism that
+        // keeps the body riding the water surface across ALL kinds — without it the body
+        // sinks between per-move depth-corrections and porpoises.
+        if (!player.level().getBlockState(player.blockPosition()).getFluidState().isEmpty()
+                && player.getY() < mv.dest.getY() + 0.6) {
+            InputDriver.jump(player);
+        }
         return Status.RUNNING;
     }
 
@@ -197,11 +206,26 @@ public final class PlayerPathExecutor {
         boolean sprintBase = speed >= 1.0 && !player.isInWater() && !hazardJustPast(mv);
         switch (mv.kind) {
             case TRAVERSE -> {
-                // Don't sprint across a floor we just placed (Baritone wasTheBridgeBlockAlwaysThere).
-                InputDriver.stepToward(player, dest, sprintBase && mv.toPlace == null);
-                // Climb back up if we've sunk below the walking lane (Baritone feet.y<dest.y → JUMP).
-                if (player.blockPosition().getY() < mv.dest.getY()) {
-                    InputDriver.jump(player);
+                // Baritone MovementTraverse: correct DEPTH before advancing. If our feet
+                // aren't on the destination's Y level (bobbing while swimming across water,
+                // or sunk into a dip), do NOT move forward this tick — only rise (JUMP) if
+                // we're below it; if we've popped ABOVE it, do nothing and let it settle.
+                // Moving forward only happens once we're actually on the lane, which is
+                // what keeps a water-surface crossing stable instead of porpoising.
+                int feetY = player.blockPosition().getY();
+                if (feetY != mv.dest.getY()) {
+                    InputDriver.halt(player);
+                    // Below the lane → rise. On LAND that's a step-up hop; in LIQUID the
+                    // universal liquid-float jump (in tick()) already does the rising, so
+                    // don't add a second impulse here (our jump() isn't an idempotent flag).
+                    if (feetY < mv.dest.getY()
+                            && player.level().getBlockState(player.blockPosition()).getFluidState().isEmpty()) {
+                        InputDriver.jump(player);
+                    }
+                } else {
+                    // On the lane: advance. Don't sprint across a floor we just placed
+                    // (Baritone wasTheBridgeBlockAlwaysThere).
+                    InputDriver.stepToward(player, dest, sprintBase && mv.toPlace == null);
                 }
             }
             // Only sprint a diagonal when both cut corners are clear (Baritone sprint() corner check).
@@ -407,6 +431,8 @@ public final class PlayerPathExecutor {
                     ? 1.0f : 0.0f;
             player.xxa = 0.0f;
             player.setSprinting(false);
+            // The rise itself comes from the universal liquid-float jump in tick() — Baritone's
+            // pillar water branch likewise presses no jump here, it relies on Movement.update.
             return;
         }
         player.setShiftKeyDown(true);   // sneak: never step off the column
@@ -578,8 +604,13 @@ public final class PlayerPathExecutor {
     private boolean arrived(Movement mv) {
         BlockPos feet = player.blockPosition();
         if (mv.kind == Movement.Kind.PILLAR) {
-            // Baritone MovementPillar success = feet at dest AND blockIsThere (the placed
-            // block exists, canWalkOn(src)). WITHOUT the block check, the jump APEX — feet
+            // Water swim-up: Baritone's pillar water branch succeeds on feet==dest with NO
+            // block check (you're swimming, nothing is placed).
+            if (BlockHelper.isWater(player.level(), mv.src)) {
+                return feet.equals(mv.dest);
+            }
+            // Dry tower: Baritone success = feet at dest AND blockIsThere (the placed block
+            // exists, canWalkOn(src)). WITHOUT the block check, the jump APEX — feet
             // momentarily at dest.y mid-air, before placeUnderfoot has placed anything —
             // false-arrives, advances the index, then the body falls back with nothing
             // placed and churns forever. The block check holds arrival until we've placed.
@@ -605,16 +636,31 @@ public final class PlayerPathExecutor {
             }
             return player.getY() - mv.dest.getY() < 0.094;
         }
-        if (feet.equals(mv.dest)) return true;
-        if (mv.kind == Movement.Kind.TRAVERSE || mv.kind == Movement.Kind.DIAGONAL) {
+        if (mv.kind == Movement.Kind.TRAVERSE) {
+            // Baritone: SUCCESS only once the floor under dest exists (isTheBridgeBlockThere
+            // = canWalkOn(dest.below)) — don't declare a bridge traverse done before the
+            // placed floor is there. Then feet==dest, or a 1-2 cell sprint overshoot in the
+            // move direction (Baritone overshootTraverse).
+            if (!BlockHelper.canWalkOn(player.level(), mv.dest.below())) return false;
+            if (feet.equals(mv.dest)) return true;
             int dx = Integer.signum(mv.dest.getX() - mv.src.getX());
             int dz = Integer.signum(mv.dest.getZ() - mv.src.getZ());
             if (dx != 0 || dz != 0) {
                 BlockPos one = mv.dest.offset(dx, 0, dz);
                 if (feet.equals(one) || feet.equals(one.offset(dx, 0, dz))) return true;
             }
+            return false;
         }
-        return false;
+        if (mv.kind == Movement.Kind.ASCEND) {
+            // Baritone MovementAscend success: feet==dest OR one cell further horizontally
+            // (the jump can carry us a cell past dest).
+            if (feet.equals(mv.dest)) return true;
+            int dx = mv.dest.getX() - mv.src.getX();
+            int dz = mv.dest.getZ() - mv.src.getZ();
+            return feet.equals(mv.dest.offset(dx, 0, dz));
+        }
+        // DIAGONAL (Baritone: feet==dest only, no overshoot), DIG_DOWN, PARKOUR.
+        return feet.equals(mv.dest);
     }
 
     /** The next still-solid block this move must break, or null when its path is clear. */

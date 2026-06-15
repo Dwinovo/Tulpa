@@ -36,6 +36,11 @@ public final class MoveToCompanionTask implements CompanionTask {
      *  requested column still counts as "got there" (a teaching success, not a
      *  thrash). This is the only tolerance — arrival itself is exact. */
     private static final double NEAR_SUCCESS_RADIUS = 3.0;
+    /** Once the planner can't get closer (e.g. it stopped at the water surface above an
+     *  underwater goal), keep the task alive this many ticks of NO progress before giving
+     *  up — long enough for the body to passively drift onto a reachable underwater target,
+     *  short enough to bail under an out-of-reach above-water one. */
+    private static final int MAX_SETTLE_TICKS = 60;
 
     private final AnimusPlayer player;
     private final MoveToTaskRecord r;
@@ -46,6 +51,8 @@ public final class MoveToCompanionTask implements CompanionTask {
     private final BlockPos blockTarget;   // only meaningful for BLOCK kind
 
     private PlayerNav nav;
+    private double bestDist = Double.MAX_VALUE;   // closest we've gotten to the goal
+    private int settleTicks = 0;                  // ticks of no progress after the planner gave up
 
     public MoveToCompanionTask(AnimusPlayer player, MoveToTaskRecord record) {
         this.player = player;
@@ -65,6 +72,12 @@ public final class MoveToCompanionTask implements CompanionTask {
         long extra = Math.min(MAX_EXTRA_TICKS, 600 + (long) (repDistance() * TICKS_PER_BLOCK));
         r.extendDeadlineTo(player.level().getGameTime() + extra);
         nav = PlayerNav.toGoal(player, this::goal, r.speed, this::reached);
+        // Highlight the ACTUAL requested cell (not the path's best-effort end) so the overlay
+        // box sits on the real target — e.g. a BLOCK goal under/over water that the path can
+        // only approach to the surface. Mirrors how Baritone always renders the goal itself.
+        if (r.kind == MoveToTaskRecord.Kind.BLOCK) {
+            nav.setHighlights(() -> java.util.List.of(blockTarget));
+        }
     }
 
     /** The Baritone goal for this move's kind. */
@@ -94,12 +107,32 @@ public final class MoveToCompanionTask implements CompanionTask {
     @Override
     public TaskState tick() {
         if (nav == null) return TaskState.FAILED;
+        if (reached()) return TaskState.SUCCESS;
+        // Track passive progress toward the goal: the planner stops at the water surface
+        // above an underwater target, but the body keeps drifting toward it on its own (it
+        // sinks). Reset the settle timer whenever we get closer.
+        double d = repDistance();
+        if (d < bestDist - 0.1) {
+            bestDist = d;
+            settleTicks = 0;
+        } else {
+            settleTicks++;
+        }
         return switch (nav.tick()) {
             case RUNNING -> TaskState.RUNNING;
             case ARRIVED -> TaskState.SUCCESS;
-            // A planner failure isn't necessarily a task failure: if we got as close
-            // as the terrain allows, buildResult reports it as a (teaching) success.
-            case FAILED -> closeEnoughToSucceed() ? TaskState.SUCCESS : TaskState.FAILED;
+            case FAILED -> {
+                // The planner can't get closer. In water, keep waiting while the body is
+                // still drifting toward the goal (sinking onto an underwater target); give
+                // up only once it's stopped making progress (bobbing at the surface below an
+                // out-of-reach above-water target). Mirrors how Baritone settles onto an
+                // underwater goal but stalls under an air one. On land a failure is final.
+                if (player.isInWater() && settleTicks < MAX_SETTLE_TICKS) {
+                    yield TaskState.RUNNING;
+                }
+                // Otherwise: as close as the terrain allows → (teaching) success or fail.
+                yield closeEnoughToSucceed() ? TaskState.SUCCESS : TaskState.FAILED;
+            }
         };
     }
 

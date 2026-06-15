@@ -35,10 +35,19 @@ public final class InputDriver {
         p.lookAt(EntityAnchorArgument.Anchor.EYES, point);
     }
 
-    /** One-shot hop (step-up assist / clear a gap), only meaningful on the ground. */
+    /**
+     * Upward impulse, routed the way vanilla routes pressing the jump key: a ground hop
+     * on land ({@code jumpFromGround}), or a swim-up stroke in water/lava (vanilla
+     * {@code jumpInLiquid} = +0.04/tick). This is why Baritone stays at the water surface
+     * (it presses Input.JUMP when its feet sink below the lane) — a fake player has no
+     * client to translate a key into the liquid case, so we do it here. Call every tick
+     * you want to keep rising; in water it's the per-tick stroke, not a one-shot.
+     */
     public static void jump(ServerPlayer p) {
         if (p.onGround()) {
             p.jumpFromGround();
+        } else if (p.isInWater() || p.isInLava()) {
+            p.setDeltaMovement(p.getDeltaMovement().add(0.0, 0.04, 0.0));
         }
     }
 
