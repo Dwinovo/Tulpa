@@ -2,6 +2,7 @@ package com.dwinovo.animus.task.tasks;
 
 import com.dwinovo.animus.entity.AnimusPlayer;
 import com.dwinovo.animus.pathing.exec.InputDriver;
+import com.dwinovo.animus.pathing.exec.Interaction;
 import com.dwinovo.animus.pathing.exec.PlayerNav;
 import com.dwinovo.animus.task.CompanionTask;
 import com.dwinovo.animus.task.TaskResult;
@@ -10,6 +11,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
@@ -30,8 +33,9 @@ public final class HuntCompanionTask implements CompanionTask {
     private static final int INITIAL_RADIUS = 24;
     private static final int RADIUS_STEP = 16;
     private static final double CHASE_SPEED = 1.2;
-    /** Melee strike range² — vanilla player entity-interaction reach ≈ 3 blocks. */
-    private static final double ATTACK_REACH_SQR = 9.0;
+    /** Melee strike range — vanilla player entity-interaction reach ≈ 3 blocks. */
+    private static final double ATTACK_REACH = 3.0;
+    private static final double ATTACK_REACH_SQR = ATTACK_REACH * ATTACK_REACH;
 
     private final AnimusPlayer player;
     private final HuntTaskRecord r;
@@ -86,7 +90,9 @@ public final class HuntCompanionTask implements CompanionTask {
             return;
         }
         target = best;
-        nav = new PlayerNav(player, this::targetCell, CHASE_SPEED, this::inReach);
+        // Arrive = in reach AND a clear line of sight, so we close around a wall rather than
+        // standing behind it swinging at nothing.
+        nav = new PlayerNav(player, this::targetCell, CHASE_SPEED, this::inReachAndLos);
         phase = Phase.ENGAGE;
     }
 
@@ -116,12 +122,22 @@ public final class HuntCompanionTask implements CompanionTask {
         }
     }
 
-    /** Native melee swing when in reach and the attack cooldown has recovered. */
+    /** Native melee swing: aim, fire one crosshair raytrace, and only strike when it actually
+     *  resolves to THIS target (a wall / another mob in the line is not hit through), the sprint
+     *  is dropped (so it sweeps and doesn't knock the mob away into another chase), and the attack
+     *  cooldown has recovered (full-charge damage). */
     private void swing() {
         if (target == null) return;
         InputDriver.lookAt(player, target.getEyePosition());
+        HitResult hit = Interaction.nativeRaytrace(player, ATTACK_REACH);
+        boolean onTarget = hit.getType() == HitResult.Type.ENTITY
+                && ((EntityHitResult) hit).getEntity() == target;
+        if (!onTarget) {
+            return;   // not actually looking at the target this tick — re-aim next tick
+        }
+        player.setSprinting(false);       // sweep + no knockback-chase
         if (player.getAttackStrengthScale(0.0f) >= 0.95f) {
-            player.attack(target);        // real damage / cooldown / sweep / knockback
+            player.attack(target);        // real damage / cooldown / sweep / knockback / crit
             player.resetAttackStrengthTicker();
             player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
         }
@@ -131,9 +147,10 @@ public final class HuntCompanionTask implements CompanionTask {
         return (target != null && !target.isRemoved()) ? target.blockPosition() : null;
     }
 
-    private boolean inReach() {
+    private boolean inReachAndLos() {
         return target != null
-                && player.distanceToSqr(Vec3.atCenterOf(target.blockPosition())) <= ATTACK_REACH_SQR;
+                && player.distanceToSqr(Vec3.atCenterOf(target.blockPosition())) <= ATTACK_REACH_SQR
+                && player.hasLineOfSight(target);
     }
 
     private LivingEntity nearestTarget() {
