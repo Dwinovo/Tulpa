@@ -27,7 +27,7 @@ public final class PlayerPlace {
         if (hit == null) return false;
         ItemStack stack = player.getInventory().getItem(slot);
         if (stack.isEmpty()) return false;
-        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        player.holdInHand(slot);   // real hotbar-select / swap-to-hand, not an aliasing overwrite
         InputDriver.lookAt(player, hit.getLocation());
         player.setShiftKeyDown(true);
         try {

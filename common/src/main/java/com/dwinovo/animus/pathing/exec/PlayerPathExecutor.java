@@ -691,7 +691,7 @@ public final class PlayerPathExecutor {
         if (!player.isCrouching()) return;
         BlockHitResult hit = Placement.resolve(player, cell, true);  // honest raycast only — no fabricated hit
         if (hit == null) return;
-        player.setItemInHand(InteractionHand.MAIN_HAND, player.getInventory().getItem(slot));
+        player.holdInHand(slot);   // real hotbar-select / swap-to-hand, not an aliasing overwrite
         Interaction.useBlock(player, hit, InteractionHand.MAIN_HAND).tick();
     }
 

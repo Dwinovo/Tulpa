@@ -69,8 +69,7 @@ public final class UseItemCompanionTask implements CompanionTask {
             fail("no " + r.label + " left to use");
             return TaskState.FAILED;
         }
-        ItemStack stack = player.getInventory().getItem(slot);
-        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        player.holdInHand(slot);   // real hotbar-select / swap-to-hand, not an aliasing overwrite
 
         // HELD use (bow-like): begin charging, count, release at holdTicks.
         if (r.holdTicks > 1) {

@@ -4,7 +4,6 @@ import com.dwinovo.animus.entity.AnimusPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -116,8 +115,7 @@ public final class PlaceManeuver {
     private boolean doPlace(BlockHitResult hit) {
         int slot = slotFinder.getAsInt();
         if (slot < 0) return false;
-        ItemStack stack = player.getInventory().getItem(slot);
-        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        player.holdInHand(slot);   // real hotbar-select / swap-to-hand, not an aliasing overwrite
         Interaction.useBlock(player, hit, InteractionHand.MAIN_HAND).tick();
         return placed.getAsBoolean();
     }

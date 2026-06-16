@@ -121,6 +121,29 @@ public final class AnimusPlayer extends ServerPlayer {
         return false;
     }
 
+    /**
+     * Hold the item in inventory slot {@code slot} in the main hand the way a real player
+     * does — a hotbar slot is simply SELECTED (number-key); a main-inventory slot is SWAPPED
+     * into the currently selected hotbar slot (item-conserving). This is the only correct way
+     * to "switch to hand": calling {@code setItemInHand(MAIN_HAND, stack)} overwrites the held
+     * item (losing it) and aliases ONE {@link net.minecraft.world.item.ItemStack} across two
+     * slots, which corrupts the inventory once the stack is consumed. No-op for {@code slot < 0}.
+     */
+    public void holdInHand(int slot) {
+        if (slot < 0) {
+            return;
+        }
+        var inv = getInventory();
+        if (net.minecraft.world.entity.player.Inventory.isHotbarSlot(slot)) {
+            inv.setSelectedSlot(slot);
+            return;
+        }
+        int selected = inv.getSelectedSlot();
+        net.minecraft.world.item.ItemStack held = inv.getItem(selected);
+        inv.setItem(selected, inv.getItem(slot));
+        inv.setItem(slot, held);
+    }
+
     // ---- server tick (Carpet's EntityPlayerMPFake trick) ----
 
     /**
