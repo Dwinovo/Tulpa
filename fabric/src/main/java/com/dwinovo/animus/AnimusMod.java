@@ -31,6 +31,12 @@ public class AnimusMod implements ModInitializer {
         // Drive companion player-body tasks (move_to / auto_mine) each tick.
         ServerTickEvents.END_SERVER_TICK.register(
                 com.dwinovo.animus.task.CompanionTickDispatcher::tick);
+        // Maintain the off-thread pathfinding cache: seed/refresh/prune per companion-level.
+        ServerTickEvents.END_SERVER_TICK.register(
+                com.dwinovo.animus.pathing.cache.PathCaches::serverTick);
+        // Keep that cache covered as companions travel — encode chunks as they load.
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register(
+                (world, chunk, newChunk) -> com.dwinovo.animus.pathing.cache.PathCaches.onChunkLoaded(world, chunk));
 
         CommonClass.init();
         Constants.LOG.info("Animus mod initialised on Fabric.");

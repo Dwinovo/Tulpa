@@ -1,13 +1,22 @@
 package com.dwinovo.animus.pathing.cache;
 
+import com.dwinovo.animus.entity.AnimusPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -45,6 +54,50 @@ public final class PathCaches {
 
     public static void dropAll() {
         CACHES.clear();
+    }
+
+    // ---- per-tick maintenance (driven from both loaders' end-of-tick hook) ----
+
+    /** Initial seed radius (chunks) when a level's first companion appears; the chunk-load hook keeps
+     *  coverage as the companion travels, so this only needs to cover its immediate vicinity. */
+    private static final int SEED_RADIUS_CHUNKS = 8;
+    /** Prune cadence — pruning scans every cached section, so do it occasionally, not every tick. */
+    private static final int PRUNE_INTERVAL_TICKS = 200;
+
+    private static int tickCounter;
+
+    /**
+     * Once per server tick: group companions by level, seed a level's cache the first time a companion
+     * is there, re-encode the sections that changed this tick, periodically prune far sections, and
+     * free caches for levels that no longer host a companion (also handles dimension travel — the old
+     * level's cache is dropped, the new one seeded). Cheap when no companions exist.
+     */
+    public static void serverTick(MinecraftServer server) {
+        Map<ServerLevel, List<BlockPos>> byLevel = new HashMap<>();
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            if (p instanceof AnimusPlayer && p.level() instanceof ServerLevel sl) {
+                byLevel.computeIfAbsent(sl, k -> new ArrayList<>()).add(p.blockPosition());
+            }
+        }
+
+        Set<ResourceKey<Level>> active = new HashSet<>();
+        for (ServerLevel sl : byLevel.keySet()) {
+            active.add(sl.dimension());
+        }
+        CACHES.keySet().removeIf(k -> !active.contains(k));   // free companion-less levels
+
+        boolean doPrune = (++tickCounter % PRUNE_INTERVAL_TICKS) == 0;
+        for (Map.Entry<ServerLevel, List<BlockPos>> e : byLevel.entrySet()) {
+            ServerLevel sl = e.getKey();
+            List<BlockPos> feet = e.getValue();
+            if (peek(sl) == null) {
+                ensureWarm(sl, feet.get(0), SEED_RADIUS_CHUNKS);   // first companion → seed around it
+            }
+            flushDirty(sl);
+            if (doPrune) {
+                prune(sl, feet);
+            }
+        }
     }
 
     // ---- population / refresh (main thread) ----
