@@ -67,6 +67,10 @@ public final class AStarSearch {
     private State state = State.COMPUTING;
     private Path result;
 
+    /** Set from another thread to abandon an in-flight search (replan / stop). The expansion loop
+     *  checks it and bails; the owner has already discarded this search's future. */
+    private volatile boolean cancelled;
+
     AStarSearch(NavContext ctx, BlockPos start, NavGoal goal, int maxNodes,
                it.unimi.dsi.fastutil.longs.LongSet favored) {
         this.ctx = ctx;
@@ -86,6 +90,11 @@ public final class AStarSearch {
             bestHeuristicSoFar[i] = startNode.estimatedCostToGoal;
             bestSoFar[i] = startNode;
         }
+    }
+
+    /** Abandon this search (thread-safe). The next loop check bails; {@link #result()} may be null. */
+    public void cancel() {
+        cancelled = true;
     }
 
     /** Current search state. */
@@ -113,7 +122,7 @@ public final class AStarSearch {
         }
 
         int budgetLeft = budget;
-        while (!open.isEmpty() && expansions < maxNodes && budgetLeft-- > 0) {
+        while (!open.isEmpty() && expansions < maxNodes && budgetLeft-- > 0 && !cancelled) {
             PathNode current = open.removeLowest();
             expansions++;
 

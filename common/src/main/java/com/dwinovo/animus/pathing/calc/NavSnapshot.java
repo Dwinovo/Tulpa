@@ -22,7 +22,7 @@ import net.minecraft.world.level.material.FluidState;
  * which the executor isn't mutating the world, so the cache is a consistent
  * snapshot for that search; a fresh search (replan) builds a fresh one.
  */
-public final class NavSnapshot implements BlockGetter {
+public final class NavSnapshot implements BlockGetter, com.dwinovo.animus.pathing.util.BlockEntityAware {
 
     private final Level level;
     private final Long2ObjectOpenHashMap<BlockState> states = new Long2ObjectOpenHashMap<>();
@@ -52,6 +52,11 @@ public final class NavSnapshot implements BlockGetter {
     public BlockEntity getBlockEntity(BlockPos pos) {
         // Rare (only the don't-grief check); not worth caching, delegate live.
         return level.getBlockEntity(pos);
+    }
+
+    @Override
+    public boolean hasBlockEntity(BlockPos pos) {
+        return level.getBlockEntity(pos) != null;   // live view (main thread)
     }
 
     @Override

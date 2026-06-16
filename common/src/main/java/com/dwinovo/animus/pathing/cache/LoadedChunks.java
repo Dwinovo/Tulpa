@@ -1,6 +1,8 @@
 package com.dwinovo.animus.pathing.cache;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 
@@ -21,15 +23,25 @@ import net.minecraft.world.level.chunk.LevelChunk;
 public final class LoadedChunks {
 
     private final Long2ObjectMap<LevelChunk> chunks;
+    /** Packed positions ({@link BlockPos#asLong}) that held a block entity when this snapshot was taken
+     *  — captured on the main thread so the don't-grief check is answerable off-thread without a live
+     *  read (presence is all {@code shouldAvoidBreaking} needs). */
+    private final LongSet blockEntities;
 
-    LoadedChunks(Long2ObjectMap<LevelChunk> chunks) {
+    LoadedChunks(Long2ObjectMap<LevelChunk> chunks, LongSet blockEntities) {
         this.chunks = chunks;
+        this.blockEntities = blockEntities;
     }
 
     /** The loaded chunk at the given chunk coordinates, or {@code null} if it wasn't loaded when this
      *  snapshot was taken (→ the reader treats it as unknown / AIR). */
     public LevelChunk at(int chunkX, int chunkZ) {
         return chunks.get(ChunkPos.pack(chunkX, chunkZ));
+    }
+
+    /** Whether a block entity occupied {@code pos} when this snapshot was taken. */
+    public boolean hasBlockEntity(BlockPos pos) {
+        return blockEntities.contains(pos.asLong());
     }
 
     /** Number of chunks captured — for debug / memory accounting. */

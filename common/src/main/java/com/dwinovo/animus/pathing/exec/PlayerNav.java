@@ -31,7 +31,6 @@ public final class PlayerNav {
 
     public enum Status { RUNNING, ARRIVED, FAILED }
 
-    private static final int NODES_PER_TICK = AStar.DEFAULT_NODES_PER_TICK;
     private static final int MAX_REPLANS = 40;
     private static final double GOAL_MOVED_SQR = 4.0;
 
@@ -44,8 +43,13 @@ public final class PlayerNav {
     private BlockPos plannedCenter;
     private PlayerPathExecutor current;
 
-    private AStarSearch search;
-    private AStarSearch nextSearch;
+    // A* now runs on the planner pool, not stepped on the tick thread. We hold the future (polled each
+    // tick) plus the search object itself (to cancel it on replan/stop so a stale worker stops wasting
+    // CPU). One in-flight search at a time for the main path, one for the precomputed next segment.
+    private java.util.concurrent.CompletableFuture<Path> searchFuture;
+    private AStarSearch searchObj;
+    private java.util.concurrent.CompletableFuture<Path> nextFuture;
+    private AStarSearch nextObj;
     private PlayerPathExecutor pendingNext;
     private Path pendingPathForViz;
 
@@ -161,9 +165,29 @@ public final class PlayerNav {
         return Status.RUNNING;
     }
 
-    /** Frozen context for a SEARCH (snapshot inventory; off-thread-ready from P-B). */
+    /** Frozen context for a SEARCH — snapshot inventory + an immutable loaded-chunk view, safe to read
+     *  off the tick thread. Ensure the level's snapshot exists first so the view is never the live
+     *  read-through fallback (which a worker thread mustn't touch). */
     private NavContext searchContext() {
+        if (player.level() instanceof net.minecraft.server.level.ServerLevel sl) {
+            com.dwinovo.animus.pathing.cache.PathCaches.ensureSnapshot(sl, player.blockPosition());
+        }
         return NavContext.forSearch(player.level(), player.getInventory());
+    }
+
+    /** Run a search to completion on the planner pool (off the tick thread). The node cap inside the
+     *  search bounds it, so one {@code step} call runs the whole thing; a thrown planner bug yields no
+     *  path rather than wedging the companion. */
+    private static java.util.concurrent.CompletableFuture<Path> runAsync(AStarSearch s) {
+        return com.dwinovo.animus.pathing.calc.PathPlannerPool.submit(() -> {
+            try {
+                s.step(Integer.MAX_VALUE);
+                return s.result();
+            } catch (Throwable t) {
+                com.dwinovo.animus.Constants.LOG.error("path search failed", t);
+                return null;
+            }
+        });
     }
 
     /** Live context for EXECUTION re-costing (main thread; reads current world + inventory). */
@@ -174,10 +198,25 @@ public final class PlayerNav {
     private void startFreshSearch() {
         NavGoal g = goalSupplier.get();
         plannedCenter = (g == null) ? null : g.center();
-        search = (g == null) ? null
-                : astar.newSearch(searchContext(),
-                        BlockHelper.playerFeet(player.level(), player.getX(), player.getY(), player.getZ()),
-                        g, previousPathHashes);
+        if (g == null) {
+            searchFuture = null;
+            searchObj = null;
+            return;
+        }
+        AStarSearch s = astar.newSearch(searchContext(),
+                BlockHelper.playerFeet(player.level(), player.getX(), player.getY(), player.getZ()),
+                g, previousPathHashes);
+        searchObj = s;
+        searchFuture = runAsync(s);
+    }
+
+    /** Cancel and forget the in-flight main search (so a stale worker stops and its result is ignored). */
+    private void cancelSearch() {
+        if (searchObj != null) {
+            searchObj.cancel();
+            searchObj = null;
+        }
+        searchFuture = null;
     }
 
     /** Packed positions (start + every movement dest) of a path — its Favoring set. */
@@ -191,15 +230,16 @@ public final class PlayerNav {
     }
 
     private Status advanceFreshSearch() {
-        if (search == null) {
+        if (searchFuture == null) {
             failReason = "target lost";
             return Status.FAILED;
         }
-        if (search.step(NODES_PER_TICK) == AStarSearch.State.COMPUTING) {
-            return Status.RUNNING;
+        if (!searchFuture.isDone()) {
+            return Status.RUNNING;   // worker still planning — body waits (it was idle anyway)
         }
-        Path path = search.result();
-        search = null;
+        Path path = searchFuture.getNow(null);
+        searchFuture = null;
+        searchObj = null;
         if (path == null || path.isEmpty()) {
             failReason = "no path to target (obstructed or out of bridging blocks)";
             return reached.getAsBoolean() ? Status.ARRIVED : Status.FAILED;
@@ -216,6 +256,7 @@ public final class PlayerNav {
             current.stop();
             current = null;
         }
+        cancelSearch();   // abandon any in-flight main search before dispatching a new one
         if (budgeted && replans++ >= MAX_REPLANS) {
             failReason = "gave up after " + MAX_REPLANS + " replans";
             return reached.getAsBoolean() ? Status.ARRIVED : Status.FAILED;
@@ -225,7 +266,7 @@ public final class PlayerNav {
     }
 
     private void maybePrecompute() {
-        if (nextSearch != null || pendingNext != null) return;
+        if (nextFuture != null || pendingNext != null) return;
         if (current == null || !current.isPartial()) return;
         // Baritone planAhead: start the next segment once the current one has
         // fewer than planningTickLookahead (150) ticks of travel left.
@@ -233,14 +274,17 @@ public final class PlayerNav {
         NavGoal g = goalSupplier.get();
         if (g == null) return;
         plannedCenter = g.center();
-        nextSearch = astar.newSearch(searchContext(), current.pathEnd(), g, previousPathHashes);
+        AStarSearch s = astar.newSearch(searchContext(), current.pathEnd(), g, previousPathHashes);
+        nextObj = s;
+        nextFuture = runAsync(s);
     }
 
     private void advancePrecompute() {
-        if (nextSearch == null) return;
-        if (nextSearch.step(NODES_PER_TICK) == AStarSearch.State.COMPUTING) return;
-        Path np = nextSearch.result();
-        nextSearch = null;
+        if (nextFuture == null) return;
+        if (!nextFuture.isDone()) return;
+        Path np = nextFuture.getNow(null);
+        nextFuture = null;
+        nextObj = null;
         if (np != null && !np.isEmpty()) {
             Path cut = np.staticCutoff();
             pendingNext = new PlayerPathExecutor(player, cut, speed, this::executionContext);
@@ -250,7 +294,11 @@ public final class PlayerNav {
     }
 
     private void discardPrecompute() {
-        nextSearch = null;
+        if (nextObj != null) {
+            nextObj.cancel();
+            nextObj = null;
+        }
+        nextFuture = null;
         pendingPathForViz = null;
         if (pendingNext != null) {
             pendingNext.stop();
@@ -268,7 +316,7 @@ public final class PlayerNav {
             current = null;
         }
         discardPrecompute();
-        search = null;
+        cancelSearch();
         InputDriver.halt(player);
         // Release sneak too — a pillar holds it every tick, and unlike Baritone (which
         // resets all inputs per tick) nothing clears it when the path ends, so the body

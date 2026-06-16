@@ -439,7 +439,12 @@ public final class BlockHelper {
      * cheap, broad proxy that catches essentially every griefable block.
      */
     public static boolean shouldAvoidBreaking(BlockGetter level, BlockPos pos) {
-        if (level.getBlockEntity(pos) != null) return true;
+        // Off-thread the search can't reconstruct a block entity, so the cache view answers presence
+        // from a main-thread snapshot (BlockEntityAware); a live view just asks the level.
+        boolean hasBlockEntity = level instanceof BlockEntityAware aware
+                ? aware.hasBlockEntity(pos)
+                : level.getBlockEntity(pos) != null;
+        if (hasBlockEntity) return true;
         return level.getBlockState(pos).getBlock() instanceof BedBlock;
     }
 

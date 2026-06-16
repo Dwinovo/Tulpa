@@ -2,6 +2,7 @@ package com.dwinovo.animus.pathing.cache;
 
 import com.dwinovo.animus.entity.AnimusPlayer;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.ResourceKey;
@@ -49,6 +50,22 @@ public final class PathCaches {
         return SNAPSHOTS.get(level.dimension());
     }
 
+    /**
+     * The snapshot for {@code level}, building one around {@code around} on the spot if none exists yet.
+     * Called on the main thread right before a search so the planner always gets a thread-safe view —
+     * without this, a level's very first search (dispatched before {@link #serverTick} has run) would
+     * fall back to a LIVE read-through, which is unsafe once the search runs off-thread.
+     */
+    public static LoadedChunks ensureSnapshot(ServerLevel level, BlockPos around) {
+        LoadedChunks existing = SNAPSHOTS.get(level.dimension());
+        if (existing != null) {
+            return existing;
+        }
+        LoadedChunks built = snapshot(level, List.of(around));
+        SNAPSHOTS.put(level.dimension(), built);
+        return built;
+    }
+
     public static void dropAll() {
         SNAPSHOTS.clear();
         idleTicks.clear();
@@ -89,6 +106,7 @@ public final class PathCaches {
      *  level (non-blocking — unloaded chunks are simply absent → the reader sees AIR). */
     private static LoadedChunks snapshot(ServerLevel level, List<BlockPos> feet) {
         Long2ObjectOpenHashMap<LevelChunk> map = new Long2ObjectOpenHashMap<>();
+        LongOpenHashSet blockEntities = new LongOpenHashSet();
         for (BlockPos f : feet) {
             int ccx = SectionPos.blockToSectionCoord(f.getX());
             int ccz = SectionPos.blockToSectionCoord(f.getZ());
@@ -101,11 +119,14 @@ public final class PathCaches {
                         LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
                         if (chunk != null) {
                             map.put(key, chunk);
+                            for (BlockPos bePos : chunk.getBlockEntities().keySet()) {
+                                blockEntities.add(bePos.asLong());
+                            }
                         }
                     }
                 }
             }
         }
-        return new LoadedChunks(map);
+        return new LoadedChunks(map, blockEntities);
     }
 }

@@ -1,5 +1,6 @@
 package com.dwinovo.animus.pathing.cache;
 
+import com.dwinovo.animus.pathing.util.BlockEntityAware;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -19,7 +20,7 @@ import net.minecraft.world.level.material.FluidState;
  * memoized per search (each cell once), like {@link com.dwinovo.animus.pathing.calc.NavSnapshot}, and
  * {@link com.dwinovo.animus.pathing.util.BlockHelper} reads it unchanged.
  */
-public final class CachedNavView implements BlockGetter {
+public final class CachedNavView implements BlockGetter, BlockEntityAware {
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 
@@ -73,10 +74,15 @@ public final class CachedNavView implements BlockGetter {
     }
 
     @Override
+    public boolean hasBlockEntity(BlockPos pos) {
+        return loaded.hasBlockEntity(pos);   // from the main-thread snapshot — safe off-thread
+    }
+
+    @Override
     public BlockEntity getBlockEntity(BlockPos pos) {
-        // Main-thread (P-B) live lookup keeps the don't-grief check (shouldAvoidBreaking) exact. P-C:
-        // when the search runs off-thread, read via the snapshot's chunk ref instead of the live level.
-        return level.getBlockEntity(pos);
+        // Can't reconstruct a live block entity off-thread. The only search-path caller, the don't-grief
+        // check, now goes through hasBlockEntity instead, so returning null here is safe.
+        return null;
     }
 
     @Override
