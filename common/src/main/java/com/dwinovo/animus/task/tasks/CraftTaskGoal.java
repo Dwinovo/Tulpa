@@ -63,6 +63,8 @@ public final class CraftTaskGoal implements CompanionTask {
     private static final double WALK_SPEED = 1.0;
     /** Bound per-tick crafts so a huge count can't stall the server tick. */
     private static final int CRAFTS_PER_TICK = 16;
+    /** Give up opening the table after this many ticks of no line of sight (don't spin to timeout). */
+    private static final int MAX_OPEN_ATTEMPTS = 30;
 
     private final AnimusPlayer player;
     private final CraftTaskRecord r;
@@ -77,6 +79,7 @@ public final class CraftTaskGoal implements CompanionTask {
     /** The real crafting-table menu while a 3×3 craft runs (so observer mods see the
      *  open/craft/close); null when closed or for 2×2 inventory crafting. */
     private CraftingMenu craftMenu;
+    private int openAttempts;
 
     private String doneReason = "done";
 
@@ -93,6 +96,7 @@ public final class CraftTaskGoal implements CompanionTask {
         this.placedTableOurselves = false;
         this.nav = null;
         this.craftMenu = null;
+        this.openAttempts = 0;
     }
 
     @Override
@@ -196,9 +200,16 @@ public final class CraftTaskGoal implements CompanionTask {
         if (craftMenu == null) {
             Interaction.useBlock(player, tablePos, InteractionHand.MAIN_HAND).tick();
             if (!(player.containerMenu instanceof CraftingMenu opened)) {
-                return;   // menu not open yet (settling / line of sight) — retry next tick
+                // Not open yet (settling / blocked line of sight). Retry a bounded number of
+                // ticks, then fail honestly instead of spinning until the task deadline.
+                if (++openAttempts > MAX_OPEN_ATTEMPTS) {
+                    fail("couldn't open the crafting table at " + tablePos.getX() + ","
+                            + tablePos.getY() + "," + tablePos.getZ() + " (no clear line of sight to it)");
+                }
+                return;
             }
             craftMenu = opened;
+            openAttempts = 0;
         }
         int did = 0;
         while (r.getProduced() < r.count && did < CRAFTS_PER_TICK) {
