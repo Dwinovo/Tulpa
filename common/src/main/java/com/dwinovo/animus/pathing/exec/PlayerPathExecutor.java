@@ -57,6 +57,9 @@ public final class PlayerPathExecutor {
     /** Set when we sprint-skipped a traverse straight into an ascend (Baritone
      *  sprintableAscend) — the ascend then sprints up instead of jumping from a standstill. */
     private boolean sprintAscend = false;
+    /** Set when we sprint-carried into this descend (Baritone canSprintFromDescendInto) —
+     *  the descend drives at sprint speed instead of a controlled walk-down. */
+    private boolean sprintDescend = false;
     /** The live edge-sneak scaffold placement for the current move (null when idle). */
     private PlaceManeuver placeManeuver;
     /** Progressive break of path obstructions (shared model with auto-mine). */
@@ -297,7 +300,7 @@ public final class PlayerPathExecutor {
                             mv.dest.getY(),
                             2 * mv.dest.getZ() - mv.src.getZ()))
                     : Vec3.atBottomCenterOf(mv.dest);
-            InputDriver.stepToward(player, aim, false);
+            InputDriver.stepToward(player, aim, sprintDescend);
         } else {
             InputDriver.halt(player);
         }
@@ -441,21 +444,66 @@ public final class PlayerPathExecutor {
      *  traverse leads straight into a sprintable ascend and we're centred enough to commit
      *  (skipNow), skip the traverse's arrival and sprint up the step. Advances the index. */
     private boolean trySprintSkip() {
-        if (index >= path.movements.size() - 2) return false;   // need cur + next + nextnext
+        // Descend-sprint is re-decided every tick (Baritone re-forces SPRINT per tick), so
+        // clear it up front; the descend branch below re-asserts it when still applicable.
+        sprintDescend = false;
+        if (index >= path.movements.size() - 1) return false;   // need at least cur + next
         Movement cur = path.movements.get(index);
         Movement next = path.movements.get(index + 1);
-        Movement nextnext = path.movements.get(index + 2);
         // Baritone decides the skip AFTER the current move's own update() has handled its
-        // break that tick; we run before the phases, so don't skip past a traverse whose
-        // own obstruction is still pending (it would cancel that dig).
+        // break that tick; we run before the phases, so don't skip past a move whose own
+        // obstruction is still pending (it would cancel that dig).
         if (nextObstruction(cur) != null) return false;
+        // Traverse → sprintable ascend: skip the traverse's arrival and sprint up the step.
         if (cur.kind == Movement.Kind.TRAVERSE && next.kind == Movement.Kind.ASCEND
-                && sprintableAscend(cur, next, nextnext) && skipNow(cur)) {
+                && index < path.movements.size() - 2
+                && sprintableAscend(cur, next, path.movements.get(index + 2)) && skipNow(cur)) {
             advance();              // skip straight into the ascend
             sprintAscend = true;    // (advance() reset it; set after)
             return true;
         }
+        // Descend → sprintable continuation (Baritone canSprintFromDescendInto): carry sprint
+        // down the descend into a same-direction descend chain or a traverse/diagonal, and
+        // hand off the moment we reach the descend's landing cell.
+        //   safeMode gate: Baritone is `safeMode() && !skipToAscend()` (it still sprints to
+        //   clip through the skip-to-ascend glitch); we gate on plain `!descendSafeMode` —
+        //   intentionally NOT sprinting into that clip-glitch, consistent with our stricter-
+        //   safety stance. Same conservative direction the rest of the port takes.
+        if (cur.kind == Movement.Kind.DESCEND && !descendSafeMode(cur)
+                && canSprintFromDescendInto(cur, next)) {
+            // Baritone next_next veto: if this descend feeds a descend chain whose THIRD link
+            // can't itself be sprinted into, don't build momentum we can't safely shed.
+            if (next.kind == Movement.Kind.DESCEND && index + 2 < path.movements.size()) {
+                Movement nextNext = path.movements.get(index + 2);
+                if (nextNext.kind == Movement.Kind.DESCEND
+                        && !canSprintFromDescendInto(next, nextNext)) {
+                    return false;
+                }
+            }
+            if (feet().equals(cur.dest)) {
+                advance();
+                return trySprintSkip();   // re-decide sprint for the NEW current (Baritone onTick recursion)
+            }
+            sprintDescend = true;   // sprint this descend this tick
+            return true;
+        }
         return false;
+    }
+
+    /** Baritone PathExecutor.canSprintFromDescendInto: a descend keeps sprint into the next
+     *  move only when it's a same-direction descend chain, or — with a solid floor one block
+     *  below-and-forward of the landing — a diagonal (allowOvershootDiagonalDescend, on by
+     *  default). NB Baritone's traverse branch compares next.getDirection() (y=0) to the
+     *  descend's getDirection() (y=-1) and so can NEVER match: a descend never sprint-flows
+     *  into a traverse. We mirror that real output (the body settles at the landing, then the
+     *  traverse drives itself), not the branch's apparent intent. */
+    private boolean canSprintFromDescendInto(Movement cur, Movement next) {
+        if (next.kind == Movement.Kind.DESCEND && dirOf(cur).equals(dirOf(next))) {
+            return true;
+        }
+        // dirOf(cur) is (dx,-1,dz), so dest.offset(dir) is one block below-AND-forward.
+        if (!BlockHelper.canWalkOn(player.level(), cur.dest.offset(dirOf(cur)))) return false;
+        return next.kind == Movement.Kind.DIAGONAL;
     }
 
     /** Baritone PathExecutor.sprintableAscend (default sprintAscends=true): the traverse and
@@ -878,6 +926,7 @@ public final class PlayerPathExecutor {
         ticksAway = 0;
         ticksOnCurrent = 0;
         sprintAscend = false;
+        sprintDescend = false;
         digger.cancel();          // a partial dig belongs to the move we just left
         placedThisMove = false;
         if (placeManeuver != null) {
