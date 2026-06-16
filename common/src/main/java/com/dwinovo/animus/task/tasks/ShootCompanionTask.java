@@ -1,7 +1,9 @@
 package com.dwinovo.animus.task.tasks;
 
 import com.dwinovo.animus.entity.AnimusPlayer;
+import com.dwinovo.animus.pathing.exec.Ballistics;
 import com.dwinovo.animus.pathing.exec.InputDriver;
+import com.dwinovo.animus.pathing.exec.Interaction;
 import com.dwinovo.animus.pathing.exec.PlayerNav;
 import com.dwinovo.animus.task.CompanionTask;
 import com.dwinovo.animus.task.TaskResult;
@@ -12,6 +14,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ProjectileWeaponItem;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,6 +37,9 @@ public final class ShootCompanionTask implements CompanionTask {
     private static final double FIRING_RANGE_SQR = 18.0 * 18.0;
     /** Vanilla bow full draw ≈ 20 ticks. */
     private static final int FULL_DRAW_TICKS = 20;
+    /** Full-draw arrow launch speed (BowItem fires at power 1.0 × 3.0) and per-tick gravity. */
+    private static final double ARROW_V = 3.0;
+    private static final double ARROW_G = 0.05;
 
     private final AnimusPlayer player;
     private final ShootTaskRecord r;
@@ -43,7 +49,7 @@ public final class ShootCompanionTask implements CompanionTask {
     private int currentRadius;
     private Entity target;
     private PlayerNav nav;
-    private int drawTicks = 0;
+    private Interaction fire;       // the shared bow draw+release (Interaction.useInAir hold)
     private String doneReason = "done";
 
     public ShootCompanionTask(AnimusPlayer player, ShootTaskRecord record) {
@@ -99,7 +105,7 @@ public final class ShootCompanionTask implements CompanionTask {
             return;
         }
         target = best;
-        drawTicks = 0;
+        fire = null;
         nav = new PlayerNav(player, this::targetCell, APPROACH_SPEED, this::inFiringPosition);
         phase = Phase.ENGAGE;
     }
@@ -136,23 +142,32 @@ public final class ShootCompanionTask implements CompanionTask {
         }
     }
 
-    /** Charge the bow while aimed at the target, release at full draw. */
+    /** Ballistic-aim at the target and draw the bow, loosing at full draw — the draw+release is
+     *  the shared {@link Interaction#useInAir} hold primitive (same machine interact_at uses for a
+     *  held air-use), and the aim is the gravity-compensated arc so the arrow actually lands on the
+     *  target instead of dropping short. Re-aimed every tick, so it tracks a moving target. */
     private void volley() {
-        InputDriver.lookAt(player, target.getEyePosition());
-        if (!player.isUsingItem()) {
-            player.gameMode.useItem(player, player.level(),
-                    player.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
-            drawTicks = 0;
-            return;
+        Vec3 aim = Ballistics.aimPoint(player.getEyePosition(), centerOf(target), ARROW_V, ARROW_G);
+        InputDriver.lookAt(player, aim);
+        if (fire == null) {
+            fire = Interaction.useInAir(player, InteractionHand.MAIN_HAND,
+                    Interaction.Timing.hold(FULL_DRAW_TICKS));
         }
-        if (++drawTicks >= FULL_DRAW_TICKS) {
-            player.releaseUsingItem();   // looses the arrow in the aimed direction
-            drawTicks = 0;
+        if (fire.tick() == Interaction.Status.DONE) {
+            fire = null;   // arrow loosed; next ARRIVED tick re-aims and draws the next one
         }
     }
 
+    /** Centre mass of the target (a solid body hit, not the very top). */
+    private Vec3 centerOf(Entity e) {
+        return e.position().add(0.0, e.getBbHeight() * 0.5, 0.0);
+    }
+
     private void releaseIfDrawing() {
-        if (player.isUsingItem()) player.stopUsingItem();
+        if (fire != null) {
+            fire.stop();        // releases an in-progress draw
+            fire = null;
+        }
     }
 
     private BlockPos targetCell() {
