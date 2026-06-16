@@ -64,6 +64,10 @@ public final class PlayerPathExecutor {
      *  (Baritone overrideFall), this is the extended aim point: driveFall sprints at it
      *  instead of braking straight down. Recomputed each tick; null = no override. */
     private Vec3 fallOverrideAim = null;
+    /** Baritone MovementDescend.numTicks: how many ticks we've actually DRIVEN this descend
+     *  (incremented only inside the drive branch, NOT on break/idle ticks) — gates the 20-tick
+     *  fakeDest momentum window so a descend that breaks first doesn't burn it before moving. */
+    private int descendDriveTicks = 0;
     /** The live edge-sneak scaffold placement for the current move (null when idle). */
     private PlaceManeuver placeManeuver;
     /** Progressive break of path obstructions (shared model with auto-mine). */
@@ -154,6 +158,10 @@ public final class PlayerPathExecutor {
         //    "edge sneak" maneuver (Baritone bridge feel): hold sneak, edge to the
         //    rim, look at the support face, place. Drives the body forward toward the
         //    placement itself, so the bridge is laid as it leans out, not teleport-popped.
+        //    (Baritone MovementAscend presses MOVE_BACK after ticksWithoutPlacement>10 to
+        //    un-wedge a body standing in the cell it's trying to place into; we instead let
+        //    the movement-timeout replan rescue a stalled placement — a bounded fallback,
+        //    not the in-move nudge-back. Revisit only if ascend-place wedging shows up.)
         if (mv.toPlace != null && !placedThisMove) {
             if (placeManeuver == null) {
                 placeManeuver = new PlaceManeuver(player, mv.toPlace, this::scaffoldSlot,
@@ -306,7 +314,9 @@ public final class PlayerPathExecutor {
         }
         double ab = horizontalDistTo(mv.dest);
         if (!feet().equals(mv.dest) || ab > 0.25) {
-            Vec3 aim = (ticksOnCurrent < 20 && horizontalDistTo(mv.src) < 1.25)
+            // Baritone numTicks++ < 20: post-increment inside the drive branch (counts only
+            // ticks we actually drive), gating the fakeDest momentum carry.
+            Vec3 aim = (descendDriveTicks++ < 20 && horizontalDistTo(mv.src) < 1.25)
                     ? Vec3.atBottomCenterOf(new BlockPos(
                             2 * mv.dest.getX() - mv.src.getX(),
                             mv.dest.getY(),
@@ -746,8 +756,9 @@ public final class PlayerPathExecutor {
         if (costCheckIndex != index) {
             costCheckIndex = index;
             int last = path.movements.size() - 1;
-            int end = Math.min(last, index + PathSettings.COST_VERIFICATION_LOOKAHEAD);
-            for (int i = index + 1; i <= end; i++) {
+            // Baritone: `i = 1; i < costVerificationLookahead(5)` → 4 movements ahead
+            // (index+1 .. index+4), bounded by `pathPosition+i < length-1` (== <= last).
+            for (int i = index + 1; i < index + PathSettings.COST_VERIFICATION_LOOKAHEAD && i <= last; i++) {
                 Movement ahead = path.movements.get(i);
                 if (!selfMutating(ahead.kind)
                         && recost(fresh, ahead) >= ActionCosts.COST_INF) {
@@ -1003,6 +1014,7 @@ public final class PlayerPathExecutor {
         ticksOnCurrent = 0;
         sprintAscend = false;
         sprintDescend = false;
+        descendDriveTicks = 0;
         digger.cancel();          // a partial dig belongs to the move we just left
         placedThisMove = false;
         if (placeManeuver != null) {
