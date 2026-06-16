@@ -16,6 +16,7 @@ import net.minecraft.world.level.block.CarpetBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.ScaffoldingBlock;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
@@ -124,6 +125,41 @@ public final class BlockHelper {
     public static boolean isDoorOpen(BlockState state) {
         return state.hasProperty(BlockStateProperties.OPEN)
                 && state.getValue(BlockStateProperties.OPEN);
+    }
+
+    /**
+     * Baritone {@code isDoorPassable}/{@code isGatePassable}: can a body approaching the
+     * door/gate at {@code doorPos} from the adjacent cell {@code fromPos} pass through it
+     * AS IT CURRENTLY STANDS? A fence gate is passable iff open. A door is orientation-aware
+     * ({@code isHorizontalBlockPassable}): passable iff {@code (facingAxis == approachAxis) == open}
+     * — so an open door perpendicular to the approach still BLOCKS (its panel swung across the
+     * gap), and a closed door flush with the approach does not. The executor toggles (right-clicks)
+     * any door/gate this reports as NOT passable, which both opens a blocking-closed one and
+     * closes a blocking-open one. Non-door/gate blocks read as passable (not our concern).
+     */
+    public static boolean isDoorwayPassable(BlockGetter level, BlockPos doorPos, BlockPos fromPos) {
+        BlockState state = level.getBlockState(doorPos);
+        Block block = state.getBlock();
+        if (block instanceof FenceGateBlock) {
+            return state.getValue(BlockStateProperties.OPEN);
+        }
+        if (!(block instanceof DoorBlock)) {
+            return true;
+        }
+        if (fromPos.equals(doorPos)) {
+            return false;
+        }
+        Direction.Axis facing = state.getValue(HorizontalDirectionalBlock.FACING).getAxis();
+        boolean open = state.getValue(BlockStateProperties.OPEN);
+        Direction.Axis approach;
+        if (fromPos.north().equals(doorPos) || fromPos.south().equals(doorPos)) {
+            approach = Direction.Axis.Z;
+        } else if (fromPos.east().equals(doorPos) || fromPos.west().equals(doorPos)) {
+            approach = Direction.Axis.X;
+        } else {
+            return true;   // not cardinally adjacent (diagonal / wrong Y) → don't toggle
+        }
+        return (facing == approach) == open;
     }
 
     /** Is this cell water (source or flowing)? */

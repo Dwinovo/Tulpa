@@ -696,28 +696,30 @@ public final class PlayerPathExecutor {
     }
 
     /**
-     * Open any shut wooden door / fence gate in this movement's path (the dest
-     * cell + the head cell above it) by hand — Baritone's alternative to breaking
-     * it. The path planner already treats these as passable (BlockHelper), so they
-     * never enter {@code toBreak}; here we just right-click them open as we arrive.
+     * Toggle any wooden door / fence gate that blocks THIS movement (the dest cell + the head
+     * cell above it, each judged from the cell we approach it from) — Baritone's MovementTraverse
+     * door/gate handling, the alternative to breaking it. The planner already treats openable
+     * doors as passable (so they never enter {@code toBreak}); here we right-click via the shared
+     * {@link Interaction#useBlock} primitive, which does a REAL eye-raycast (no fabricated hit) and
+     * only fires when the door is actually in line of sight — exactly like a player, and the same
+     * interaction path mining uses. Not sneaking (drive() cleared shift), so the door's own use()
+     * fires (open/close) rather than placing a held block against it.
      */
     private void openDoorsForMove(Movement mv) {
-        openDoorAt(mv.dest);
-        openDoorAt(mv.dest.above());
+        toggleDoorwayIfBlocking(mv.dest, mv.src);
+        toggleDoorwayIfBlocking(mv.dest.above(), mv.src.above());
     }
 
-    private void openDoorAt(BlockPos cell) {
-        BlockState state = player.level().getBlockState(cell);
-        if (!BlockHelper.isOpenableDoor(state) || BlockHelper.isDoorOpen(state)) {
-            return;
+    private void toggleDoorwayIfBlocking(BlockPos cell, BlockPos from) {
+        if (!BlockHelper.isOpenableDoor(player.level().getBlockState(cell))) {
+            return;   // not a wooden door / fence gate (iron doors stay a solid obstruction)
         }
-        // Not sneaking (drive() cleared shift) so the door's own use() fires and
-        // opens it, rather than placing a held block against it.
-        Vec3 centre = Vec3.atCenterOf(cell);
-        InputDriver.lookAt(player, centre);
-        player.gameMode.useItemOn(player, player.level(),
-                player.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND,
-                new BlockHitResult(centre, Direction.UP, cell, false));
+        if (BlockHelper.isDoorwayPassable(player.level(), cell, from)) {
+            return;   // already passable for this approach — nothing to toggle
+        }
+        // Real line-of-sight right-click (raycast-verified); a blocked sightline just retries
+        // next tick as the body lines up, matching Baritone's "no reachable rotation → no click".
+        Interaction.useBlock(player, cell, InteractionHand.MAIN_HAND).tick();
     }
 
     /**
