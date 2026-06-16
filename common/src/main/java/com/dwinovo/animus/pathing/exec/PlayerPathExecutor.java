@@ -809,8 +809,9 @@ public final class PlayerPathExecutor {
             ticksAway = 0;
             return null;
         }
-        // Backward: lag / pushed back — scan ALL earlier movements (Baritone).
-        for (int i = index - 1; i >= 0; i--) {
+        // Backward (Baritone PathExecutor.onTick): lagged / pushed back — scan earlier
+        // movements FROM THE START and take the FIRST (earliest) whose valid cells hold us.
+        for (int i = 0; i < index; i++) {
             if (path.movements.get(i).validPositions().contains(feet)) {
                 jumpToIndex(i);
                 return null;

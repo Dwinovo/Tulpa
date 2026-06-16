@@ -310,9 +310,9 @@ public final class Moves {
         //     the surface water cell (res.y = the water cell, not one above it).
         //   • DRY floor — feet land one above it (y-fallHeight+1), bounded by
         //     maxFallHeightNoWater + 1.
-        // Charged FALL_N[fallHeight] (fallHeight, NOT blocks-dropped: a fall to y-2 is
-        // fallHeight 3). Bucket-MLG and vine/ladder fall-speed resets remain out of
-        // scope; columns with those cost the full height or aren't emitted.
+        // Charged FALL_N[unprotectedFallHeight] (height since the last vine/ladder reset,
+        // NOT blocks-dropped). Bucket-MLG remains out of scope; vine/ladder resets ARE
+        // modelled (see the loop below).
         if (!BlockHelper.canWalkThrough(level, belowLanding)) return null;
         // Baritone dynamicFallCost guard: if we're breaking the front column AND a
         // FallingBlock sits just above it (y+2), breaking would drop that block into
@@ -322,23 +322,35 @@ public final class Moves {
                         instanceof net.minecraft.world.level.block.FallingBlock) {
             return null;
         }
+        // Baritone charges FALL by unprotectedFallHeight (height since the last fall-speed
+        // reset), NOT the raw drop: grabbing a vine/ladder mid-fall resets the speed (and
+        // adds a ladder-down cost), so a long fall broken by a vine is cheap.
+        double costSoFar = 0.0;
+        int effectiveStartHeight = col.getY();
         for (int fallHeight = 3; fallHeight <= PathSettings.MAX_FALL_HEIGHT_BUCKET + 1; fallHeight++) {
             BlockPos onto = col.below(fallHeight);   // (destX, y-fallHeight): landing candidate
+            int unprotected = fallHeight - (col.getY() - effectiveStartHeight);
             if (BlockHelper.isWater(level, onto)) {
                 // Fall into water (Baritone dynamicFallCost water branch).
                 if (!BlockHelper.canWalkThrough(level, onto)) return null;     // submerged, not a surface cell
                 if (BlockHelper.isFlowingWater(level, onto)) return null;
                 if (!BlockHelper.canWalkOn(level, onto.below())) return null;  // don't punch through into a void
-                double totalW = ActionCosts.WALK_OFF_BLOCK + ActionCosts.fallCost(fallHeight) + frontBreak;
+                double totalW = ActionCosts.WALK_OFF_BLOCK + ActionCosts.fallCost(unprotected) + frontBreak + costSoFar;
                 return new Movement(Movement.Kind.FALL, from, onto, totalW, toBreak, null);
             }
+            // Vine/ladder mid-fall (Baritone): grab on, reset the fall speed, keep falling.
+            if (unprotected <= 11 && isLadderOrVine(level.getBlockState(onto))) {
+                costSoFar += ActionCosts.fallCost(unprotected - 1) + ActionCosts.LADDER_DOWN_ONE;
+                effectiveStartHeight = onto.getY();
+                continue;
+            }
             if (BlockHelper.canWalkThrough(level, onto)) continue;   // still air — keep falling
-            if (fallHeight > ctx.maxFallHeight + 1) return null;     // dry landing beyond safe height
             if (!BlockHelper.canWalkOn(level, onto)) return null;    // not standable — abort
             if (BlockHelper.isBottomSlab(level, onto)) return null;  // glitchy fall onto a half slab
+            if (unprotected > ctx.maxFallHeight + 1) return null;    // dry landing beyond safe height (no bucket)
             BlockPos feet = onto.above();                            // (destX, y-fallHeight+1)
             if (BlockHelper.isHazard(level, onto) || BlockHelper.isHazard(level, feet)) return null;
-            double total = ActionCosts.WALK_OFF_BLOCK + ActionCosts.fallCost(fallHeight) + frontBreak;
+            double total = ActionCosts.WALK_OFF_BLOCK + ActionCosts.fallCost(unprotected) + frontBreak + costSoFar;
             return new Movement(Movement.Kind.FALL, from, feet, total, toBreak, null);
         }
         return null;
