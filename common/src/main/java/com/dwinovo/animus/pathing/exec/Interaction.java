@@ -5,10 +5,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -153,6 +156,78 @@ public final class Interaction {
      *  ({@code hold()} eats food / {@code hold(n)} draws and looses a bow). */
     public static Interaction useInAir(AnimusPlayer p, InteractionHand hand, Timing timing) {
         return new Interaction(p, Button.USE, null, null, hand, timing);
+    }
+
+    /** vanilla {@code Minecraft.rightClickDelay} — held right-click re-fires this often. */
+    private static final int RIGHT_CLICK_DELAY = 4;
+    /** A "hold forever" fire count; the owning task stops us after hold_ticks / on completion. */
+    private static final int CONTINUOUS = 1_000_000;
+
+    /**
+     * Carpet's {@code Tracer} / vanilla crosshair pick: one ray from the eyes along the CURRENT
+     * look, resolving the CLOSER of a block or an entity (else MISS). A wall occludes a mob behind
+     * it (entities are searched only as near as the block hit). {@code reach} 4.5 = survival.
+     */
+    public static HitResult nativeRaytrace(AnimusPlayer player, double reach) {
+        Level level = player.level();
+        Vec3 eye = player.getEyePosition();
+        Vec3 reachVec = player.getViewVector(1.0f).scale(reach);
+        Vec3 end = eye.add(reachVec);
+        BlockHitResult block = level.clip(new ClipContext(
+                eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
+        double maxSq = block.getType() == HitResult.Type.MISS
+                ? reach * reach : block.getLocation().distanceToSqr(eye);
+        AABB box = player.getBoundingBox().expandTowards(reachVec).inflate(1.0);
+        EntityHitResult ent = ProjectileUtil.getEntityHitResult(
+                player, eye, end, box, e -> !e.isSpectator() && e.isPickable(), maxSq);
+        return ent != null ? ent : block;   // entity (closer than the block) wins, else the block/miss
+    }
+
+    /**
+     * Build the native action for a resolved crosshair {@code hit} + {@code button}, mapping
+     * {@code holdTicks} to the cell's natural cadence — Carpet's 6-cell dispatch:
+     * <ul>
+     *   <li>ATTACK·BLOCK → break (BlockDigger holds till the block is gone);</li>
+     *   <li>ATTACK·ENTITY → hit (tap = one cooldown-gated hit; hold = keep hitting);</li>
+     *   <li>USE·BLOCK → activate (tap once; hold re-clicks every rightClickDelay — modded crank);</li>
+     *   <li>USE·ENTITY → interact (tap once; hold re-clicks);</li>
+     *   <li>USE·AIR → useItem (tap = throw; hold = charge/eat up to ticks, or self-complete);</li>
+     *   <li>ATTACK·AIR → {@code null} (left-click air does nothing).</li>
+     * </ul>
+     * {@code holdTicks}: 0 = tap, &gt;0 / -1 = hold. The block/entity hit is used verbatim (the
+     * native raytrace already resolved the exact face/point — no re-raycast). The caller drives
+     * the returned object to completion and enforces the hold duration.
+     */
+    public static Interaction forHit(AnimusPlayer p, HitResult hit, Button button, int holdTicks) {
+        boolean hold = holdTicks != 0;
+        switch (hit.getType()) {
+            case BLOCK -> {
+                BlockHitResult bh = (BlockHitResult) hit;
+                if (button == Button.ATTACK) {
+                    return attackBlock(p, bh.getBlockPos());
+                }
+                Interaction i = new Interaction(p, Button.USE, bh.getBlockPos(), null,
+                        InteractionHand.MAIN_HAND,
+                        hold ? Timing.repeat(CONTINUOUS, RIGHT_CLICK_DELAY) : Timing.once());
+                i.presetHit = bh;   // use the robust native hit, no re-raycast
+                return i;
+            }
+            case ENTITY -> {
+                Entity e = ((EntityHitResult) hit).getEntity();
+                if (button == Button.ATTACK) {
+                    return attackEntity(p, e, hold ? Timing.repeat(CONTINUOUS, 1) : Timing.once());
+                }
+                return new Interaction(p, Button.USE, null, e, InteractionHand.MAIN_HAND,
+                        hold ? Timing.repeat(CONTINUOUS, RIGHT_CLICK_DELAY) : Timing.once());
+            }
+            default -> {   // MISS = air
+                if (button == Button.ATTACK) {
+                    return null;
+                }
+                Timing t = hold ? (holdTicks > 0 ? Timing.hold(holdTicks) : Timing.hold()) : Timing.once();
+                return useInAir(p, InteractionHand.MAIN_HAND, t);
+            }
+        }
     }
 
     public String failReason() {

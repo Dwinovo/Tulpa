@@ -81,6 +81,7 @@ public class CommonClass {
         ToolRegistry.register(new PlaceBlockTool());
         ToolRegistry.register(new BreakBlockTool());
         ToolRegistry.register(new InteractTool());
+        ToolRegistry.register(new com.dwinovo.animus.agent.tool.tools.InteractAtTool());
         ToolRegistry.register(new UseItemTool());
         ToolRegistry.register(new EatItemTool());
         ToolRegistry.register(new WaitTool());
