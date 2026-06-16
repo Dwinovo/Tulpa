@@ -28,13 +28,16 @@ abstract class AbstractContainerItemGoal<T extends ContainerItemTaskRecord>
     private enum Phase { FIND, GOTO, OPERATE }
 
     private static final double WALK_SPEED = 1.0;
+    private static final int MAX_OPEN_ATTEMPTS = 30;
 
     protected final AnimusPlayer player;
     protected final T r;
+    protected final com.dwinovo.animus.task.ContainerSession session;
 
     private Phase phase = Phase.FIND;
     protected BlockPos containerPos;
     private PlayerNav nav;
+    private int openAttempts;
 
     protected String doneReason = "done";
     protected final Map<String, Object> resultData = new HashMap<>();
@@ -42,6 +45,7 @@ abstract class AbstractContainerItemGoal<T extends ContainerItemTaskRecord>
     protected AbstractContainerItemGoal(AnimusPlayer player, T record) {
         this.player = player;
         this.r = record;
+        this.session = new com.dwinovo.animus.task.ContainerSession(player);
     }
 
     @Override
@@ -49,6 +53,7 @@ abstract class AbstractContainerItemGoal<T extends ContainerItemTaskRecord>
         phase = Phase.FIND;
         containerPos = null;
         nav = null;
+        openAttempts = 0;
         doneReason = "done";
         resultData.clear();
     }
@@ -125,10 +130,22 @@ abstract class AbstractContainerItemGoal<T extends ContainerItemTaskRecord>
         resultData.put("z", containerPos.getZ());
         resultData.put("block", BuiltInRegistries.BLOCK.getKey(
                 player.level().getBlockState(containerPos).getBlock()).toString());
+
+        // Open the container's REAL menu (right-click). Items move through it (shift-click), so
+        // observer/replay mods see open → move → close. {@code container} stays a read-only view for
+        // contents listings; the move itself goes via {@link #session}.
+        if (!session.open(containerPos)) {
+            if (++openAttempts > MAX_OPEN_ATTEMPTS) {
+                fail("can't open the container at " + posLabel() + " — no clear line of sight to it");
+            }
+            return;
+        }
         operate(r, container);
+        session.close();
     }
 
-    /** Do the actual slot work; set {@link #doneReason} + a terminal state. */
+    /** Do the actual slot work via {@link #session} ({@code container} is a read-only view for
+     *  listing contents); set {@link #doneReason} + a terminal state. */
     protected abstract void operate(T record, Container container);
 
     protected void fail(String reason) {
@@ -148,6 +165,7 @@ abstract class AbstractContainerItemGoal<T extends ContainerItemTaskRecord>
     @Override
     public TaskResult buildResult(TaskState finalState) {
         if (nav != null) nav.stop();
+        session.close();
         return switch (finalState) {
             case SUCCESS -> TaskResult.ok(doneReason, resultData);
             case TIMEOUT -> TaskResult.timeout("timed out: " + doneReason);

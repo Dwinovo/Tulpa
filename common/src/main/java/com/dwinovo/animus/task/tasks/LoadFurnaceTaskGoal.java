@@ -53,8 +53,11 @@ public final class LoadFurnaceTaskGoal implements CompanionTask {
     private static final double WALK_SPEED = 1.0;
     private static final int SLOT_MAX = 64;
 
+    private static final int MAX_OPEN_ATTEMPTS = 30;
+
     private final AnimusPlayer player;
     private final LoadFurnaceTaskRecord r;
+    private final com.dwinovo.animus.task.ContainerSession session;
 
     private Phase phase = Phase.RESOLVE;
     private SmeltingRecipe recipe;
@@ -63,6 +66,7 @@ public final class LoadFurnaceTaskGoal implements CompanionTask {
 
     private BlockPos furnacePos;
     private PlayerNav nav;
+    private int openAttempts;
 
     private String doneReason = "done";
     private final Map<String, Object> resultData = new HashMap<>();
@@ -70,6 +74,7 @@ public final class LoadFurnaceTaskGoal implements CompanionTask {
     public LoadFurnaceTaskGoal(AnimusPlayer player, LoadFurnaceTaskRecord record) {
         this.player = player;
         this.r = record;
+        this.session = new com.dwinovo.animus.task.ContainerSession(player);
     }
 
     @Override
@@ -78,6 +83,7 @@ public final class LoadFurnaceTaskGoal implements CompanionTask {
         this.recipe = null;
         this.furnacePos = null;
         this.nav = null;
+        this.openAttempts = 0;
         this.resultData.clear();
     }
 
@@ -270,15 +276,30 @@ public final class LoadFurnaceTaskGoal implements CompanionTask {
             return;
         }
 
-        // Commit: pull from inventory, write to furnace slots.
-        com.dwinovo.animus.task.tasks.ContainerOps.removeFrom(inv, r.input, loadInput);
-        com.dwinovo.animus.task.tasks.ContainerOps.removeFrom(inv, r.fuel, loadFuel);
-        furnace.setItem(FurnaceEngine.SLOT_INPUT,
-                new ItemStack(r.input, (curInput.isEmpty() ? 0 : curInput.getCount()) + loadInput));
-        furnace.setItem(FurnaceEngine.SLOT_FUEL,
-                new ItemStack(r.fuel, (curFuel.isEmpty() ? 0 : curFuel.getCount()) + loadFuel));
-        furnace.setChanged();
-        inv.setChanged();
+        // Commit through the furnace's REAL menu (observable: right-click open → shift-click in →
+        // close), not a silent setItem. The menu routes the smeltable to the input slot and the fuel
+        // to the fuel slot by its own quickMoveStack rules; deposit lands an exact count.
+        if (!session.open(furnacePos)) {
+            if (++openAttempts > MAX_OPEN_ATTEMPTS) {
+                fail("can't open the furnace — no clear line of sight to it");
+            }
+            return;
+        }
+        int didInput = session.deposit(st -> st.is(r.input), loadInput);
+        if (didInput <= 0) {
+            // Bail BEFORE touching fuel: vanilla quickMoveStack routes a smeltable item (many fuels —
+            // logs, planks — are smeltable) to the INPUT slot first, so depositing fuel while the input
+            // slot is still empty would misroute the fuel into it. With the input slot now occupied by
+            // r.input, a normal non-smeltable fuel (coal/charcoal) still routes to the fuel slot; a
+            // smeltable fuel just fails to load (reported as under-fuel) instead of polluting the input.
+            session.close();
+            fail("couldn't load any " + r.label + " into the furnace (input slot busy or full)");
+            return;
+        }
+        int didFuel = session.deposit(st -> st.is(r.fuel), loadFuel);
+        session.close();
+        loadInput = didInput;
+        loadFuel = didFuel;
 
         resultData.put("x", furnacePos.getX());
         resultData.put("y", furnacePos.getY());
@@ -336,6 +357,7 @@ public final class LoadFurnaceTaskGoal implements CompanionTask {
     @Override
     public TaskResult buildResult(TaskState finalState) {
         if (nav != null) nav.stop();
+        session.close();
         return switch (finalState) {
             case SUCCESS -> TaskResult.ok(doneReason, resultData);
             case TIMEOUT -> TaskResult.timeout("timed out before loading the furnace: " + doneReason);

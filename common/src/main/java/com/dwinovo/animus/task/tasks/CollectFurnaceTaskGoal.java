@@ -6,7 +6,6 @@ import com.dwinovo.animus.task.CompanionTask;
 import com.dwinovo.animus.task.TaskResult;
 import com.dwinovo.animus.task.TaskState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.phys.Vec3;
@@ -32,12 +31,15 @@ public final class CollectFurnaceTaskGoal implements CompanionTask {
     private enum Phase { GOTO_FURNACE, COLLECT }
 
     private static final double WALK_SPEED = 1.0;
+    private static final int MAX_OPEN_ATTEMPTS = 30;
 
     private final AnimusPlayer player;
     private final CollectFurnaceTaskRecord r;
+    private final com.dwinovo.animus.task.ContainerSession session;
 
     private Phase phase = Phase.GOTO_FURNACE;
     private PlayerNav nav;
+    private int openAttempts;
 
     private String doneReason = "done";
     private final Map<String, Object> resultData = new HashMap<>();
@@ -45,12 +47,14 @@ public final class CollectFurnaceTaskGoal implements CompanionTask {
     public CollectFurnaceTaskGoal(AnimusPlayer player, CollectFurnaceTaskRecord record) {
         this.player = player;
         this.r = record;
+        this.session = new com.dwinovo.animus.task.ContainerSession(player);
     }
 
     @Override
     public void start() {
         this.phase = Phase.GOTO_FURNACE;
         this.nav = null;
+        this.openAttempts = 0;
         if (FurnaceEngine.furnaceAt(player.level(), r.pos) == null) {
             fail("no furnace at " + r.pos.getX() + "," + r.pos.getY() + "," + r.pos.getZ());
             return;
@@ -104,7 +108,6 @@ public final class CollectFurnaceTaskGoal implements CompanionTask {
             fail("furnace vanished before collecting");
             return;
         }
-        Inventory inv = player.getInventory();
         ItemStack output = furnace.getItem(FurnaceEngine.SLOT_RESULT);
         int collected = 0;
         boolean invFull = false;
@@ -112,12 +115,19 @@ public final class CollectFurnaceTaskGoal implements CompanionTask {
         if (!output.isEmpty()) {
             collectedItem = net.minecraft.core.registries.BuiltInRegistries.ITEM
                     .getKey(output.getItem()).toString();
-            int before = output.getCount();
-            ItemStack leftover = ContainerOps.addTo(inv, output.copy());
-            collected = before - leftover.getCount();
-            invFull = !leftover.isEmpty();
-            furnace.setItem(FurnaceEngine.SLOT_RESULT, leftover);
-            furnace.setChanged();
+            // Take it through the furnace's REAL menu (open → shift-click the result slot → close).
+            // collectOutputs() empties ONLY output slots, so it never drags the input or the burning
+            // fuel out even when they're the same item as the result (logs→charcoal on charcoal fuel).
+            // Shift-clicking the result slot also awards the smelting XP a player would earn.
+            if (!session.open(r.pos)) {
+                if (++openAttempts > MAX_OPEN_ATTEMPTS) {
+                    fail("can't open the furnace — no clear line of sight to it");
+                }
+                return;
+            }
+            collected = session.collectOutputs();
+            session.close();
+            invFull = !furnace.getItem(FurnaceEngine.SLOT_RESULT).isEmpty();
         }
 
         resultData.putAll(FurnaceEngine.describe(player.level(), r.pos, furnace));
@@ -157,6 +167,7 @@ public final class CollectFurnaceTaskGoal implements CompanionTask {
     @Override
     public TaskResult buildResult(TaskState finalState) {
         stopNav();
+        session.close();
         return switch (finalState) {
             case SUCCESS -> TaskResult.ok(doneReason, resultData);
             case TIMEOUT -> TaskResult.timeout("timed out walking to the furnace");

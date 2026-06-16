@@ -3,6 +3,7 @@ package com.dwinovo.animus.task;
 import com.dwinovo.animus.entity.AnimusPlayer;
 import com.dwinovo.animus.pathing.exec.Interaction;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -64,23 +65,39 @@ public final class ContainerSession {
     }
 
     /**
-     * Shift-click player-inventory stacks matching {@code which} INTO the machine, until {@code max}
-     * items have moved (or nothing more matches). The menu routes each to the slot it belongs in.
-     * Whole stacks move at a time, so the count can overshoot {@code max} by less than one stack —
-     * fine for furnaces/chests; precise single-slot counts would need the click protocol. Returns moved.
+     * Shift-click player-inventory stacks matching {@code which} INTO the machine, until EXACTLY
+     * {@code max} items have moved (or nothing more matches). The menu routes each to the slot it
+     * belongs in (smeltable → input, fuel → fuel, the modded machine's input).
+     *
+     * <p>To land a precise count we split the last stack: stash its excess in a free player slot so
+     * the slot holds exactly the remainder, then shift it. (If the inventory is completely full so
+     * there's nowhere to stash, that last stack moves whole — a sub-one-stack overshoot, the only
+     * case it isn't exact.) Returns the number of items actually moved into the machine.
      */
     public int deposit(Predicate<ItemStack> which, int max) {
         if (!isOpen() || max <= 0) {
             return 0;
         }
+        Inventory inv = player.getInventory();
         int moved = 0;
         for (int i = 0; i < menu.slots.size() && moved < max; i++) {
             Slot s = menu.slots.get(i);
-            if (s.container != player.getInventory()) {
+            if (s.container != inv) {
                 continue;   // player side only
             }
             if (!s.hasItem() || !which.test(s.getItem())) {
                 continue;
+            }
+            ItemStack stack = s.getItem();
+            int want = max - moved;
+            if (stack.getCount() > want) {
+                // Split: move the part we DON'T want out to a free slot, leaving exactly `want` to shift.
+                int free = firstFreeStorageSlot(inv);
+                if (free >= 0) {
+                    inv.setItem(free, stack.copyWithCount(stack.getCount() - want));
+                    s.set(stack.copyWithCount(want));
+                }
+                // else: nowhere to stash → shift the whole stack (best-effort, slight overshoot).
             }
             int before = s.getItem().getCount();
             menu.quickMoveStack(player, i);
@@ -89,13 +106,36 @@ public final class ContainerSession {
         return moved;
     }
 
-    /** Shift-click machine-side stacks matching {@code which} OUT into the inventory. Returns moved. */
+    /** First empty hotbar/backpack slot (0..35), or -1 — used to stash a split remainder. Skips
+     *  armor/offhand so we never shove loose items into an equipment slot. */
+    private int firstFreeStorageSlot(Inventory inv) {
+        int n = Math.min(36, inv.getContainerSize());
+        for (int i = 0; i < n; i++) {
+            if (inv.getItem(i).isEmpty()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Shift-click ALL machine-side stacks matching {@code which} OUT into the inventory (e.g. empty a
+     *  furnace's result slot). Returns moved. */
     public int withdraw(Predicate<ItemStack> which) {
-        if (!isOpen()) {
+        return withdraw(which, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Shift-click machine-side stacks matching {@code which} OUT into the inventory, until EXACTLY
+     * {@code max} items have moved. Like {@link #deposit}, the last stack is split — its excess stashed
+     * in a free machine slot — so the count is exact (whole-stack overshoot only if the machine has no
+     * free slot to stash into, e.g. a single-output furnace). Returns the number moved out.
+     */
+    public int withdraw(Predicate<ItemStack> which, int max) {
+        if (!isOpen() || max <= 0) {
             return 0;
         }
         int moved = 0;
-        for (int i = 0; i < menu.slots.size(); i++) {
+        for (int i = 0; i < menu.slots.size() && moved < max; i++) {
             Slot s = menu.slots.get(i);
             if (s.container == player.getInventory()) {
                 continue;   // machine side only
@@ -103,11 +143,63 @@ public final class ContainerSession {
             if (!s.hasItem() || !which.test(s.getItem())) {
                 continue;
             }
+            ItemStack stack = s.getItem();
+            int want = max - moved;
+            if (stack.getCount() > want) {
+                int free = freeMachineSlotFor(stack, i);
+                if (free >= 0) {
+                    menu.slots.get(free).set(stack.copyWithCount(stack.getCount() - want));
+                    s.set(stack.copyWithCount(want));
+                }
+                // else: nothing to stash the remainder in → take the whole stack (slight overshoot).
+            }
             int before = s.getItem().getCount();
             menu.quickMoveStack(player, i);
             moved += before - (s.hasItem() ? s.getItem().getCount() : 0);
         }
         return moved;
+    }
+
+    /**
+     * Take everything out of the machine's OUTPUT slots — those that refuse item placement
+     * ({@code mayPlace == false}, i.e. a furnace result slot or a machine's product slot), leaving
+     * inputs and fuel untouched even when they hold the SAME item as the output (smelting logs into
+     * charcoal while burning charcoal as fuel). Shift-clicking a result slot also awards the smelt XP.
+     * Slot-index free — it keys off the slot's own role, so it works for any machine. Returns moved.
+     */
+    public int collectOutputs() {
+        if (!isOpen()) {
+            return 0;
+        }
+        int moved = 0;
+        for (int i = 0; i < menu.slots.size(); i++) {
+            Slot s = menu.slots.get(i);
+            if (s.container == player.getInventory() || !s.hasItem()) {
+                continue;
+            }
+            if (s.mayPlace(s.getItem())) {
+                continue;   // a normal in/out slot (chest cell, furnace input/fuel) — not an output
+            }
+            int before = s.getItem().getCount();
+            menu.quickMoveStack(player, i);
+            moved += before - (s.hasItem() ? s.getItem().getCount() : 0);
+        }
+        return moved;
+    }
+
+    /** An empty machine-side slot (other than {@code exceptIndex}) that may hold {@code stack} — used to
+     *  stash a split remainder when taking a precise count out. -1 if none. */
+    private int freeMachineSlotFor(ItemStack stack, int exceptIndex) {
+        for (int i = 0; i < menu.slots.size(); i++) {
+            if (i == exceptIndex) {
+                continue;
+            }
+            Slot s = menu.slots.get(i);
+            if (s.container != player.getInventory() && !s.hasItem() && s.mayPlace(stack)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**

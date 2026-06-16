@@ -32,7 +32,7 @@ public final class TakeItemsTaskGoal extends AbstractContainerItemGoal<TakeItems
                     + " — it holds: " + summarise(container));
             return;
         }
-        int taken = ContainerOps.extract(container, player.getInventory(), r.item, r.count);
+        int taken = session.withdraw(st -> st.is(r.item), r.count);
         if (taken <= 0) {
             fail("my inventory is full — deposit_items or drop_items something first");
             return;

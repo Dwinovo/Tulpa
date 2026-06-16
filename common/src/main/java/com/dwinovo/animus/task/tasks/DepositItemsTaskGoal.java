@@ -23,7 +23,7 @@ public final class DepositItemsTaskGoal extends AbstractContainerItemGoal<Deposi
             fail("no " + r.label + " in inventory to deposit");
             return;
         }
-        int moved = ContainerOps.deposit(inv, container, r.item, r.count);
+        int moved = session.deposit(st -> st.is(r.item), r.count);
         if (moved <= 0) {
             fail("the container at " + posLabel() + " is full — take_items something out, "
                     + "or deposit into another container (give its x/y/z)");
