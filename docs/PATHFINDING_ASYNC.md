@@ -6,7 +6,28 @@
 > ② 服务端安全(绝不在 worker 线程上撞 chunk 卸载竞争 / 撕裂 `PalettedContainer` 读 / CME);
 > ③ 设计对着 Baritone 真实源码,不凭记忆。
 
-本文是**落地计划**,不含实现。批准后按阶段实现,每阶段编译 + 中立 review + 守确定性对拍。
+本文是**落地计划**。按阶段实现,每阶段编译 + 中立 review。
+
+---
+
+> ## ⚠️ 设计修订(2026-06-16)— 改为 Baritone 活读模型,§4/§5 的"拷贝 section"方案已废弃
+>
+> 原计划(下文 §4/§5.1)把每个已加载 section **拷贝**成 `CompactSection`,为此要做空气哨兵 +
+> 每 tick 补编码 + `setBlockState` mixin 脏标记,来保证"完整性"。**这套已删除**。
+>
+> Baritone 其实**不拷贝**:它对**已加载 chunk 直接离线读 live**(`BlockStateInterface.useTheRealWorld`),
+> 线程安全靠 `createThreadSafeCopy()` 拷的是 **chunk 映射表**(chunk 对象共享),只对**未加载** chunk
+> 用打包缓存。对齐后我们的实现:
+> - **`LoadedChunks`** = 每维度一份"已加载 chunk 引用快照"(`PathCaches.serverTick` 每 tick 围着伙伴
+>   用 `getChunkNow` 重建,不可变后发布)。= Baritone 线程安全 chunk 表的服务端等价物。
+> - **`CachedNavView`** 离线读:命中快照 → 读该 chunk 的 **live section**;未命中(未加载)→ AIR(Baritone miss)。
+>   极罕见的"读到主线程正在扩容的 palette"用 `try/catch → AIR` 兜住(陈旧→执行期 live 重算 + replan 修正)。
+> - **删除**:`CompactSection`、`SectionCache`、`setBlockState` mixin、脏标记/flush、距离 prune
+>   (服务器自己卸载远 chunk → 快照天然有界;活读永远新鲜,无需失效)。
+> - 取舍:接受 Baritone 同款"离线读 live 的偶发陈旧",服务端写更频繁所以略多,但都被 replan + 执行期
+>   重算兜住。未加载地形的打包缓存(原 Tier 2)仍推迟。
+>
+> 下文 §4/§5.1/§5.2 描述的是已废弃的拷贝方案,保留作设计推演记录;**实际实现以本框为准**。
 
 ---
 
@@ -160,8 +181,9 @@ PlayerNav.tick:            │                                                  
 
 ## 9. 决策(已定 2026-06-16)
 
-1. **缓存单元** → 压缩的 `CompactSection`(去重驻留 `BlockState` 调色板 + 位打包索引,丢 biome/light/锁,跳空气 section)。既非 2bit 也非整份 copy。见 §4。
-2. **Tier 2(2bit + 磁盘 + 特殊方块扫描)** → **推迟**,需要时再起。见 §4。
+1. **缓存单元** → ~~压缩 `CompactSection` 拷贝~~ **已改为 Baritone 活读**(见顶部修订框):`LoadedChunks` 持已加载 chunk 引用,`CachedNavView` 离线读 live section,未加载→AIR。不拷贝、不编码、无 mixin。
+2. **Tier 2(2bit + 磁盘 + 特殊方块扫描,服务未加载地形)** → **推迟**,需要时再起。
+2b. **未加载语义** → AIR(Baritone miss);搜索靠分段 partial-path + replan 推进,快照半径(默认 8 chunk,实际被伙伴已加载半径裹住)即每段视野。
 3. **缓存淘汰** → 参考 Baritone:删距任一伙伴 >1024 方块的 section(`CachedWorld.prune` 同款),可选加 MB 安全阀。见 §5.1。
 4. **线程池** → 可配置,默认参考 Baritone(`ThreadPoolExecutor(4, MAX, 60s, SynchronousQueue)`,守护)。见 §5.4。
 5. **未命中语义** → 参考 Baritone:返回 `AIR`(`BlockStateInterface.get0` 同款)。见 §5.1。

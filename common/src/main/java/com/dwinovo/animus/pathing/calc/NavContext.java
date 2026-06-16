@@ -110,7 +110,15 @@ public final class NavContext {
      * swaps in the {@code CompactSection}-backed off-thread view so the search can move to a worker.
      */
     public static NavContext forSearch(Level level, Container liveInventory) {
-        return new NavContext(level, new NavSnapshot(level), snapshotInventory(liveInventory), true);
+        // Read loaded chunks LIVE through the per-tick snapshot (Baritone useTheRealWorld); before the
+        // snapshot exists (a level's first companion tick) fall back to the live read-through so the
+        // first search is still correct.
+        com.dwinovo.animus.pathing.cache.LoadedChunks loaded =
+                com.dwinovo.animus.pathing.cache.PathCaches.peek(level);
+        BlockGetter view = loaded != null
+                ? new com.dwinovo.animus.pathing.cache.CachedNavView(loaded, level)
+                : new NavSnapshot(level);
+        return new NavContext(level, view, snapshotInventory(liveInventory), true);
     }
 
     /** A point-in-time copy of {@code live} (same slot layout, copied stacks) — read-only fodder for

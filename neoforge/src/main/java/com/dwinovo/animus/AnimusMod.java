@@ -37,8 +37,6 @@ public class AnimusMod {
                 com.dwinovo.animus.entity.AnimusCommands.register(e.getDispatcher()));
         // When an owner logs in, bring their dormant companions back.
         NeoForge.EVENT_BUS.addListener(AnimusMod::onPlayerLoggedIn);
-        // Keep the off-thread pathfinding cache covered as companions travel.
-        NeoForge.EVENT_BUS.addListener(AnimusMod::onChunkLoad);
 
         CommonClass.init();
         Constants.LOG.info("Animus mod initialised on NeoForge.");
@@ -53,15 +51,8 @@ public class AnimusMod {
     private static void onServerTickPost(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
         com.dwinovo.animus.task.tasks.ScanBlocksJob.tick(event.getServer());
         com.dwinovo.animus.task.CompanionTickDispatcher.tick(event.getServer());
-        // Maintain the off-thread pathfinding cache: seed/refresh/prune per companion-level.
+        // Snapshot loaded chunks near companions each tick, for the off-thread planner to read live.
         com.dwinovo.animus.pathing.cache.PathCaches.serverTick(event.getServer());
-    }
-
-    private static void onChunkLoad(net.neoforged.neoforge.event.level.ChunkEvent.Load event) {
-        if (event.getLevel() instanceof net.minecraft.server.level.ServerLevel sl
-                && event.getChunk() instanceof net.minecraft.world.level.chunk.LevelChunk lc) {
-            com.dwinovo.animus.pathing.cache.PathCaches.onChunkLoaded(sl, lc);
-        }
     }
 
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {

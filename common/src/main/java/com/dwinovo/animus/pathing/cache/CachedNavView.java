@@ -2,27 +2,33 @@ package com.dwinovo.animus.pathing.cache;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.material.FluidState;
 
 /**
- * A {@link BlockGetter} over a {@link SectionCache} — the search-side twin of
- * {@link com.dwinovo.animus.pathing.calc.NavSnapshot} (which reads the live world). Block states come
- * from the immutable {@link CompactSection} copies (race-free, so a worker thread can read them) and
- * are memoized per search — each cell fetched once, exactly like NavSnapshot. Because it implements
- * {@link BlockGetter}, {@link com.dwinovo.animus.pathing.util.BlockHelper} reads it unchanged.
+ * A {@link BlockGetter} over a {@link LoadedChunks} snapshot — the search-side world view, the
+ * server-side twin of Baritone's {@code BlockStateInterface}. Loaded chunk → read its LIVE section
+ * palette ({@code useTheRealWorld}); not in the snapshot (unloaded) → AIR (Baritone's miss). Reads are
+ * memoized per search (each cell once), like {@link com.dwinovo.animus.pathing.calc.NavSnapshot}, and
+ * {@link com.dwinovo.animus.pathing.util.BlockHelper} reads it unchanged.
  */
 public final class CachedNavView implements BlockGetter {
 
-    private final SectionCache cache;
+    private static final BlockState AIR = Blocks.AIR.defaultBlockState();
+
+    private final LoadedChunks loaded;
     private final Level level;
     private final Long2ObjectOpenHashMap<BlockState> memo = new Long2ObjectOpenHashMap<>();
 
-    public CachedNavView(SectionCache cache, Level level) {
-        this.cache = cache;
+    public CachedNavView(LoadedChunks loaded, Level level) {
+        this.loaded = loaded;
         this.level = level;
     }
 
@@ -33,9 +39,32 @@ public final class CachedNavView implements BlockGetter {
         if (cached != null) {
             return cached;
         }
-        BlockState state = cache.get(pos.getX(), pos.getY(), pos.getZ());
+        BlockState state = read(pos.getX(), pos.getY(), pos.getZ());
         memo.put(key, state);
         return state;
+    }
+
+    private BlockState read(int x, int y, int z) {
+        if (y < level.getMinY() || y >= level.getMinY() + level.getHeight()) {
+            return AIR;
+        }
+        LevelChunk chunk = loaded.at(SectionPos.blockToSectionCoord(x), SectionPos.blockToSectionCoord(z));
+        if (chunk == null) {
+            return AIR;   // unloaded / outside the snapshot — Baritone's miss → AIR
+        }
+        try {
+            int idx = level.getSectionIndex(y);
+            LevelChunkSection[] sections = chunk.getSections();
+            if (idx < 0 || idx >= sections.length) {
+                return AIR;
+            }
+            LevelChunkSection section = sections[idx];
+            return section.hasOnlyAir() ? AIR : section.getBlockState(x & 15, y & 15, z & 15);
+        } catch (RuntimeException race) {
+            // An off-thread read raced a main-thread palette resize (rare). Yield AIR; the executor
+            // re-costs against the live world and replans, so a one-off bad cell self-corrects.
+            return AIR;
+        }
     }
 
     @Override
@@ -45,10 +74,8 @@ public final class CachedNavView implements BlockGetter {
 
     @Override
     public BlockEntity getBlockEntity(BlockPos pos) {
-        // P-B runs the search on the MAIN thread, so a live lookup is safe and keeps the don't-grief
-        // check (BlockHelper.shouldAvoidBreaking) exact. P-C TODO: when the search moves off-thread,
-        // this must NOT touch the live level — bake a hasBlockEntity bit into CompactSection and read
-        // that here instead (see docs/PATHFINDING_ASYNC.md §5.2).
+        // Main-thread (P-B) live lookup keeps the don't-grief check (shouldAvoidBreaking) exact. P-C:
+        // when the search runs off-thread, read via the snapshot's chunk ref instead of the live level.
         return level.getBlockEntity(pos);
     }
 
