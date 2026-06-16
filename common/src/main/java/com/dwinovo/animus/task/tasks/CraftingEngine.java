@@ -57,8 +57,10 @@ public final class CraftingEngine {
 
     private CraftingEngine() {}
 
-    /** A resolved recipe choice plus the derived facts the goal needs. */
-    public record Plan(CraftingRecipe recipe, boolean needsTable, ItemStack resultPreview) {}
+    /** A resolved recipe choice plus the derived facts the goal needs. The {@code holder} is kept
+     *  so the goal can drive a REAL crafting menu via vanilla's recipe-book placement. */
+    public record Plan(RecipeHolder<CraftingRecipe> holder, CraftingRecipe recipe,
+                       boolean needsTable, ItemStack resultPreview) {}
 
     /**
      * Reverse-lookup a crafting recipe producing {@code target}. Among all
@@ -71,10 +73,9 @@ public final class CraftingEngine {
      * the target at all.
      */
     public static Plan findRecipe(ServerLevel level, Container inv, Item target) {
-        List<CraftingRecipe> matches = new ArrayList<>();
+        List<RecipeHolder<CraftingRecipe>> matches = new ArrayList<>();
         for (RecipeHolder<?> holder : level.recipeAccess().getRecipes()) {
-            Recipe<?> recipe = holder.value();
-            if (!(recipe instanceof CraftingRecipe cr)) continue;
+            if (!(holder.value() instanceof CraftingRecipe cr)) continue;
             PlacementInfo info = cr.placementInfo();
             // Skip special / no-ingredient recipes (firework, map-clone, …):
             // they have no static material list to gather.
@@ -86,24 +87,27 @@ public final class CraftingEngine {
                 continue;   // input-dependent result — not reverse-lookup-able
             }
             if (out.isEmpty() || out.getItem() != target) continue;
-            matches.add(cr);
+            @SuppressWarnings("unchecked")  // value is a CraftingRecipe (checked above)
+            RecipeHolder<CraftingRecipe> craftingHolder = (RecipeHolder<CraftingRecipe>) holder;
+            matches.add(craftingHolder);
         }
         if (matches.isEmpty()) return null;
 
-        CraftingRecipe chosen = matches.get(0);
+        RecipeHolder<CraftingRecipe> chosen = matches.get(0);
         int fewestMissing = Integer.MAX_VALUE;
-        for (CraftingRecipe cr : matches) {
-            int missing = countMissing(inv, cr.placementInfo().ingredients());
+        for (RecipeHolder<CraftingRecipe> h : matches) {
+            int missing = countMissing(inv, h.value().placementInfo().ingredients());
             if (missing == 0) {           // craftable right now → take it outright
-                chosen = cr;
+                chosen = h;
                 break;
             }
             if (missing < fewestMissing) {
                 fewestMissing = missing;
-                chosen = cr;
+                chosen = h;
             }
         }
-        return new Plan(chosen, needsTable(chosen), chosen.assemble(CraftingInput.EMPTY));
+        CraftingRecipe recipe = chosen.value();
+        return new Plan(chosen, recipe, needsTable(recipe), recipe.assemble(CraftingInput.EMPTY));
     }
 
     /** Does this recipe require a 3×3 grid (crafting table)? */

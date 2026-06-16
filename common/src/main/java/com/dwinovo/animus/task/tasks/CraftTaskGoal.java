@@ -1,6 +1,7 @@
 package com.dwinovo.animus.task.tasks;
 
 import com.dwinovo.animus.entity.AnimusPlayer;
+import com.dwinovo.animus.pathing.exec.Interaction;
 import com.dwinovo.animus.pathing.exec.PlayerNav;
 import com.dwinovo.animus.pathing.util.BlockHelper;
 import com.dwinovo.animus.pathing.util.BlockScanner;
@@ -12,6 +13,8 @@ import com.dwinovo.animus.task.TaskState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -71,6 +74,9 @@ public final class CraftTaskGoal implements CompanionTask {
     private BlockPos tablePos;
     private boolean placedTableOurselves = false;
     private PlayerNav nav;
+    /** The real crafting-table menu while a 3×3 craft runs (so observer mods see the
+     *  open/craft/close); null when closed or for 2×2 inventory crafting. */
+    private CraftingMenu craftMenu;
 
     private String doneReason = "done";
 
@@ -86,6 +92,7 @@ public final class CraftTaskGoal implements CompanionTask {
         this.tablePos = null;
         this.placedTableOurselves = false;
         this.nav = null;
+        this.craftMenu = null;
     }
 
     @Override
@@ -168,17 +175,67 @@ public final class CraftTaskGoal implements CompanionTask {
     // ---- CRAFT: consume materials and produce, bounded per tick ----
 
     private void tickCraft() {
+        // 2×2 has no separate container to observe (it's the player's own inventory grid), so it
+        // stays the fast virtual path. 3×3 opens the table's REAL menu so observer mods see it.
+        if (!plan.needsTable()) {
+            tickCraftVirtual();
+            return;
+        }
         // A table we walked to could have been removed; re-validate before relying on it.
-        if (plan.needsTable()
-                && player.level().getBlockState(tablePos).getBlock() != Blocks.CRAFTING_TABLE) {
+        if (player.level().getBlockState(tablePos).getBlock() != Blocks.CRAFTING_TABLE) {
+            closeMenu();
             phase = Phase.FIND_TABLE;
             return;
         }
+        if (!(player.level() instanceof ServerLevel sl)) {
+            closeMenu();
+            fail("not on a server level");
+            return;
+        }
+        // Open the table's real CraftingMenu once (a genuine right-click on the table → menu open).
+        if (craftMenu == null) {
+            Interaction.useBlock(player, tablePos, InteractionHand.MAIN_HAND).tick();
+            if (!(player.containerMenu instanceof CraftingMenu opened)) {
+                return;   // menu not open yet (settling / line of sight) — retry next tick
+            }
+            craftMenu = opened;
+        }
+        int did = 0;
+        while (r.getProduced() < r.count && did < CRAFTS_PER_TICK) {
+            // Vanilla recipe-book auto-fill: places our recipe's ingredients into the grid by its
+            // real shape (handles modded + shaped layouts), then the menu resolves the result slot.
+            craftMenu.handlePlacement(false, false, plan.holder(), sl, player.getInventory());
+            ItemStack result = craftMenu.getSlot(CraftingMenu.RESULT_SLOT).getItem();
+            if (result.isEmpty()) {                 // couldn't fill the grid → out of materials
+                String missing = CraftingEngine.describeMissing(player.getInventory(), plan.recipe());
+                int made = r.getProduced();
+                closeMenu();
+                doneReason = made > 0
+                        ? "made " + made + "/" + r.count + ", then ran out (missing " + missing + ")"
+                        : "missing materials: " + missing;
+                r.setState(made > 0 ? TaskState.SUCCESS : TaskState.FAILED);
+                return;
+            }
+            int producedThisCraft = result.getCount();
+            craftMenu.quickMoveStack(player, CraftingMenu.RESULT_SLOT);   // shift-click result → craft into inventory
+            r.addProduced(producedThisCraft);
+            player.setDebugTask(r.describe());
+            did++;
+        }
+        if (r.getProduced() >= r.count) {
+            closeMenu();
+            doneReason = "crafted " + r.getProduced() + " " + r.label;
+            r.setState(TaskState.SUCCESS);
+        }
+        // else: more to do — continue next tick (menu stays open across the batch).
+    }
+
+    /** 2×2 inventory crafting — the original virtual path (no GUI to open). */
+    private void tickCraftVirtual() {
         int did = 0;
         while (r.getProduced() < r.count && did < CRAFTS_PER_TICK) {
             ItemStack result = CraftingEngine.craftOnce(player, plan.recipe());
             if (result == null) {
-                // Ran out of materials mid-run — partial success if we made any.
                 String missing = CraftingEngine.describeMissing(player.getInventory(), plan.recipe());
                 doneReason = r.getProduced() > 0
                         ? "made " + r.getProduced() + "/" + r.count + ", then ran out (missing " + missing + ")"
@@ -194,7 +251,14 @@ public final class CraftTaskGoal implements CompanionTask {
             doneReason = "crafted " + r.getProduced() + " " + r.label;
             r.setState(TaskState.SUCCESS);
         }
-        // else: more to do — continue next tick.
+    }
+
+    /** Close the open table menu (returns any grid leftovers to the inventory, fires the close event). */
+    private void closeMenu() {
+        if (craftMenu != null) {
+            player.closeContainer();
+            craftMenu = null;
+        }
     }
 
     // ---- helpers ----
@@ -238,6 +302,7 @@ public final class CraftTaskGoal implements CompanionTask {
     @Override
     public TaskResult buildResult(TaskState finalState) {
         if (nav != null) nav.stop();
+        closeMenu();   // never leave the table menu open (timeout / cancel land here too)
 
         Map<String, Object> data = new HashMap<>();
         data.put("item", r.label);
