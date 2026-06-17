@@ -161,10 +161,12 @@ public final class LookupRecipeTool implements AnimusTool {
                 + "To make it —\n"
                 + "• [crafting]: just `craft " + name + "` — it does the whole thing (2x2 on your own "
                 + "grid; a 3x3 recipe needs a crafting table open first via interact_at).\n"
-                + "• [smelting|blasting|smoking]: interact_at the furnace, transfer the input into the "
-                + "top slot + fuel into the bottom, then wait and take the output.\n"
-                + "• [stonecutter] / [smithing]: interact_at the station, then inspect_gui and transfer "
-                + "the input(s) into their slot(s) and take the output.";
+                + "• [smelting|blasting|smoking]: interact_at the furnace, then transfer the input and "
+                + "the fuel with NO `to` — the menu routes each to its slot. Wait, then transfer the "
+                + "output back out.\n"
+                + "• [stonecutter]: interact_at it, transfer the input (no `to` routes it in), take the "
+                + "output. [smithing]: interact_at it, inspect_gui, then transfer template + base + "
+                + "addition each into its own slot (give `to`).";
     }
 
     private static String format(CraftingRecipe recipe, ItemStack result) {
