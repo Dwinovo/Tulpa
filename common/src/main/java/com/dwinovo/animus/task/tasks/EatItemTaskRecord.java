@@ -4,12 +4,10 @@ import com.dwinovo.animus.task.TaskRecord;
 import net.minecraft.world.item.Item;
 
 /**
- * Typed task descriptor for {@code eat_item}: consume a food from the entity's
- * inventory to heal itself. Unlike {@code use_item} (which routes through a fake
- * player and would feed the fake player, not the Animus), this applies directly
- * to the Animus. The goal ({@link EatItemTaskGoal}) eats it as a real, timed
- * process — chewing particles + sound over the food's consume duration — and
- * only heals / applies the food's effects once eating completes.
+ * Typed task descriptor for {@code eat_item}: consume a food / drink from the
+ * companion's inventory. {@link EatCompanionTask} eats it natively (the player
+ * body's own held-use path), so hunger + saturation + consume effects apply
+ * exactly as they do for a real player when the chew completes.
  */
 public final class EatItemTaskRecord extends TaskRecord {
 

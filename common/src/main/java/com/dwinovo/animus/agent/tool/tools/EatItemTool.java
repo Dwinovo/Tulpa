@@ -36,15 +36,14 @@ public final class EatItemTool implements AnimusTool {
 
     @Override
     public String description() {
-        return "Eat a food item from your inventory to heal yourself. It's a real "
-                + "timed action — chewing particles and sound play over the food's "
-                + "eat duration, and you only heal + gain the food's effects (e.g. a "
-                + "golden apple's regeneration/absorption) once eating finishes. "
-                + "Healing scales with the food's nutrition (cooked_beef = 8 HP). "
-                + "Fails if you don't carry the item, it isn't edible, or you're "
-                + "already at full HP (the food is kept). NOTE: during hunt/shoot "
-                + "you auto-eat on your own when HP runs low and the result reports "
-                + "it — use this tool to top up before or after fights, not during.";
+        return "Eat or drink a consumable from your inventory. It's a real timed "
+                + "action — chewing animation, particles and sound play over the eat "
+                + "duration, and only when it finishes does it restore your hunger + "
+                + "saturation and apply the item's effects (e.g. a golden apple's "
+                + "regeneration/absorption). Your HP then regenerates naturally from "
+                + "saturation, the same as a real player — so eat to refill hunger and "
+                + "let health recover. Fails if you don't carry it, it isn't a "
+                + "consumable, or your hunger is already full (the food is kept).";
     }
 
     @Override
