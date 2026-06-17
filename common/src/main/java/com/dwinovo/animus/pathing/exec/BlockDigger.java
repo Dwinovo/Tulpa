@@ -1,6 +1,7 @@
 package com.dwinovo.animus.pathing.exec;
 
 import com.dwinovo.animus.entity.AnimusPlayer;
+import com.dwinovo.animus.pathing.util.BlockHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
@@ -73,18 +74,33 @@ public final class BlockDigger {
             InputDriver.halt(player);
             return false;
         }
-        if (pos == null || !pos.equals(target)) {
-            start(target);
+        // Resolve what to actually swing at this tick. First try a raycast-VERIFIED face on the
+        // target (Baritone RotationUtils.reachable). If the target is OCCLUDED — no face in line of
+        // sight (leaves in front, a tight column overhead) — fall back to Baritone's "break the
+        // incorrect block" (Movement.prepared): aim at the target's centre and break whatever the
+        // crosshair actually hits, opening the way, instead of holding forever for a clear angle.
+        // Our one guard over Baritone: never grind a do_not_break / container block as the occluder.
+        BlockHitResult hit = reachableHit(target);
+        BlockPos effective = target;
+        if (hit == null) {
+            BlockHitResult center = centerRaycast(target);
+            if (center != null && !center.getBlockPos().equals(target)
+                    && !BlockHelper.shouldAvoidBreaking(level, center.getBlockPos())) {
+                hit = center;
+                effective = center.getBlockPos();
+            }
         }
         InputDriver.halt(player);
-        // Aim the crosshair at a raycast-VERIFIED point on the block (Baritone
-        // RotationUtils.reachable) and break the face the ray actually hits — like a real
-        // player. If nothing on the block is in line of sight, don't break this tick
-        // (Baritone: no reachable rotation → no CLICK_LEFT); hold for a clear angle.
-        BlockHitResult hit = reachableHit(pos);
         if (hit == null) {
-            return false;
+            return false;                            // no clear shot, nothing safe in the way — hold
         }
+        if (pos == null || !pos.equals(effective)) {
+            start(effective);
+        }
+        // dig() may be clearing an OCCLUDER this tick, not the target; report the break (true) ONLY
+        // when the TARGET itself goes, so callers that count mined targets / treat the cell as cleared
+        // aren't fooled by a leaf we broke just to open the line of sight.
+        boolean targetBreak = effective.equals(target);
         InputDriver.lookAt(player, hit.getLocation());
         Direction side = hit.getDirection();
         BlockState state = level.getBlockState(pos);
@@ -97,13 +113,13 @@ public final class BlockDigger {
             if (player.getAbilities().instabuild) {
                 blockHitDelay = BLOCK_HIT_DELAY;
                 reset();
-                return true;                         // creative: START broke it
+                return targetBreak;                  // creative: START broke it
             }
             if (!state.isAir()) {
                 state.attack(level, pos, player);    // left-click punch
                 if (state.getDestroyProgress(player, level, pos) >= 1.0f) {
                     reset();                         // instamine: START broke it (no STOP — Carpet)
-                    return true;
+                    return targetBreak;
                 }
             }
             return false;                            // begin accumulating next tick
@@ -121,7 +137,7 @@ public final class BlockDigger {
                     ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, side, level.getMaxY(), -1);
             blockHitDelay = BLOCK_HIT_DELAY;
             reset();
-            return true;
+            return targetBreak;
         }
         return false;
     }
@@ -215,6 +231,31 @@ public final class BlockDigger {
             }
         }
         return null;
+    }
+
+    /**
+     * A single ray from the eye to {@code target}'s shape centre — used as Baritone's "break the
+     * incorrect block" fallback when {@link #reachableHit} finds no clear face: the ray lands on the
+     * occluder (a leaf / a tight overhead), and we break THAT to open the way. Null on a miss / out
+     * of reach. ({@link #reachableHit} already tries the centre first, so if that hit the target it
+     * would have returned it; reaching here means the centre ray hits something else.)
+     */
+    private BlockHitResult centerRaycast(BlockPos target) {
+        Level level = player.level();
+        Vec3 eye = player.getEyePosition();
+        double reach = player.blockInteractionRange();
+        VoxelShape shape = level.getBlockState(target).getShape(level, target);
+        Vec3 center = shape.isEmpty()
+                ? Vec3.atCenterOf(target)
+                : offsetOn(target, shape, 0.5, 0.5, 0.5);
+        Vec3 dir = center.subtract(eye);
+        if (dir.lengthSqr() < 1.0e-8) {
+            return null;
+        }
+        Vec3 end = eye.add(dir.normalize().scale(reach));
+        BlockHitResult res = level.clip(new ClipContext(
+                eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
+        return res.getType() == HitResult.Type.BLOCK ? res : null;
     }
 
     /** A point on the block's shape per Baritone's offset formula:
