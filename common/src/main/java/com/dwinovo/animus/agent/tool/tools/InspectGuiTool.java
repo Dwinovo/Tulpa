@@ -5,6 +5,7 @@ import com.dwinovo.animus.entity.AnimusPlayer;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
@@ -77,19 +78,27 @@ public final class InspectGuiTool implements AnimusTool {
                 container.append(line);  // all container slots, empty included (placement targets)
             }
         }
-        // Machine progress lives in the menu's data slots, not the item slots. Vanilla exposes the
-        // furnace family's via typed getters; surface it so smelting progress is visible here too.
-        String progress = "";
-        if (menu instanceof net.minecraft.world.inventory.AbstractFurnaceMenu furnace) {
-            progress = "smelt progress: cook " + Math.round(furnace.getBurnProgress() * 100) + "%, fuel "
-                    + Math.round(furnace.getLitProgress() * 100) + "% left, lit=" + furnace.isLit() + "\n";
+        // Data slots = the menu's OTHER synced channel, parallel to the item slots: the ints a real
+        // screen reads to draw progress / fuel / energy bars. Read them generically (no per-menu
+        // special-casing) — meaning is GUI-specific, the model/skill interprets (e.g. a furnace's are
+        // [litTime, litDuration, cookProgress, cookTotal], so cook% = cookProgress/cookTotal).
+        String dataLine = "";
+        List<DataSlot> data = ((com.dwinovo.animus.mixin.MenuDataSlotsAccessor) (Object) menu).animus$dataSlots();
+        if (!data.isEmpty()) {
+            StringBuilder d = new StringBuilder("data values (machine state — progress/fuel/energy/…, "
+                    + "meaning is GUI-specific): [");
+            for (int i = 0; i < data.size(); i++) {
+                if (i > 0) d.append(", ");
+                d.append(data.get(i).get());
+            }
+            dataLine = d.append("]\n").toString();
         }
 
         return "GUI: " + menu.getClass().getSimpleName() + "\n"
                 + "container slots:\n" + (container.length() == 0 ? "  (none)\n" : container)
                 + "your inventory (non-empty):\n" + (mine.length() == 0 ? "  (empty)\n" : mine)
                 + "cursor: " + describe(menu.getCarried()) + "\n"
-                + progress
+                + dataLine
                 + "tip: click_slot type=quick_move shift-moves a whole stack; type=pickup for precise counts.";
     }
 

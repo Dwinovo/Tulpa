@@ -27,6 +27,14 @@ You move items through real GUIs, exactly like a player: open the block, look at
 
 `click_slot` returns the cursor + that slot after the click, so you can chain clicks without re-inspecting every time.
 
+## Reading machine progress
+
+`inspect_gui` also shows a `data values: [...]` line — the menu's synced ints (the same numbers a real GUI uses to draw progress/fuel/energy bars), separate from the item slots. Meaning is machine-specific; for a **vanilla furnace** they are `[litTime, litDuration, cookProgress, cookTotal]`, so:
+- cook % = `cookProgress / cookTotal` (the smelting arrow),
+- still burning if `litTime > 0`.
+
+So to check a furnace: `interact_at` it → `inspect_gui` → read the input count (slots) + the data values. The output slot filling up is also a clear "an item finished" signal.
+
 ## Recipes (vanilla path)
 
 For crafting use the `craft` tool (it fills the grid from the recipe and takes the result). For smelting use `load_furnace` / `collect_furnace` (they compute fuel and award XP). Those are higher-level helpers; this skill is for **raw item movement** and for any GUI those helpers don't cover.
