@@ -37,8 +37,16 @@ So to check a furnace: `interact_at` it → `inspect_gui` → read the input cou
 
 ## Crafting & smelting
 
-- **Crafting** has a dedicated `craft` tool (it fills the grid from the recipe and takes the result) — use it; you never hand-place a crafting grid.
-- **Smelting** has NO special tool — a furnace is just another container you drive with these primitives:
+Neither has a dedicated tool — you drive the GUI yourself, the same as any container.
+
+- **Crafting**:
+  1. `lookup_recipe <item>` — get the recipe's ingredients + grid layout (reads the game's recipe data, so modded recipes work too, like JEI).
+  2. `interact_at button=right` a crafting table (3×3). Small recipes (≤2×2) also fit your own 2×2 inventory grid — but `interact_at` on a table is simplest.
+  3. `inspect_gui` — the grid slots (row-major; slot 0 = result).
+  4. `click_slot type=pickup` each ingredient into its cell, matching the recipe grid (a W×H shaped recipe goes in the top-left; shapeless = place anywhere). Right-click (button=1) places one at a time for cells that need a single item.
+  5. `click_slot type=quick_move` the result slot (0) to take the output — repeat to craft more.
+  6. `close_gui`.
+- **Smelting** — a furnace is just another container you drive with these primitives:
   1. `interact_at button=right` the furnace.
   2. `click_slot type=quick_move` your raw item (the menu routes it to the input slot) and your fuel (routes to the fuel slot).
      - **Fuel rule**: 1 coal/charcoal smelts 8 items; a log/plank ~1.5. So for N items add about ⌈N/8⌉ coal. Don't overload — surplus fuel just sits in the slot.

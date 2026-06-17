@@ -9,7 +9,6 @@ import com.dwinovo.animus.agent.tool.tools.GetWorldInfoTool;
 import com.dwinovo.animus.agent.tool.tools.InspectBlockTool;
 import com.dwinovo.animus.agent.tool.tools.LoadSkillTool;
 import com.dwinovo.animus.agent.tool.tools.WaitTool;
-import com.dwinovo.animus.agent.tool.tools.CraftTool;
 import com.dwinovo.animus.agent.tool.tools.EquipTool;
 import com.dwinovo.animus.agent.tool.tools.HuntTool;
 import com.dwinovo.animus.agent.tool.tools.ShootTool;
@@ -66,7 +65,6 @@ public class CommonClass {
         ToolRegistry.register(new com.dwinovo.animus.agent.tool.tools.LocateBiomeTool());
         ToolRegistry.register(new CollectItemsTool());
         ToolRegistry.register(new MineBlockTool());
-        ToolRegistry.register(new CraftTool());
         ToolRegistry.register(new EquipTool());
         ToolRegistry.register(new PlaceBlockTool());
         ToolRegistry.register(new BreakBlockTool());
@@ -83,6 +81,7 @@ public class CommonClass {
         ToolRegistry.register(new GetOwnerStatusTool());
 
         // Shared perception / planning tools.
+        ToolRegistry.register(new com.dwinovo.animus.agent.tool.tools.LookupRecipeTool());
         ToolRegistry.register(new ScanNearbyEntitiesTool());
         ToolRegistry.register(new ScanBlocksTool());
         ToolRegistry.register(new InspectBlockTool());

@@ -40,8 +40,6 @@ public final class CompanionTaskFactory {
         if (record instanceof DropItemsTaskRecord r) return new DropCompanionTask(player, r);
         if (record instanceof BreakBlockTaskRecord r) return new BreakBlockCompanionTask(player, r);
         if (record instanceof EatItemTaskRecord r) return new EatCompanionTask(player, r);
-        if (record instanceof com.dwinovo.animus.task.tasks.CraftTaskRecord r)
-            return new com.dwinovo.animus.task.tasks.CraftTaskGoal(player, r);
         if (record instanceof HuntTaskRecord r) return new HuntCompanionTask(player, r);
         if (record instanceof ShootTaskRecord r) return new ShootCompanionTask(player, r);
         if (record instanceof com.dwinovo.animus.task.tasks.CollectItemsTaskRecord r)
