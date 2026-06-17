@@ -22,7 +22,7 @@ You move items through real GUIs, exactly like a player: open the block, look at
 - **quick_move** — shift-click: sends that slot's whole stack to the other side, routed by the menu (a smeltable → a furnace's input, fuel → fuel, anything → a chest; a **crafting result → crafts repeatedly until the grid ingredients run out**). Use for "dump my cobblestone in" or "grab all the iron".
 - **pickup** — `button=0` picks up / places the WHOLE stack onto/from your cursor; `button=1` grabs half / places exactly ONE (use button=1 to put one item per crafting cell).
 - **swap** — `button` = hotbar index 0-8 (equip from a slot).
-- **throw** — drop from the slot (`button=1` = one, `button=0` = whole stack).
+- **throw** — drop from the slot (`button=0` = one, `button=1` = the whole stack); only works when your cursor is empty.
 
 **Deposit / take whole stacks** — batch the quick_moves: `click_slot clicks=[{slot:S1,type:quick_move},{slot:S2,type:quick_move},…]`.
 

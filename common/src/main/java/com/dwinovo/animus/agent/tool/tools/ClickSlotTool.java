@@ -31,18 +31,20 @@ public final class ClickSlotTool implements AnimusTool {
 
     @Override
     public String description() {
-        return "Run a SEQUENCE of slot clicks in the GUI you have open (inspect_gui first for indices). "
-                + "Pass `clicks` as a list — they run in order, so do a whole operation in ONE call "
-                + "(e.g. craft: pick up an ingredient, place it in each cell, take the result).\n"
+        return "Move items in the GUI you have open by clicking its slots (inspect_gui first for "
+                + "indices). Pass `clicks` as a LIST — they run in order, so do a whole operation "
+                + "(deposit several stacks, take an exact count) in ONE call. For crafting / smelting "
+                + "prefer place_recipe; reach for click_slot to move items, drive a custom modded "
+                + "machine, or fix things up.\n"
                 + "Each click: {slot, type, button}.\n"
-                + "• type=quick_move: shift-click — whole stack to the other section (deposit/take; on a "
-                + "crafting result it crafts repeatedly until the grid ingredients run out — put a FULL "
-                + "stack in the grid to craft the whole stack at once).\n"
-                + "• type=pickup: button=0 pick up / place whole stack; button=1 grab half / place ONE "
-                + "(use to put one item per crafting cell).\n"
-                + "• type=swap: button = hotbar index 0-8. • type=throw: drop from the slot.\n"
+                + "• type=quick_move: shift-click — sends the slot's whole stack to the other section, "
+                + "routed by the menu (deposit/take; a smeltable to a furnace input, etc.).\n"
+                + "• type=pickup: button=0 pick up / place the whole stack; button=1 grab half / place "
+                + "ONE.\n"
+                + "• type=swap: button = hotbar index 0-8 (equip from the slot). • type=throw: button=0 "
+                + "drops ONE, button=1 drops the whole stack (your cursor must be empty).\n"
                 + "Returns each step's result (slot + cursor after, [NO CHANGE] if a slot refused it). "
-                + "Stops at an out-of-range slot.";
+                + "Stops at an out-of-range or errored click (earlier steps still applied).";
     }
 
     @Override
@@ -114,7 +116,16 @@ public final class ClickSlotTool implements AnimusTool {
             ItemStack beforeSlot = menu.slots.get(slot).getItem().copy();
             ItemStack beforeCursor = menu.getCarried().copy();
 
-            menu.clicked(slot, button, input, entity);
+            try {
+                menu.clicked(slot, button, input, entity);
+            } catch (RuntimeException ex) {
+                // clicked() mutates the menu step-by-step; a throwing click (e.g. a finicky modded
+                // slot) must not discard the log of the steps that already applied. Report + stop.
+                out.append(step).append(". ").append(input.name().toLowerCase()).append(" slot ")
+                        .append(slot).append(" — ERROR: ").append(ex.getMessage())
+                        .append(" (stopped here; earlier steps already applied)\n");
+                break;
+            }
 
             ItemStack now = menu.slots.get(slot).getItem();
             ItemStack cursor = menu.getCarried();
