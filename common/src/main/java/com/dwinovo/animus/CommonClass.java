@@ -2,14 +2,12 @@ package com.dwinovo.animus;
 
 import com.dwinovo.animus.agent.tool.ToolRegistry;
 import com.dwinovo.animus.agent.tool.tools.BreakBlockTool;
-import com.dwinovo.animus.agent.tool.tools.DepositItemsTool;
 import com.dwinovo.animus.agent.tool.tools.DropItemsTool;
 import com.dwinovo.animus.agent.tool.tools.GetOwnerStatusTool;
 import com.dwinovo.animus.agent.tool.tools.GetSelfStatusTool;
 import com.dwinovo.animus.agent.tool.tools.GetWorldInfoTool;
 import com.dwinovo.animus.agent.tool.tools.InspectBlockTool;
 import com.dwinovo.animus.agent.tool.tools.LoadSkillTool;
-import com.dwinovo.animus.agent.tool.tools.TakeItemsTool;
 import com.dwinovo.animus.agent.tool.tools.WaitTool;
 import com.dwinovo.animus.agent.tool.tools.CraftTool;
 import com.dwinovo.animus.agent.tool.tools.EquipTool;
@@ -83,8 +81,10 @@ public class CommonClass {
         ToolRegistry.register(new EatItemTool());
         ToolRegistry.register(new WaitTool());
         ToolRegistry.register(new DropItemsTool());
-        ToolRegistry.register(new DepositItemsTool());
-        ToolRegistry.register(new TakeItemsTool());
+        // GUI primitives — interact_at opens a menu, then the model inspects + clicks it directly.
+        ToolRegistry.register(new com.dwinovo.animus.agent.tool.tools.InspectGuiTool());
+        ToolRegistry.register(new com.dwinovo.animus.agent.tool.tools.ClickSlotTool());
+        ToolRegistry.register(new com.dwinovo.animus.agent.tool.tools.CloseGuiTool());
         ToolRegistry.register(new GetSelfStatusTool());
         ToolRegistry.register(new GetOwnerStatusTool());
 

@@ -1,0 +1,65 @@
+---
+name: containers
+description: How to move items in/out of any container or machine GUI — chest, barrel, shulker, furnace, modded machine. The open → inspect_gui → click_slot → close_gui loop, with the fast path for simple deposit/take and the precise path for exact counts, plus error recovery.
+---
+
+# Skill: containers
+
+You move items through real GUIs, exactly like a player: open the block, look at the slots, click them, close. There is no "deposit this item" black box — you drive the menu yourself, which means it works for **any** container or machine (vanilla or modded) and you can **see and fix** what goes wrong.
+
+## The loop
+
+1. **Open** — `interact_at` with `button=right` on the container block (walk there first if needed; `interact_at` paths to it). This opens its GUI and leaves it open.
+2. **Look** — `inspect_gui`. Lists every slot: `index: item xN`, which side (container vs your inventory), and `[output]` for take-only slots (a furnace result, a machine product). Also shows your cursor.
+3. **Click** — `click_slot` to move items (see below).
+4. **Verify** — `inspect_gui` again if you need to confirm, especially after something unexpected.
+5. **Close** — `close_gui` when done. (It also auto-closes if you walk away.)
+
+## Moving items with click_slot
+
+- **Fast deposit / take (whole stack)** — `click_slot type=quick_move slot=<i>`. Shift-click: sends that slot's whole stack to the other side, routed by the menu (a smeltable goes to a furnace's input, fuel to fuel, anything to a chest). Use this for "dump my cobblestone in" or "grab all the iron".
+- **Exact count** — `quick_move` moves the WHOLE stack. For an exact number, use pickup:
+  1. `click_slot type=pickup button=0 slot=<source>` — picks the whole stack onto your cursor.
+  2. `click_slot type=pickup button=1 slot=<dest>` — right-click places ONE from the cursor. Repeat for N.
+  3. `click_slot type=pickup button=0 slot=<source>` — left-click the source again to drop the remainder back.
+- **Equip from a slot** — `type=swap button=<hotbar 0-8>`.
+- **Drop from a slot** — `type=throw button=1`.
+
+`click_slot` returns the cursor + that slot after the click, so you can chain clicks without re-inspecting every time.
+
+## Recipes (vanilla path)
+
+For crafting use the `craft` tool (it fills the grid from the recipe and takes the result). For smelting use `load_furnace` / `collect_furnace` (they compute fuel and award XP). Those are higher-level helpers; this skill is for **raw item movement** and for any GUI those helpers don't cover.
+
+## Common patterns
+
+**Store everything of one type into the nearest chest:**
+```
+interact_at button=right x,y,z         (the chest)
+inspect_gui                            (find your cobblestone in "your inventory")
+click_slot type=quick_move slot=<that slot>   (repeat per stack you hold)
+close_gui
+```
+
+**Take 10 iron from a chest (exact):**
+```
+interact_at button=right x,y,z
+inspect_gui                            (find the iron stack's slot in the container)
+click_slot type=pickup button=0 slot=<iron>      (grab the stack)
+click_slot type=pickup button=1 slot=<a free inventory slot>   (×10, places one each)
+click_slot type=pickup button=0 slot=<iron>      (put the rest back)
+close_gui
+```
+
+**Empty a furnace's output:** `inspect_gui` → the `[output]` slot → `click_slot type=quick_move slot=<output>`.
+
+## Error recovery (your advantage)
+
+Because you can `inspect_gui`, you are never blind:
+
+- **A `quick_move` moved nothing** → that slot is full on the other side, or routing refused it. Inspect: is the destination full? Is it an `[output]` slot (can't put INTO it)? Try a different slot or another container.
+- **Chest is full** → `inspect_gui` shows no empty container slots. Find another chest (scan / known_blocks) or take something out first.
+- **Cursor not empty after you thought you were done** → you're still holding an item; place it back into a slot before `close_gui` (closing returns it to your inventory anyway, but tidy up if a specific slot matters).
+- **"no GUI open"** → you didn't open one, or walked out of range and it closed. `interact_at` the block again.
+
+Always `close_gui` (or walk away) when finished so you don't leave a menu hanging.
