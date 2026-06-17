@@ -19,6 +19,9 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.world.item.crafting.SmithingRecipe;
+import net.minecraft.world.item.crafting.SmithingRecipeInput;
+import net.minecraft.world.item.crafting.StonecutterRecipe;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,12 +49,12 @@ public final class LookupRecipeTool implements AnimusTool {
 
     @Override
     public String description() {
-        return "Look up how to make an item — like JEI. Returns every recipe whose output is this item: "
-                + "crafting recipes (with the grid layout) AND smelting / blasting / smoking recipes "
-                + "(with the input + station), each tagged [crafting] / [smelting] / …. Then make it: "
-                + "open the matching station (crafting table / furnace / your 2x2 grid) and call "
-                + "place_recipe to auto-fill the ingredients. No recipe found = the item is mined or "
-                + "traded, not made.";
+        return "Look up how to make an item — like JEI. Returns every recipe whose output is this item, "
+                + "across all stations: crafting (with the grid layout), smelting / blasting / smoking, "
+                + "stonecutting, and smithing — each tagged [crafting] / [smelting] / [stonecutter] / "
+                + "[smithing] / …. Then make it: open the matching station and either place_recipe (for "
+                + "crafting tables & furnaces) or click_slot the inputs (stonecutter, smithing table). No "
+                + "recipe found = the item is mined or traded, not made.";
     }
 
     @Override
@@ -120,6 +123,32 @@ public final class LookupRecipeTool implements AnimusTool {
                     continue;
                 }
                 recipes.add(formatCooking(cook, result));
+            } else if (r instanceof StonecutterRecipe sc) {
+                ItemStack result;
+                try {
+                    result = sc.assemble(new SingleRecipeInput(ItemStack.EMPTY));     // ignores input
+                } catch (RuntimeException inputDependent) {
+                    continue;
+                }
+                if (result.isEmpty() || result.getItem() != target) {
+                    continue;
+                }
+                recipes.add("[stonecutter] " + describeIngredient(sc.input())
+                        + " -> makes " + result.getCount());
+            } else if (r instanceof SmithingRecipe sm) {
+                ItemStack result;
+                try {
+                    // Empty input: a transform recipe (netherite upgrade etc.) still yields its result
+                    // item; a cosmetic trim recipe yields the (empty) base, so it self-excludes.
+                    result = sm.assemble(new SmithingRecipeInput(
+                            ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY));
+                } catch (RuntimeException inputDependent) {
+                    continue;
+                }
+                if (result.isEmpty() || result.getItem() != target) {
+                    continue;
+                }
+                recipes.add(formatSmithing(sm, result));
             }
         }
 
@@ -128,11 +157,12 @@ public final class LookupRecipeTool implements AnimusTool {
                     + "crafted or smelted.";
         }
         return "recipe(s) for " + name + ":\n\n" + String.join("\n\n", recipes) + "\n\n"
-                + "To make it: open the matching station — interact_at a crafting table or furnace / "
-                + "blast furnace / smoker (small crafting recipes also fit your own 2x2 grid) — then call "
-                + "place_recipe " + name + " to auto-fill the ingredients for you, and click_slot "
-                + "type=quick_move the result slot to take the output. (Smelting: also add fuel and wait.) "
-                + "Only hand-place with click_slot if place_recipe can't (a custom modded machine).";
+                + "To make it: interact_at the matching station, then —\n"
+                + "• [crafting] / [smelting|blasting|smoking]: place_recipe " + name + " auto-fills it "
+                + "(crafting recipes also fit your own 2x2 grid; smelting: add fuel + wait), then "
+                + "click_slot type=quick_move the result slot.\n"
+                + "• [stonecutter] / [smithing]: place_recipe can't drive these — inspect_gui, then "
+                + "click_slot the input(s) into their slot(s) and take the output.";
     }
 
     private static String format(CraftingRecipe recipe, ItemStack result) {
@@ -173,6 +203,14 @@ public final class LookupRecipeTool implements AnimusTool {
                 : "smelting (furnace)";
         return "[" + station + "] " + describeIngredient(recipe.input()) + " -> makes "
                 + result.getCount() + " (" + recipe.cookingTime() + " ticks)";
+    }
+
+    /** A smithing recipe (smithing table): base + addition, plus an optional template. */
+    private static String formatSmithing(SmithingRecipe recipe, ItemStack result) {
+        StringBuilder sb = new StringBuilder("[smithing] base " + describeIngredient(recipe.baseIngredient()));
+        recipe.additionIngredient().ifPresent(a -> sb.append(" + addition ").append(describeIngredient(a)));
+        recipe.templateIngredient().ifPresent(t -> sb.append(" + template ").append(describeIngredient(t)));
+        return sb.append(" -> makes ").append(result.getCount()).toString();
     }
 
     /** Name an ingredient: a single item directly, a shared-suffix tag as "planks (any)", else a few
