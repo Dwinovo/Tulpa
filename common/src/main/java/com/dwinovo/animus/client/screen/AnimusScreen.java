@@ -667,10 +667,14 @@ public final class AnimusScreen extends Screen {
             String status = str(it, "status");
             String content = str(it, "content");
             String glyph = switch (status) { case "completed" -> "✔"; case "in_progress" -> "▸"; default -> "○"; };
-            int color = switch (status) { case "completed" -> OK; case "in_progress" -> RUN; default -> TXT_MUTED; };
+            int color = switch (status) { case "completed" -> OK; case "in_progress" -> RUN; default -> TXT_FAINT; };
             txt(g, Component.literal(glyph), x, ly, color);
-            // one wrapped line of the content beside the glyph (colour baked into the FCS)
-            int textColor = status.equals("pending") ? TXT_MUTED : TXT;
+            // text hierarchy: in-progress = strong (current focus), completed = recede, pending = faint
+            int textColor = switch (status) {
+                case "in_progress" -> TXT;
+                case "completed" -> TXT_MUTED;
+                default -> TXT_FAINT;
+            };
             List<FormattedCharSequence> lines = font.split(colored(content, textColor), PLAN_W - 14);
             int sub = 0;
             for (FormattedCharSequence seq : lines) {
