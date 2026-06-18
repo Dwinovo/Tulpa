@@ -3,7 +3,6 @@ package com.dwinovo.tulpa.client.hud;
 import com.dwinovo.tulpa.agent.llm.ConvoState;
 import com.dwinovo.tulpa.agent.provider.AssistantTurn;
 import com.dwinovo.tulpa.client.agent.AgentLoopRegistry;
-import com.dwinovo.tulpa.client.agent.ClientDeaths;
 import com.dwinovo.tulpa.client.agent.TulpaRoster;
 import com.dwinovo.tulpa.client.agent.ClientTulpaLookup;
 import com.dwinovo.tulpa.client.screen.TulpaScreen;
@@ -42,7 +41,7 @@ public final class TulpaToasts {
 
     private static final int W = 172;            // bubble width
     private static final int AVATAR = 24;        // avatar head size
-    private static final int MARGIN = 6;
+    private static final int MARGIN = 0;         // avatar flush against the left window edge (no gap)
     private static final int STACK_GAP = 8;
     private static final int BUBBLE_GAP = 5;
     private static final int TIP_W = 6, TIP_H = 11;
@@ -134,12 +133,6 @@ public final class TulpaToasts {
         for (int i = 0; i < n; i++) {
             UUID uuid = entries.get(i).uuid();
             int ay = startY + i * (AVATAR + STACK_GAP);
-
-            if (ClientDeaths.isDead(uuid)) {                                 // dead — dimmed avatar + countdown
-                drawDeadAvatar(g, font, uuid, MARGIN, ay, th);
-                continue;
-            }
-
             Status s = STATUS.get(uuid);
             long sinceActive = s == null ? Long.MAX_VALUE : now - s.lastActivityMs;
 
@@ -164,17 +157,6 @@ public final class TulpaToasts {
         Nb.border(g, x, y, AVATAR, AVATAR, 2, th.border());
     }
 
-    /** A dead companion: the avatar under a dim veil with a bright respawn-countdown number on top. */
-    private static void drawDeadAvatar(GuiGraphicsExtractor g, Font font, UUID uuid, int x, int y, UiTheme th) {
-        PlayerFaceExtractor.extractRenderState(g, skinFor(uuid), x, y, AVATAR);
-        g.fill(x, y, x + AVATAR, y + AVATAR, 0xB0101010);   // dim veil → "out" (pragmatic stand-in for grayscale)
-        Nb.border(g, x, y, AVATAR, AVATAR, 2, th.border());
-        long rem = ClientDeaths.remainingMs(uuid);
-        if (rem >= 0) {
-            String s = String.valueOf((int) Math.ceil(rem / 1000.0));
-            Nb.text(g, font, s, x + (AVATAR - font.width(s)) / 2, y + (AVATAR - 8) / 2, th.cta());
-        }
-    }
 
     private static void drawBubble(GuiGraphicsExtractor g, Font font, int ax, int ay, Status s, long now) {
         int h = s.lines.size() * LINE_H + PADV * 2;
