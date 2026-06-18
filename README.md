@@ -9,7 +9,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft-26.1.2-62B47A?style=flat-square)
 ![Loaders](https://img.shields.io/badge/Loaders-Fabric%20%7C%20NeoForge-DE7C36?style=flat-square)
 ![Java](https://img.shields.io/badge/Java-25-007396?style=flat-square&logo=openjdk&logoColor=white)
-![License](https://img.shields.io/badge/License-PolyForm%20NC-4B6BFB?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-4B6BFB?style=flat-square)
 ![Status](https://img.shields.io/badge/status-WIP-A8731E?style=flat-square)
 
 [**Features**](#features) · [**Quick start**](#quick-start) · [**Usage**](#usage) · [**How it works**](#how-it-works) · [**Tools**](#what-it-can-do) · [**Config**](#configuration) · [**Build**](#building-from-source)
@@ -175,13 +175,7 @@ A standard Gradle **multiloader** project: shared code in `common/`, thin loader
 
 ## License
 
-Source-available, **non-commercial**.
-
-- **Code** → [PolyForm Noncommercial 1.0.0](LICENSE) — use, modify, and redistribute for any noncommercial purpose, with attribution.
-- **Art** (textures, sprites, sounds — anything under `assets/` that isn't source code) → [CC BY-NC 4.0](LICENSE-ART) — same terms.
-- **Commercial use of either requires a separate license from the author.**
-
-This is *source-available*, not OSI "open source" (that definition forbids non-commercial restrictions) — please describe it as **source-available**.
+Released under the [MIT License](LICENSE) — do whatever you like (use, modify, distribute, even commercially); just keep the copyright notice.
 
 <div align="center">
 <sub>Built on the <a href="https://github.com/jaredlll08/MultiLoader-Template">MultiLoader Template</a>.</sub>
