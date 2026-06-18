@@ -1,6 +1,7 @@
 package com.dwinovo.tulpa.client.screen;
 
 import com.dwinovo.tulpa.agent.llm.TulpaLlmClient;
+import com.dwinovo.tulpa.agent.model.ModelRegistry;
 import com.dwinovo.tulpa.agent.llm.ConvoState;
 import com.dwinovo.tulpa.agent.provider.AssistantTurn;
 import com.dwinovo.tulpa.agent.provider.LlmToolCall;
@@ -122,6 +123,9 @@ public final class TulpaScreen extends Screen {
 
     // settings tab widgets
     private ProviderDropdown providerDropdown;
+    private Dropdown modelDropdown;          // null when in custom-model mode
+    private boolean customModel;             // model is a free-text custom id (not a registry preset)
+    private static final String CUSTOM_MODEL = "__custom__";
     private EditBox apiKeyInput;
     private EditBox modelInput;
     private EditBox baseUrlInput;
@@ -214,6 +218,7 @@ public final class TulpaScreen extends Screen {
         input = null;
         sendButton = stopButton = compactButton = null;
         apiKeyInput = modelInput = baseUrlInput = null;
+        modelDropdown = null;
         summonInput = null;
         if (summoning) { buildSummonField(); return; }
         switch (tab) {
@@ -301,7 +306,18 @@ public final class TulpaScreen extends Screen {
         scroll = 0;
         pinBottom = true;
         if (t == Tab.ITEMS) requestInventory();
+        if (t == Tab.SETTINGS) initModelMode();
         rebuild();
+    }
+
+    /** Decide once (on entering Settings) whether the model field starts as a preset dropdown or a
+     *  custom text box: custom-provider or a configured model that isn't a known preset → custom. */
+    private void initModelMode() {
+        ITulpaConfig cfg = Services.CONFIG;
+        ModelRegistry.Provider mp = ModelRegistry.provider(LlmProviders.normalize(cfg.getProvider()));
+        boolean known = mp != null && mp.models().stream().anyMatch(m -> m.id().equals(cfg.getModel()));
+        customModel = (mp != null && mp.custom())
+                || (cfg.getModel() != null && !cfg.getModel().isBlank() && !known);
     }
 
     // ---- settings tab ----
@@ -326,13 +342,43 @@ public final class TulpaScreen extends Screen {
                 b -> { showKey = !showKey; b.setMessage(Component.literal(showKey ? "隐" : "见")); }));
 
         int y3 = y2 + 37;
-        modelInput = field(x, y3 + 11, w, 128, cfg.getModel());
+        buildModelRow(x, y3 + 11, w, cfg);
         int y4 = y3 + 37;
         baseUrlInput = field(x, y4 + 11, w, 256, cfg.getBaseUrl());
 
         int saveW = 64;
         add(new SimpleButton(left + PANEL_W - PAD - saveW, top + PANEL_H - PAD - 18,
                 saveW, 18, Component.literal("Save"), b -> onSaveSettings()));
+    }
+
+    /** Model row: a preset dropdown for the provider's known models, or a free-text box (custom mode)
+     *  with a "▾" toggle back to presets. A custom provider (openai-compatible) is always free-text. */
+    private void buildModelRow(int x, int y, int w, ITulpaConfig cfg) {
+        ModelRegistry.Provider mp = ModelRegistry.provider(LlmProviders.normalize(providerDropdown.selectedId()));
+        boolean providerCustom = mp != null && mp.custom();
+        if (customModel || providerCustom) {
+            customModel = true;
+            modelDropdown = null;
+            modelInput = field(x, y, providerCustom ? w : w - 20, 128, cfg.getModel());
+            if (!providerCustom) {     // a way back to the preset list (custom providers have none)
+                add(new SimpleButton(x + w - 18, y, 18, 18, Component.literal("▾"),
+                        b -> { customModel = false; rebuild(); }));
+            }
+        } else {
+            modelInput = null;
+            boolean known = mp != null && mp.models().stream().anyMatch(m -> m.id().equals(cfg.getModel()));
+            String sel = known ? cfg.getModel()
+                    : (mp != null && !mp.models().isEmpty() ? mp.models().get(0).id() : CUSTOM_MODEL);
+            modelDropdown = new Dropdown(modelItems(mp), sel);
+            modelDropdown.setBounds(x, y, w, 18);
+        }
+    }
+
+    private List<Dropdown.Item> modelItems(ModelRegistry.Provider mp) {
+        List<Dropdown.Item> items = new ArrayList<>();
+        if (mp != null) for (ModelRegistry.Model m : mp.models()) items.add(new Dropdown.Item(m.id(), m.id()));
+        items.add(new Dropdown.Item(CUSTOM_MODEL, "自定义…"));
+        return items;
     }
 
     private EditBox field(int x, int y, int w, int max, String value) {
@@ -351,7 +397,11 @@ public final class TulpaScreen extends Screen {
         ITulpaConfig cfg = Services.CONFIG;
         cfg.setProvider(providerDropdown.selectedId());
         cfg.setApiKey(apiKeyInput.getValue());
-        cfg.setModel(modelInput.getValue());
+        String model = customModel
+                ? (modelInput != null ? modelInput.getValue().trim() : "")
+                : (modelDropdown != null && !CUSTOM_MODEL.equals(modelDropdown.selectedId())
+                        ? modelDropdown.selectedId() : "");
+        cfg.setModel(model);
         cfg.setBaseUrl(baseUrlInput.getValue());
         cfg.save();
         TulpaLlmClient.reset();
@@ -362,7 +412,7 @@ public final class TulpaScreen extends Screen {
         int x = left + PAD;
         int y = top + HEADER_H + 10;
         LlmProviders.Option opt = LlmProviders.byId(providerDropdown.selectedId());
-        if (modelInput != null) modelInput.setHint(Component.literal(opt.defaultModel()));
+        if (modelInput != null) modelInput.setHint(Component.literal(opt.defaultModel()));   // custom mode only
         if (baseUrlInput != null) baseUrlInput.setHint(Component.literal(opt.defaultBaseUrl()));
 
         txt(g, Component.literal("Provider"), x, y, TXT_MUTED);
@@ -448,8 +498,18 @@ public final class TulpaScreen extends Screen {
                 }
                 return true;
             }
-            if (tab == Tab.SETTINGS && providerDropdown != null
-                    && providerDropdown.mouseClicked(event.x(), event.y())) {
+            if (tab == Tab.SETTINGS && providerDropdown != null) {
+                String before = providerDropdown.selectedId();
+                if (providerDropdown.mouseClicked(event.x(), event.y())) {
+                    if (modelDropdown != null) modelDropdown.close();
+                    if (!providerDropdown.selectedId().equals(before)) { customModel = false; rebuild(); }
+                    return true;
+                }
+            }
+            if (tab == Tab.SETTINGS && modelDropdown != null
+                    && modelDropdown.mouseClicked(event.x(), event.y())) {
+                providerDropdown.close();
+                if (CUSTOM_MODEL.equals(modelDropdown.selectedId())) { customModel = true; rebuild(); }
                 return true;
             }
             int my = (int) event.y();
@@ -545,8 +605,15 @@ public final class TulpaScreen extends Screen {
             w.extractRenderState(g, mouseX, mouseY, partial);
         }
         // The provider dropdown's open list must sit above even the fields.
-        if (tab == Tab.SETTINGS && providerDropdown != null) {
-            providerDropdown.render(g, font, mouseX, mouseY);
+        if (tab == Tab.SETTINGS) {
+            // render the non-open one first so the open list draws on top
+            if (modelDropdown != null && providerDropdown != null && providerDropdown.isOpen()) {
+                modelDropdown.render(g, font, mouseX, mouseY);
+                providerDropdown.render(g, font, mouseX, mouseY);
+            } else {
+                if (providerDropdown != null) providerDropdown.render(g, font, mouseX, mouseY);
+                if (modelDropdown != null) modelDropdown.render(g, font, mouseX, mouseY);
+            }
         }
     }
 
