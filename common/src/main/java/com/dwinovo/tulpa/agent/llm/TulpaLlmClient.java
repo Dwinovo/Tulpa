@@ -247,7 +247,11 @@ public final class TulpaLlmClient {
             case MinimaxProvider.NAME -> new MinimaxProvider();
             case VolcengineProvider.NAME, "doubao", "ark" -> new VolcengineProvider();
             case DashScopeProvider.NAME, "qwen", "tongyi", "aliyun" -> new DashScopeProvider();
-            case OpenAIProvider.NAME -> new OpenAIProvider();
+            case com.dwinovo.tulpa.agent.provider.ZhipuProvider.NAME, "glm" ->
+                    new com.dwinovo.tulpa.agent.provider.ZhipuProvider();
+            case com.dwinovo.tulpa.agent.provider.SiliconFlowProvider.NAME, "silicon" ->
+                    new com.dwinovo.tulpa.agent.provider.SiliconFlowProvider();
+            case OpenAIProvider.NAME, "openai-compatible" -> new OpenAIProvider();
             default -> {
                 Constants.LOG.warn("[tulpa-llm] unknown provider '{}', falling back to openai", name);
                 yield new OpenAIProvider();

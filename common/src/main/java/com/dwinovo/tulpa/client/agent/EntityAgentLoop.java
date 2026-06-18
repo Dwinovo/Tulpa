@@ -142,11 +142,10 @@ public final class EntityAgentLoop {
     // ---- context compaction (mirrors Claude Code's /compact machinery) ----
 
     /**
-     * Assumed model context window. TODO: surface as a config field once the
-     * settings GUI grows a slot for it; 64k matches the smallest window among
-     * the supported providers' current flagship chat models.
+     * The model context window now comes per-model from {@code ModelRegistry} (tulpa_models.json),
+     * looked up from the configured provider+model at the auto-compaction gate; unknown/custom models
+     * fall back to {@code ModelRegistry.DEFAULT_CTX} (64k).
      */
-    private static final int CONTEXT_WINDOW_TOKENS = 64_000;
     /**
      * Headroom under the window at which auto-compaction fires (Claude Code's
      * {@code AUTOCOMPACT_BUFFER_TOKENS}): the next turn adds tool results and
@@ -609,11 +608,14 @@ public final class EntityAgentLoop {
         // API counted it) is within the buffer of the window — summarize FIRST,
         // then this method re-runs and dispatches the turn on the compacted
         // history. Mirrors Claude Code's autoCompactIfNeeded.
-        if (lastPromptTokens >= CONTEXT_WINDOW_TOKENS - AUTO_COMPACT_BUFFER_TOKENS
+        int window = com.dwinovo.tulpa.agent.model.ModelRegistry.contextWindow(
+                com.dwinovo.tulpa.client.screen.LlmProviders.normalize(com.dwinovo.tulpa.platform.Services.CONFIG.getProvider()),
+                com.dwinovo.tulpa.platform.Services.CONFIG.getModel());
+        if (lastPromptTokens >= window - AUTO_COMPACT_BUFFER_TOKENS
                 && convo.snapshot().size() >= MIN_COMPACT_MESSAGES
                 && compactFailures < MAX_COMPACT_FAILURES) {
             Constants.LOG.info("[tulpa-entity#{}] auto-compacting: last prompt {} tokens >= {} - {}",
-                    entityUuid, lastPromptTokens, CONTEXT_WINDOW_TOKENS, AUTO_COMPACT_BUFFER_TOKENS);
+                    entityUuid, lastPromptTokens, window, AUTO_COMPACT_BUFFER_TOKENS);
             startCompaction(true);
             return;
         }

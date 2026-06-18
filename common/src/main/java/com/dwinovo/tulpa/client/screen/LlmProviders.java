@@ -1,22 +1,28 @@
 package com.dwinovo.tulpa.client.screen;
 
+import com.dwinovo.tulpa.agent.model.ModelRegistry;
+
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The LLM providers offered in the settings UI — display name + the canonical
- * model / base-URL each expects (shown as field hints). Shared by the standalone
- * {@link SettingsScreen} and the {@link TulpaScreen} Settings tab.
+ * The LLM providers offered in the settings UI — derived from the {@link ModelRegistry} (bundled
+ * {@code tulpa_models.json}) so adding a provider/model is a data edit, not code. Shared by the
+ * standalone {@link SettingsScreen} and the {@link TulpaScreen} Settings tab.
  */
 public final class LlmProviders {
 
-    /** Order roughly by relevance to the target audience. */
-    public static final List<Option> ALL = List.of(
-            new Option("openai",     "OpenAI",   "gpt-5-2-mini",                "https://api.openai.com/v1"),
-            new Option("deepseek",   "DeepSeek", "deepseek-v4-pro",             "https://api.deepseek.com/beta"),
-            new Option("moonshot",   "Kimi",     "kimi-k2.5-preview",           "https://api.moonshot.ai/v1"),
-            new Option("minimax",    "MiniMax",  "MiniMax-M2",                  "https://api.minimax.io/v1"),
-            new Option("volcengine", "Doubao",   "doubao-1-6-pro-256k-250115",  "https://ark.cn-beijing.volces.com/api/v3"),
-            new Option("dashscope",  "Qwen",     "qwen3-max",                   "https://dashscope.aliyuncs.com/compatible-mode/v1"));
+    /** Every provider, in registry order; defaultModel = the registry's first model (empty for custom). */
+    public static final List<Option> ALL = build();
+
+    private static List<Option> build() {
+        List<Option> out = new ArrayList<>();
+        for (ModelRegistry.Provider p : ModelRegistry.providers()) {
+            String defaultModel = p.models().isEmpty() ? "" : p.models().get(0).id();
+            out.add(new Option(p.id(), p.name(), defaultModel, p.baseUrl()));
+        }
+        return List.copyOf(out);
+    }
 
     private LlmProviders() {}
 
@@ -37,6 +43,8 @@ public final class LlmProviders {
             case "kimi" -> "moonshot";
             case "doubao", "ark" -> "volcengine";
             case "qwen", "tongyi", "aliyun" -> "dashscope";
+            case "glm" -> "zhipu";
+            case "silicon" -> "siliconflow";
             default -> raw.toLowerCase();
         };
     }
