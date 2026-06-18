@@ -76,8 +76,9 @@ public final class AnimusScreen extends Screen {
     private static final int CTA = TH.cta();
     private static final int ON_CTA = TH.onCta();
     private static final int FIELD = TH.field();
-    private static final int YOU = TH.reply();
-    private static final int TOOL = TH.text();
+    private static final int YOU = TH.reply();          // user messages — teal
+    private static final int AI = 0xFF35562F;            // assistant replies — deep moss green (the "point")
+    private static final int TOOL = TH.textDim();        // folded tool-call rows — muted, secondary
     private static final int OK = TH.ok();
     private static final int RUN = TH.run();
     private static final int FAIL = TH.fail();
@@ -526,11 +527,11 @@ public final class AnimusScreen extends Screen {
         Set<String> failed = failedIds();
         for (Row row : rows) {
             if (y + LINE_H > bodyY && y < bodyBottom) {
-                if (row.toolId != null) {
-                    boolean isDone = done.contains(row.toolId);
-                    boolean isFail = failed.contains(row.toolId);
-                    String icon = isDone ? (isFail ? "✗" : "✔") : SPIN[(int) ((t / 120) % 4)];
-                    int ic = isDone ? (isFail ? FAIL : OK) : RUN;
+                if (row.toolIds() != null) {
+                    boolean anyRunning = row.toolIds().stream().anyMatch(id -> !done.contains(id));
+                    boolean anyFail = row.toolIds().stream().anyMatch(failed::contains);
+                    String icon = anyRunning ? SPIN[(int) ((t / 120) % 4)] : (anyFail ? "✗" : "✔");
+                    int ic = anyRunning ? RUN : (anyFail ? FAIL : OK);
                     txt(g, Component.literal(icon), transX, y, ic);
                     txt(g, row.text, transX + 11, y, row.color);
                 } else {
@@ -556,28 +557,58 @@ public final class AnimusScreen extends Screen {
      *  matching tool call done (via {@link #doneIds()}); the call line shows the spinner/check. */
     private List<Row> buildRows(int width) {
         List<Row> out = new ArrayList<>();
+        List<LlmToolCall> group = new ArrayList<>();        // consecutive tool calls, folded into one row
         for (ConvoState.Msg msg : loop().convo().snapshot()) {
             switch (msg) {
-                case ConvoState.Msg.User u -> wrap(out, "you  " + u.content(), YOU, width, null);
+                case ConvoState.Msg.User u -> {
+                    flushTools(out, group, width);
+                    wrap(out, "you  " + u.content(), YOU, width);
+                }
                 case ConvoState.Msg.Assistant a -> {
                     AssistantTurn turn = a.turn();
                     if (turn.content() != null && !turn.content().isBlank()) {
-                        wrap(out, turn.content(), TXT, width, null);
+                        flushTools(out, group, width);           // spoken reply breaks the fold
+                        wrap(out, turn.content(), AI, width);
                     }
-                    for (LlmToolCall tc : turn.toolCalls()) {
-                        out.add(new Row(colored(toolLine(tc), TOOL).getVisualOrderText(), TOOL, tc.id()));
-                    }
+                    group.addAll(turn.toolCalls());
                 }
                 case ConvoState.Msg.Tool ignored -> { /* result drives done/fail, not a row */ }
             }
         }
+        flushTools(out, group, width);
         if (loop().isCompacting()) {
-            wrap(out, "compacting history…", TXT_MUTED, width, null);
+            wrap(out, "compacting history…", TXT_MUTED, width);
         }
         if (out.isEmpty()) {
-            wrap(out, "Say something to " + name + ".", TXT_FAINT, width, null);
+            wrap(out, "Say something to " + name + ".", TXT_FAINT, width);
         }
         return out;
+    }
+
+    /** Collapse a run of consecutive tool calls into ONE muted row: a single call shows {@code name args};
+     *  many show "N steps · distinct names…". The row carries every call's id so its icon aggregates status. */
+    private void flushTools(List<Row> out, List<LlmToolCall> group, int width) {
+        if (group.isEmpty()) return;
+        List<String> ids = new ArrayList<>();
+        for (LlmToolCall tc : group) ids.add(tc.id());
+        String summary;
+        if (group.size() == 1) {
+            summary = toolLine(group.get(0));
+        } else {
+            List<String> names = new ArrayList<>();
+            for (LlmToolCall tc : group) if (!names.contains(tc.name())) names.add(tc.name());
+            summary = group.size() + " steps · " + String.join(" · ", names);
+        }
+        FormattedCharSequence seq = colored(fitOneLine(summary, width - 2 - 11), TOOL).getVisualOrderText();
+        out.add(new Row(seq, TOOL, ids));
+        group.clear();
+    }
+
+    /** Trim a string with an ellipsis so it fits one line of the given pixel width. */
+    private String fitOneLine(String s, int pxWidth) {
+        if (font.width(s) <= pxWidth) return s;
+        while (s.length() > 1 && font.width(s + "…") > pxWidth) s = s.substring(0, s.length() - 1);
+        return s + "…";
     }
 
     private String toolLine(LlmToolCall tc) {
@@ -586,9 +617,9 @@ public final class AnimusScreen extends Screen {
         return tc.name() + "  " + args;
     }
 
-    private void wrap(List<Row> out, String text, int color, int width, String toolId) {
+    private void wrap(List<Row> out, String text, int color, int width) {
         for (FormattedCharSequence seq : font.split(coloredBold(text, color), width - 2)) {   // colour + bold baked in
-            out.add(new Row(seq, color, toolId));
+            out.add(new Row(seq, color, null));
         }
     }
 
@@ -756,5 +787,7 @@ public final class AnimusScreen extends Screen {
         return false;
     }
 
-    private record Row(FormattedCharSequence text, int color, String toolId) {}
+    /** A rendered transcript line. {@code toolIds} non-null = a folded tool-call group whose icon shows
+     *  aggregate status (spinner if any still running, else ✔ / ✗); null = a plain text line. */
+    private record Row(FormattedCharSequence text, int color, List<String> toolIds) {}
 }
