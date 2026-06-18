@@ -2,7 +2,6 @@ package com.dwinovo.animus.client.hud;
 
 import com.dwinovo.animus.agent.llm.ConvoState;
 import com.dwinovo.animus.agent.provider.AssistantTurn;
-import com.dwinovo.animus.agent.provider.LlmToolCall;
 import com.dwinovo.animus.client.agent.AgentLoopRegistry;
 import com.dwinovo.animus.client.agent.AnimusRoster;
 import com.dwinovo.animus.client.screen.AnimusScreen;
@@ -83,19 +82,11 @@ public final class AnimusToasts {
         }
     }
 
-    /** Append one line for an assistant turn: spoken reply if any, else the action it started. */
+    /** Append one line for an assistant turn — ONLY spoken replies; tool-only turns are ignored. */
     private static void addLine(UUID uuid, String name, AssistantTurn turn, long now) {
+        if (turn.content() == null || turn.content().isBlank()) return;   // text-only toasts
         UiTheme th = UiTheme.current();
-        Line line;
-        if (turn.content() != null && !turn.content().isBlank()) {
-            line = new Line(snip(turn.content(), 36), th.reply(), now);
-        } else if (!turn.toolCalls().isEmpty()) {
-            LlmToolCall tc = turn.toolCalls().get(turn.toolCalls().size() - 1);
-            String extra = turn.toolCalls().size() > 1 ? " +" + (turn.toolCalls().size() - 1) : "";
-            line = new Line("▸ " + tc.name() + extra, th.run(), now);
-        } else {
-            return;
-        }
+        Line line = new Line(snip(turn.content(), 36), th.reply(), now);
         Card card = CARDS.computeIfAbsent(uuid, u -> {
             while (CARDS.size() >= MAX_CARDS) {       // make room — drop the oldest card
                 UUID oldest = CARDS.keySet().iterator().next();
