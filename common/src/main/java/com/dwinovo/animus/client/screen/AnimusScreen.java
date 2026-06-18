@@ -205,6 +205,12 @@ public final class AnimusScreen extends Screen {
                 net.minecraft.network.chat.TextColor.fromRgb(color & 0xFFFFFF)));
     }
 
+    /** Like {@link #colored} but bold — used for the chat transcript message text (heavier, easier to read). */
+    private static Component coloredBold(String s, int color) {
+        return Component.literal(s).withStyle(st -> st.withColor(
+                net.minecraft.network.chat.TextColor.fromRgb(color & 0xFFFFFF)).withBold(true));
+    }
+
     private void buildChatWidgets() {
         int inputY = top + PANEL_H - INPUT_H - PAD;
         int compactW = 26;
@@ -581,7 +587,7 @@ public final class AnimusScreen extends Screen {
     }
 
     private void wrap(List<Row> out, String text, int color, int width, String toolId) {
-        for (FormattedCharSequence seq : font.split(colored(text, color), width - 2)) {   // colour baked in
+        for (FormattedCharSequence seq : font.split(coloredBold(text, color), width - 2)) {   // colour + bold baked in
             out.add(new Row(seq, color, toolId));
         }
     }
