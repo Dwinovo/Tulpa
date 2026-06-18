@@ -404,9 +404,9 @@ public final class AnimusScreen extends Screen {
         // used to paint over the auto-rendered widgets). Text fields are borderless EditBoxes, so draw
         // a parchment field background + border behind each before it renders its text.
         for (AbstractWidget w : overlay) {
-            if (w instanceof EditBox eb) {
-                g.fill(eb.getX(), eb.getY(), eb.getX() + eb.getWidth(), eb.getY() + eb.getHeight(), FIELD);
-                Nb.border(g, eb.getX(), eb.getY(), eb.getWidth(), eb.getHeight(), 2, BORDER);
+            if (w instanceof EditBox eb) {                          // parchment field sprite behind the text
+                g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
+                        FIELD_SPRITE, eb.getX(), eb.getY(), eb.getWidth(), eb.getHeight());
             }
         }
         for (AbstractWidget w : overlay) {
@@ -689,6 +689,9 @@ public final class AnimusScreen extends Screen {
 
     private static final net.minecraft.resources.Identifier SLOT_SPRITE =
             net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.animus.Constants.MOD_ID, "slot");
+    /** Parchment frame (reuses the button sprite) behind text fields. */
+    private static final net.minecraft.resources.Identifier FIELD_SPRITE =
+            net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.animus.Constants.MOD_ID, "button");
 
     private void drawSlot(GuiGraphicsExtractor g, List<ItemStack> items, int index,
                           int x, int y, int mouseX, int mouseY) {

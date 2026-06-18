@@ -34,13 +34,17 @@ public final class AnimusToasts {
     private static final int W = 172;
     private static final int MARGIN = 6;
     private static final int GAP = 4;
-    private static final int HEADER_H = 13;
+    private static final int HEADER_H = 15;
     private static final int LINE_H = 11;
     private static final int PAD = 4;
     private static final int MAX_LINES = 4;
     private static final int MAX_CARDS = 4;
     private static final long LINE_LIFE_MS = 5000;
     private static final long SLIDE_MS = 220;
+
+    private static final net.minecraft.resources.Identifier CARD_SPRITE =
+            net.minecraft.resources.Identifier.fromNamespaceAndPath(
+                    com.dwinovo.animus.Constants.MOD_ID, "card");
 
     private static final Map<UUID, Integer> SEEN = new HashMap<>();
     /** Insertion-ordered so cards stack stably. */
@@ -118,11 +122,10 @@ public final class AnimusToasts {
             int off = slideIn(now - card.bornMs);          // W → 0 from off-screen left
             int x = MARGIN - off;
 
-            // Cottage card: sage header strip + warm tan body + thick warm-brown border.
-            g.fill(x, y, x + W, y + h, th.ground());
-            g.fill(x, y, x + W, y + HEADER_H - 1, th.band());     // sage name strip
-            Nb.border(g, x, y, W, h, 2, th.border());
-            Nb.text(g, font, card.name, x + 7, y + 3, th.onBand());
+            // Cottage card sprite: nine_slice sage-header + warm tan body + warm-brown border.
+            g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
+                    CARD_SPRITE, x, y, W, h);
+            Nb.text(g, font, card.name, x + 7, y + 4, th.onBand());
             int ly = y + HEADER_H;
             for (Line line : card.lines) {
                 Nb.text(g, font, line.text(), x + 7, ly, line.color());

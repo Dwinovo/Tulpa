@@ -30,27 +30,30 @@ public final class ProviderDropdown {
     public boolean isOpen() { return open; }
     public void close() { open = false; }
 
+    private static final net.minecraft.resources.Identifier FRAME =
+            net.minecraft.resources.Identifier.fromNamespaceAndPath(
+                    com.dwinovo.animus.Constants.MOD_ID, "button");
+
     public void render(GuiGraphicsExtractor g, Font font, int mouseX, int mouseY) {
         UiTheme th = UiTheme.current();
-        g.fill(x, y, x + w, y + h, th.field());                     // parchment box (clickable)
-        Nb.border(g, x, y, w, h, 2, open ? th.cta() : th.border());
+        var pipe = net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED;
+        g.blitSprite(pipe, FRAME, x, y, w, h);                       // parchment box (clickable)
         int ty = y + (h - 8) / 2;
         Nb.text(g, font, LlmProviders.byId(selectedId).displayName(), x + 6, ty, th.text());
         Nb.text(g, font, open ? "▴" : "▾", x + w - 12, ty, th.textDim());
 
         if (open) {
-            int oy = y + h;
+            int oy = y + h - 2;
             int n = LlmProviders.ALL.size();
-            g.fill(x, oy, x + w, oy + n * ROW, th.ground());
+            g.blitSprite(pipe, FRAME, x, oy, w, n * ROW + 4);        // parchment list frame
             for (int i = 0; i < n; i++) {
                 LlmProviders.Option o = LlmProviders.ALL.get(i);
-                int ry = oy + i * ROW;
+                int ry = oy + 2 + i * ROW;
                 boolean hover = mouseX >= x && mouseX < x + w && mouseY >= ry && mouseY < ry + ROW;
-                if (hover) g.fill(x, ry, x + w, ry + ROW, 0x33000000);
+                if (hover) g.fill(x + 2, ry, x + w - 2, ry + ROW, 0x33000000);
                 boolean sel = o.id().equals(selectedId);
                 Nb.text(g, font, o.displayName(), x + 6, ry + (ROW - 8) / 2, sel ? th.cta() : th.text());
             }
-            Nb.border(g, x, oy, w, n * ROW, 2, th.border());
         }
     }
 
