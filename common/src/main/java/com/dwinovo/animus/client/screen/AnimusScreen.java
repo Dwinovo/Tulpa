@@ -557,13 +557,14 @@ public final class AnimusScreen extends Screen {
             switch (msg) {
                 case ConvoState.Msg.User u -> {
                     flushTools(out, group, width);
-                    wrapLabeled(out, "you", u.content(), YOU, width);
+                    wrapPlain(out, u.content(), YOU, width);     // user = teal body, no label
                 }
                 case ConvoState.Msg.Assistant a -> {
                     AssistantTurn turn = a.turn();
                     if (turn.content() != null && !turn.content().isBlank()) {
                         flushTools(out, group, width);           // spoken reply breaks the fold
-                        wrapLabeled(out, name, turn.content(), AI, width);
+                        addHeader(out, name, AI, width);         // bold name header on its OWN line
+                        wrapPlain(out, turn.content(), AI, width);
                     }
                     group.addAll(turn.toolCalls());
                 }
@@ -612,12 +613,10 @@ public final class AnimusScreen extends Screen {
         return tc.name() + "  " + args;
     }
 
-    /** A message line: a BOLD label ("you" / the companion name) + regular-weight body, one colour, the
-     *  whole thing split to fit the width (styles carry across wrapped lines). */
-    private void wrapLabeled(List<Row> out, String label, String body, int color, int width) {
+    /** A bold name header on its OWN line (fixed format — never merges into the body). */
+    private void addHeader(List<Row> out, String label, int color, int width) {
         var tc = net.minecraft.network.chat.TextColor.fromRgb(color & 0xFFFFFF);
-        Component c = Component.literal(label).withStyle(s -> s.withColor(tc).withBold(true))
-                .append(Component.literal("  " + body).withStyle(s -> s.withColor(tc)));
+        Component c = Component.literal(label).withStyle(s -> s.withColor(tc).withBold(true));
         for (FormattedCharSequence seq : font.split(c, width - 2)) {
             out.add(new Row(seq, color, null));
         }
