@@ -128,7 +128,7 @@ PlayerNav.tick:            │                                                  
 - `AStarSearch`/`PathPlannerPool` 断言传入上下文 `safeForThreadedUse`(抄 Baritone 的门禁)。
 
 ### 5.4 `PathPlannerPool`(新,全局单例)
-- 共享 `ExecutorService`,**默认参考 Baritone(用户 #4)**:抄 `Baritone.java` 的 `new ThreadPoolExecutor(4, Integer.MAX_VALUE, 60L, SECONDS, new SynchronousQueue<>())`(核心 4、按需增长、60s 空闲回收、守护线程、命名 `animus-path-N`)。100 个伙伴共用,不是一伙伴一线程。
+- 共享 `ExecutorService`,**默认参考 Baritone(用户 #4)**:抄 `Baritone.java` 的 `new ThreadPoolExecutor(4, Integer.MAX_VALUE, 60L, SECONDS, new SynchronousQueue<>())`(核心 4、按需增长、60s 空闲回收、守护线程、命名 `tulpa-path-N`)。100 个伙伴共用,不是一伙伴一线程。
 - **可配置(用户 #4)**:核心数 / 最大数 走 mod 配置项;默认即上面 Baritone 值。规模化时可把 max 设成有界(文档提示:每个 `PlayerNav` 最多 1 个在飞搜索,replan 非持续,实际并发远低于伙伴数)。
 - `submit(AStarSearch) → CompletableFuture<Path>`:worker 调 `search.step(maxNodes)`(一次跑到底,可加 worker 端 wall-clock 超时近似 Baritone 的 primary/failureTimeout)。
 - 关停 hook(服务器停 / mod 卸载)优雅 shutdown。

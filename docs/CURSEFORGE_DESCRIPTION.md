@@ -1,6 +1,6 @@
-# Animus — an AI companion that actually plays the game
+# Tulpa — an AI companion that actually plays the game
 
-Animus adds a tameable companion powered by a real LLM (bring your own API
+Tulpa adds a tameable companion powered by a real LLM (bring your own API
 key). Talk to it in natural language — any language — and it acts with its
 own body in the world: it mines, crafts, smelts, builds, fights, stores loot,
 and reports back in chat. No scripted behaviors; the model decides, a
@@ -42,10 +42,10 @@ ones. While it works far away, its chunks stay loaded.
 
 ## Make it yours
 
-- **Skills** are plain markdown in `config/animus/skills/` — edit them,
+- **Skills** are plain markdown in `config/tulpa/skills/` — edit them,
   write your own workflows, teach it your base's rules.
 - **Custom models**: drop Bedrock-format models into
-  `config/animus/models/` and switch skins in the GUI.
+  `config/tulpa/models/` and switch skins in the GUI.
 
 ## Notes
 
@@ -54,4 +54,4 @@ ones. While it works far away, its chunks stay loaded.
   only the conversation goes to your LLM provider.
 - Works in singleplayer and on servers (install on both sides).
 
-Source & issues: https://github.com/Dwinovo/minecraft-animus
+Source & issues: https://github.com/Dwinovo/minecraft-tulpa

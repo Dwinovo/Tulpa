@@ -16,13 +16,13 @@
     "environment": "*",
     "entrypoints": {
         "main": [
-            "com.dwinovo.animus.AnimusMod"
+            "com.dwinovo.tulpa.TulpaMod"
         ],
         "client": [
-            "com.dwinovo.animus.AnimusFabricClient"
+            "com.dwinovo.tulpa.TulpaFabricClient"
         ],
         "fabric-datagen": [
-            "com.dwinovo.animus.data.FabricDataGenerators"
+            "com.dwinovo.tulpa.data.FabricDataGenerators"
         ]
     },
     "mixins": [
