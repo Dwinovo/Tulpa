@@ -77,13 +77,10 @@ public final class AnimusScreen extends Screen {
     private static final int OK = TH.ok();
     private static final int RUN = TH.run();
     private static final int FAIL = TH.fail();
-    private static final int GROUND = TH.ground();
-    private static final int BAND = TH.band();
-    /** Baked Cottage panel chrome (warm tan ground + dot-grid + sage band + warm-brown border). Blitted
-     *  over a cheap procedural base so a not-yet-loaded texture never shows broken. */
-    private static final net.minecraft.resources.Identifier PANEL_TEX =
-            net.minecraft.resources.Identifier.fromNamespaceAndPath(
-                    com.dwinovo.animus.Constants.MOD_ID, "textures/gui/panel.png");
+    /** Cottage panel chrome — a vanilla GUI sprite (assets/animus/textures/gui/sprites/panel.png,
+     *  loaded into the GUI sprite atlas at resource-load), drawn with blitSprite like vanilla widgets. */
+    private static final net.minecraft.resources.Identifier PANEL_SPRITE =
+            net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.animus.Constants.MOD_ID, "panel");
 
     private static final String[] SPIN = {"|", "/", "-", "\\"};
     private static final EquipmentSlot[] EQUIP = {
@@ -367,16 +364,12 @@ public final class AnimusScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
         super.extractRenderState(g, mouseX, mouseY, partial);
 
-        // BlockFrame "Cottage" panel. Cheap procedural base (hard offset shadow + warm tan ground +
-        // sage band + thick warm-brown border) as a fallback, then the baked chrome TEXTURE on top
-        // (adds the dot-grid; a not-yet-loaded texture just no-ops over the matching base).
+        // BlockFrame "Cottage" panel: a hard offset shadow (outside the sprite) + the chrome GUI sprite
+        // (warm tan ground + dot-grid + sage band + thick warm-brown border), drawn the vanilla way.
         int s = 4;
-        g.fill(left + s, top + s, left + PANEL_W + s, top + PANEL_H + s, BORDER);   // hard offset shadow
-        g.fill(left, top, left + PANEL_W, top + PANEL_H, GROUND);                   // warm tan ground
-        g.fill(left + 3, top + 3, left + PANEL_W - 3, top + HEADER_H, BAND);        // sage header band
-        SimpleButton.thickBorder(g, left, top, PANEL_W, PANEL_H, 3, BORDER);        // thick border
-        g.fill(left, top + HEADER_H, left + PANEL_W, top + HEADER_H + 3, BORDER);   // header divider
-        g.blit(PANEL_TEX, left, top, PANEL_W, PANEL_H, 0f, 0f, 1f, 1f);             // real sprite on top
+        g.fill(left + s, top + s, left + PANEL_W + s, top + PANEL_H + s, BORDER);
+        g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
+                PANEL_SPRITE, left, top, PANEL_W, PANEL_H);
 
         g.text(font, Component.literal(name), left + PAD, top + 7, ON_BAND);   // name on the sage band
         renderTabs(g, mouseX, mouseY);

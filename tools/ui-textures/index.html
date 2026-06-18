@@ -5,27 +5,25 @@
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { width: 760px; height: 464px; overflow: hidden; background: #00000000; }
-      /* Cozy-2 "Cottage" panel chrome ONLY (content drawn procedurally on top in-code).
-         2x scale: 6px border = 3 GUI units, band ends at GUI y22 = HEADER_H. */
+      html, body { width: 380px; height: 232px; overflow: hidden; background: #00000000; }
+      /* Cozy-2 "Cottage" panel chrome at 1x GUI-unit size (380x232) for pixel-crisp blitSprite.
+         3px border, band ends at y22 = HEADER_H. */
       .panel {
         position: absolute; inset: 0;
-        background: #CBA87B;                       /* warm tan ground */
-        border: 6px solid #352818;                 /* warm-brown border */
-        background-image: radial-gradient(rgba(53,40,24,0.16) 2px, transparent 2px);
-        background-size: 34px 34px; background-position: 6px 6px;   /* dot grid */
+        background: #CBA87B; border: 3px solid #352818;
+        background-image: radial-gradient(rgba(53,40,24,0.20) 1px, transparent 1px);
+        background-size: 12px 12px; background-position: 3px 3px;   /* dot grid */
       }
       .header {
-        position: absolute; top: 6px; left: 6px; right: 6px; height: 32px;
-        background: #6E8F66;                        /* sage green band */
-        border-bottom: 6px solid #352818;
+        position: absolute; top: 3px; left: 3px; right: 3px; height: 16px;
+        background: #6E8F66; border-bottom: 3px solid #352818;     /* sage band, ends at y22 */
       }
     </style>
   </head>
   <body>
     <div id="root" data-composition-id="main" data-start="0" data-duration="1"
-         data-width="760" data-height="464"
-         style="position: relative; width: 760px; height: 464px; overflow: hidden;">
+         data-width="380" data-height="232"
+         style="position: relative; width: 380px; height: 232px; overflow: hidden;">
       <div class="clip" data-start="0" data-duration="1" data-track-index="1" style="position: absolute; inset: 0;">
         <div class="panel"><div class="header"></div></div>
       </div>
