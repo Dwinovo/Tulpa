@@ -45,7 +45,7 @@ public record RequestInventoryPayload(UUID uuid) implements CustomPacketPayload 
     public static void handle(RequestInventoryPayload p, ServerPlayer player) {
         AnimusPlayer animus = AnimusPlayer.findByUuid(player.level().getServer(), p.uuid());
         if (animus == null || !animus.isOwnedByPlayer(player.getUUID())) {
-            Services.NETWORK.sendToPlayer(player, new AnimusInventoryPayload(p.uuid(), false, List.of()));
+            Services.NETWORK.sendToPlayer(player, new AnimusInventoryPayload(p.uuid(), false, List.of(), 0, 0f));
             return;
         }
         Inventory inv = animus.getInventory();
@@ -53,6 +53,7 @@ public record RequestInventoryPayload(UUID uuid) implements CustomPacketPayload 
         for (int i = 0; i < MAIN_SLOTS; i++) {
             items.add(inv.getItem(i).copy());
         }
-        Services.NETWORK.sendToPlayer(player, new AnimusInventoryPayload(p.uuid(), true, items));
+        Services.NETWORK.sendToPlayer(player, new AnimusInventoryPayload(p.uuid(), true, items,
+                animus.getFoodData().getFoodLevel(), animus.getFoodData().getSaturationLevel()));
     }
 }

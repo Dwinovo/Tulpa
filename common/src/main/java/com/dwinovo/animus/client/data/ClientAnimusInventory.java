@@ -15,8 +15,9 @@ import java.util.UUID;
  */
 public final class ClientAnimusInventory {
 
-    /** {@code loaded=false} = the body is asleep / not ours (no contents). */
-    public record Snapshot(boolean loaded, List<ItemStack> items, long receivedAtMs) {}
+    /** {@code loaded=false} = the body is asleep / not ours (no contents). foodLevel 0-20. */
+    public record Snapshot(boolean loaded, List<ItemStack> items,
+                           int foodLevel, float saturation, long receivedAtMs) {}
 
     private static final Map<UUID, Snapshot> CACHE = new HashMap<>();
 

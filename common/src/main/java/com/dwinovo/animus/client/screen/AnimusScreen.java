@@ -17,6 +17,7 @@ import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -95,6 +96,13 @@ public final class AnimusScreen extends Screen {
     private EditBox baseUrlInput;
     private long savedFlashUntil;
 
+    // Widgets are registered for EVENTS only (addWidget) and rendered MANUALLY at the end of the
+    // frame, so they sit ON TOP of the panel background instead of being painted over by it (the
+    // "dim fields" bug — the panel fill ran after the auto-rendered widgets).
+    private final List<AbstractWidget> overlay = new ArrayList<>();
+    /** API key is masked by default; the eye button toggles it. */
+    private boolean showKey;
+
     // geometry resolved in init()
     private int left, top;
     private final int[] tabX = new int[3];   // left x of each tab label, for click hit-testing
@@ -147,6 +155,7 @@ public final class AnimusScreen extends Screen {
     private void rebuild() {
         if (input != null) savedInput = input.getValue();
         clearWidgets();
+        overlay.clear();
         input = null;
         sendButton = stopButton = compactButton = null;
         apiKeyInput = modelInput = baseUrlInput = null;
@@ -157,6 +166,14 @@ public final class AnimusScreen extends Screen {
         }
     }
 
+    /** Register a widget for EVENTS only; it's rendered manually (on top of the panel) in {@link
+     *  #extractRenderState}. */
+    private <T extends AbstractWidget> T add(T w) {
+        addWidget(w);
+        overlay.add(w);
+        return w;
+    }
+
     private void buildChatWidgets() {
         int inputY = top + PANEL_H - INPUT_H - PAD;
         int compactW = 26;
@@ -165,26 +182,23 @@ public final class AnimusScreen extends Screen {
         int inX = left + PAD + compactW + 4;
         int inW = PANEL_W - PAD * 2 - compactW - sendW - stopW - 12;
 
-        compactButton = new SimpleButton(left + PAD, inputY, compactW, INPUT_H,
-                Component.literal("⤬"), b -> loop().requestCompact());
+        compactButton = add(new SimpleButton(left + PAD, inputY, compactW, INPUT_H,
+                Component.literal("⤬"), b -> loop().requestCompact()));
         compactButton.active = loop().canCompact();
-        addRenderableWidget(compactButton);
 
         input = new EditBox(font, inX, inputY, inW, INPUT_H, Component.literal("animus.chat.input"));
         input.setMaxLength(MAX_PROMPT);
         input.setHint(Component.literal("Talk to " + name + "…"));
         if (!savedInput.isEmpty()) { input.setValue(savedInput); savedInput = ""; }
-        addRenderableWidget(input);
+        add(input);
         setInitialFocus(input);
 
-        sendButton = new SimpleButton(inX + inW + 4, inputY, sendW, INPUT_H,
-                Component.literal("Send"), b -> onSend());
-        addRenderableWidget(sendButton);
+        sendButton = add(new SimpleButton(inX + inW + 4, inputY, sendW, INPUT_H,
+                Component.literal("Send"), b -> onSend()));
 
-        stopButton = new SimpleButton(inX + inW + 4 + sendW + 4, inputY, stopW, INPUT_H,
-                Component.literal("■"), b -> loop().abort());
+        stopButton = add(new SimpleButton(inX + inW + 4 + sendW + 4, inputY, stopW, INPUT_H,
+                Component.literal("■"), b -> loop().abort()));
         stopButton.active = loop().canInterrupt();
-        addRenderableWidget(stopButton);
     }
 
     private void selectTab(Tab t) {
@@ -206,15 +220,24 @@ public final class AnimusScreen extends Screen {
         providerDropdown = new ProviderDropdown(cfg.getProvider());
         providerDropdown.setBounds(x, y + 11, w, 18);
 
+        // API key: leave room for the eye button, and mask the value until revealed.
+        int eyeW = 22;
         int y2 = y + 37;
-        apiKeyInput = field(x, y2 + 11, w, 512, cfg.getApiKey());
+        apiKeyInput = field(x, y2 + 11, w - eyeW - 2, 512, cfg.getApiKey());
+        apiKeyInput.addFormatter((text, idx) -> showKey
+                ? FormattedCharSequence.forward(text, net.minecraft.network.chat.Style.EMPTY)
+                : FormattedCharSequence.forward("•".repeat(text.length()), net.minecraft.network.chat.Style.EMPTY));
+        add(new SimpleButton(x + w - eyeW, y2 + 11, eyeW, 18,
+                Component.literal(showKey ? "隐" : "见"),
+                b -> { showKey = !showKey; b.setMessage(Component.literal(showKey ? "隐" : "见")); }));
+
         int y3 = y2 + 37;
         modelInput = field(x, y3 + 11, w, 128, cfg.getModel());
         int y4 = y3 + 37;
         baseUrlInput = field(x, y4 + 11, w, 256, cfg.getBaseUrl());
 
         int saveW = 64;
-        addRenderableWidget(new SimpleButton(left + PANEL_W - PAD - saveW, top + PANEL_H - PAD - 18,
+        add(new SimpleButton(left + PANEL_W - PAD - saveW, top + PANEL_H - PAD - 18,
                 saveW, 18, Component.literal("Save"), b -> onSaveSettings()));
     }
 
@@ -222,7 +245,8 @@ public final class AnimusScreen extends Screen {
         EditBox e = new EditBox(font, x, y, w, 18, Component.literal(""));
         e.setMaxLength(max);
         e.setValue(value == null ? "" : value);
-        addRenderableWidget(e);
+        e.setTextColor(TXT);
+        add(e);
         return e;
     }
 
@@ -252,8 +276,7 @@ public final class AnimusScreen extends Screen {
         if (savedFlashUntil > System.currentTimeMillis()) {
             g.text(font, Component.literal("✔ saved"), x, top + PANEL_H - PAD - 14, OK);
         }
-        // drawn LAST so the open option list overlays the fields below it
-        providerDropdown.render(g, font, mouseX, mouseY);
+        // the dropdown itself is rendered in extractRenderState, AFTER the widgets (open list on top)
     }
 
     @Override
@@ -342,8 +365,18 @@ public final class AnimusScreen extends Screen {
 
         switch (tab) {
             case CHAT -> { renderVitals(g, mouseX, mouseY); renderChat(g); }
-            case ITEMS -> { renderVitals(g, mouseX, mouseY); renderItems(g, mouseX, mouseY); }
+            case ITEMS -> renderItems(g, mouseX, mouseY);
             case SETTINGS -> renderSettings(g, mouseX, mouseY);
+        }
+
+        // Widgets render LAST, on top of the panel background (fixes the "dim fields" — the panel fill
+        // used to paint over the auto-rendered widgets).
+        for (AbstractWidget w : overlay) {
+            w.extractRenderState(g, mouseX, mouseY, partial);
+        }
+        // The provider dropdown's open list must sit above even the fields.
+        if (tab == Tab.SETTINGS && providerDropdown != null) {
+            providerDropdown.render(g, font, mouseX, mouseY);
         }
     }
 
@@ -361,7 +394,7 @@ public final class AnimusScreen extends Screen {
         }
     }
 
-    /** HP bar (left) + equipment slots (right), read off the live client entity. */
+    /** Chat header vitals: just the HP bar (equipment + hunger live on the Items tab now). */
     private void renderVitals(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         int y = top + HEADER_H + 4;
         AbstractClientPlayer e = ClientAnimusLookup.resolve(uuid);
@@ -369,27 +402,42 @@ public final class AnimusScreen extends Screen {
             g.text(font, Component.literal("(body out of view)"), left + PAD, y + 4, TXT_FAINT);
             return;
         }
-        float hp = e.getHealth(), max = e.getMaxHealth();
-        int barW = 96, barH = 5, barX = left + PAD, barY = y + 8;
-        g.text(font, Component.literal("HP " + fmt(hp) + "/" + fmt(max)), barX, y - 1, 0xFFFF8A8A);
-        g.fill(barX, barY, barX + barW, barY + barH, 0xFF3A1414);
-        int fill = (int) (barW * Math.clamp(hp / max, 0f, 1f));
-        if (fill > 0) g.fill(barX, barY, barX + fill, barY + barH, 0xFFE0473C);
-        g.outline(barX - 1, barY - 1, barW + 2, barH + 2, BORDER);
+        renderHpBar(g, left + PAD, y, e.getHealth(), e.getMaxHealth());
+    }
 
-        int step = 18, x = left + PANEL_W - PAD - EQUIP.length * step, sy = y;
+    private void renderHpBar(GuiGraphicsExtractor g, int x, int y, float hp, float max) {
+        int barW = 96, barH = 5, barY = y + 8;
+        g.text(font, Component.literal("HP " + fmt(hp) + "/" + fmt(max)), x, y - 1, 0xFFFF8A8A);
+        g.fill(x, barY, x + barW, barY + barH, 0xFF3A1414);
+        int fill = (int) (barW * Math.clamp(hp / max, 0f, 1f));
+        if (fill > 0) g.fill(x, barY, x + fill, barY + barH, 0xFFE0473C);
+        g.outline(x - 1, barY - 1, barW + 2, barH + 2, BORDER);
+    }
+
+    private void renderHungerBar(GuiGraphicsExtractor g, int x, int y, int food) {
+        int barW = 96, barH = 5, barY = y + 8;
+        g.text(font, Component.literal("Food " + food + "/20"), x, y - 1, 0xFFD8B36A);
+        g.fill(x, barY, x + barW, barY + barH, 0xFF2E2410);
+        int fill = (int) (barW * Math.clamp(food / 20f, 0f, 1f));
+        if (fill > 0) g.fill(x, barY, x + fill, barY + barH, 0xFFC88A3A);
+        g.outline(x - 1, barY - 1, barW + 2, barH + 2, BORDER);
+    }
+
+    /** The six equipment slots, read off the live client entity (equipment IS client-synced). */
+    private void renderEquipment(GuiGraphicsExtractor g, AbstractClientPlayer e, int x, int y,
+                                 int mouseX, int mouseY) {
         for (EquipmentSlot slot : EQUIP) {
-            g.fill(x, sy, x + 16, sy + 16, 0x40000000);
-            g.outline(x, sy, 16, 16, BORDER);
+            g.fill(x, y, x + 16, y + 16, 0x40000000);
+            g.outline(x, y, 16, 16, BORDER);
             ItemStack st = e.getItemBySlot(slot);
             if (!st.isEmpty()) {
-                g.item(st, x, sy);
-                g.itemDecorations(font, st, x, sy);
-                if (mouseX >= x && mouseX < x + 16 && mouseY >= sy && mouseY < sy + 16) {
+                g.item(st, x, y);
+                g.itemDecorations(font, st, x, y);
+                if (mouseX >= x && mouseX < x + 16 && mouseY >= y && mouseY < y + 16) {
                     g.setTooltipForNextFrame(font, st, mouseX, mouseY);
                 }
             }
-            x += step;
+            x += 18;
         }
     }
 
@@ -562,13 +610,23 @@ public final class AnimusScreen extends Screen {
         return o.has(k) && !o.get(k).isJsonNull() ? o.get(k).getAsString() : "";
     }
 
-    /** Read-only backpack grid (36 main slots) fetched via RequestInventoryPayload. Equipment is
-     *  in the header strip, so it isn't repeated here. */
+    /** The Items tab: vitals (HP + hunger) + equipment + the read-only 36-slot backpack, all fetched
+     *  via RequestInventoryPayload (food + items) and the live entity (HP + equipment). */
     private void renderItems(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        int y = top + HEADER_H + VITALS_H + 6;
-        g.text(font, Component.literal("Backpack (read-only)"), left + PAD, y, TXT_MUTED);
-
         var snap = ClientAnimusInventory.get(uuid).orElse(null);
+        AbstractClientPlayer e = ClientAnimusLookup.resolve(uuid);
+
+        // -- vitals row: HP + hunger (left), equipment (right) --
+        int vy = top + HEADER_H + 6;
+        if (e != null) renderHpBar(g, left + PAD, vy, e.getHealth(), e.getMaxHealth());
+        if (snap != null && snap.loaded()) renderHungerBar(g, left + PAD + 110, vy, snap.foodLevel());
+        if (e != null) {
+            renderEquipment(g, e, left + PANEL_W - PAD - EQUIP.length * 18, vy + 1, mouseX, mouseY);
+        }
+
+        // -- backpack --
+        int y = vy + 24;
+        g.text(font, Component.literal("Backpack (read-only)"), left + PAD, y, TXT_MUTED);
         if (snap == null) {
             g.text(font, Component.literal("loading…"), left + PAD, y + 16, TXT_FAINT);
             return;
@@ -581,12 +639,11 @@ public final class AnimusScreen extends Screen {
         List<ItemStack> items = snap.items();
         int gx = left + (PANEL_W - 9 * 18) / 2;       // centre the 9-wide grid
         int gy = y + 16;
-        // storage rows (slots 9..35), then the hotbar (0..8) below a small gap
-        for (int i = 9; i < 36; i++) {
+        for (int i = 9; i < 36; i++) {                 // storage rows (slots 9..35)
             int col = (i - 9) % 9, row = (i - 9) / 9;
             drawSlot(g, items, i, gx + col * 18, gy + row * 18, mouseX, mouseY);
         }
-        int hotbarY = gy + 3 * 18 + 6;
+        int hotbarY = gy + 3 * 18 + 6;                 // hotbar (slots 0..8)
         for (int i = 0; i < 9; i++) {
             drawSlot(g, items, i, gx + i * 18, hotbarY, mouseX, mouseY);
         }

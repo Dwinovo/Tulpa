@@ -16,62 +16,67 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Advancement-style HUD toasts: when an Animus speaks or starts an action while
- * you're NOT looking at its panel, a small card slides in top-right with its name
- * and what it's doing, then auto-dismisses. Brief by design — the full transcript
- * lives in the chat tab.
- *
- * <p>{@link #tick()} (each client tick) polls every companion's agent loop for new
- * assistant turns and enqueues a toast; {@link #render} draws + animates them. Both
- * loaders call into here from their HUD hook + client tick. Client main thread only.
+ * Left-side HUD activity cards. ONE card per Animus: new reactions append a line
+ * to that companion's existing card. Each line carries its OWN lifetime — an old
+ * line vanishes while newer ones linger, and the card itself stays until ALL its
+ * lines have expired. Shown only when not watching a panel. Brief by design.
  */
 public final class AnimusToasts {
 
-    private static final int W = 162;
-    private static final int H = 28;
+    private static final int W = 172;
     private static final int MARGIN = 6;
     private static final int GAP = 4;
-    private static final int MAX_VISIBLE = 4;
+    private static final int HEADER_H = 13;
+    private static final int LINE_H = 11;
+    private static final int PAD = 4;
+    private static final int MAX_LINES = 4;
+    private static final int MAX_CARDS = 4;
+    private static final long LINE_LIFE_MS = 5000;
     private static final long SLIDE_MS = 220;
-    private static final long HOLD_MS = 4200;
-    private static final long LIFE_MS = SLIDE_MS + HOLD_MS + SLIDE_MS;
 
     private static final int BG = 0xF00E1116;
     private static final int BORDER = 0xFF2B313B;
+    private static final int ACCENT = 0xFF4F8CC9;
     private static final int NAME = 0xFFE6E8EB;
     private static final int REPLY = 0xFF6FC3FF;
     private static final int ACTION = 0xFF7FD4C8;
 
     private static final Map<UUID, Integer> SEEN = new HashMap<>();
-    private static final Deque<Toast> TOASTS = new ArrayDeque<>();
+    /** Insertion-ordered so cards stack stably. */
+    private static final Map<UUID, Card> CARDS = new LinkedHashMap<>();
 
     private AnimusToasts() {}
 
-    private record Toast(String name, String line, int color, long bornMs) {}
+    private record Line(String text, int color, long bornMs) {}
 
-    /** Poll loops for new assistant turns, drop expired toasts. */
+    private static final class Card {
+        final String name;
+        final long bornMs;
+        final Deque<Line> lines = new ArrayDeque<>();   // oldest first
+        Card(String name, long bornMs) { this.name = name; this.bornMs = bornMs; }
+    }
+
+    /** Drop expired lines / empty cards, then poll loops for new assistant turns. */
     public static void tick() {
         long now = System.currentTimeMillis();
-        TOASTS.removeIf(t -> now - t.bornMs() > LIFE_MS);
+        CARDS.values().forEach(c -> c.lines.removeIf(l -> now - l.bornMs() > LINE_LIFE_MS));
+        CARDS.values().removeIf(c -> c.lines.isEmpty());
 
         for (AnimusRoster.Entry entry : AnimusRoster.instance().entries()) {
             UUID uuid = entry.uuid();
             AgentLoopRegistry.get(uuid).ifPresent(loop -> {
                 List<ConvoState.Msg> snap = loop.convo().snapshot();
                 int prev = SEEN.getOrDefault(uuid, -1);
-                if (prev < 0) {                       // first sight — don't replay the backlog
-                    SEEN.put(uuid, snap.size());
-                    return;
-                }
+                if (prev < 0) { SEEN.put(uuid, snap.size()); return; }   // skip backlog on first sight
                 for (int i = prev; i < snap.size(); i++) {
                     if (snap.get(i) instanceof ConvoState.Msg.Assistant a) {
-                        Toast t = toastFor(entry.name(), a.turn(), now);
-                        if (t != null) push(t);
+                        addLine(uuid, entry.name(), a.turn(), now);
                     }
                 }
                 SEEN.put(uuid, snap.size());
@@ -79,58 +84,60 @@ public final class AnimusToasts {
         }
     }
 
-    /** One toast per assistant turn: the spoken reply if any, else the action it started. */
-    private static Toast toastFor(String name, AssistantTurn turn, long now) {
+    /** Append one line for an assistant turn: spoken reply if any, else the action it started. */
+    private static void addLine(UUID uuid, String name, AssistantTurn turn, long now) {
+        Line line;
         if (turn.content() != null && !turn.content().isBlank()) {
-            return new Toast(name, snip(turn.content(), 34), REPLY, now);
-        }
-        if (!turn.toolCalls().isEmpty()) {
+            line = new Line(snip(turn.content(), 36), REPLY, now);
+        } else if (!turn.toolCalls().isEmpty()) {
             LlmToolCall tc = turn.toolCalls().get(turn.toolCalls().size() - 1);
-            String extra = turn.toolCalls().size() > 1 ? "  +" + (turn.toolCalls().size() - 1) : "";
-            return new Toast(name, "▸ " + tc.name() + extra, ACTION, now);
+            String extra = turn.toolCalls().size() > 1 ? " +" + (turn.toolCalls().size() - 1) : "";
+            line = new Line("▸ " + tc.name() + extra, ACTION, now);
+        } else {
+            return;
         }
-        return null;
-    }
-
-    private static void push(Toast t) {
-        TOASTS.addLast(t);
-        while (TOASTS.size() > MAX_VISIBLE) TOASTS.removeFirst();
+        Card card = CARDS.computeIfAbsent(uuid, u -> {
+            while (CARDS.size() >= MAX_CARDS) {       // make room — drop the oldest card
+                UUID oldest = CARDS.keySet().iterator().next();
+                CARDS.remove(oldest);
+            }
+            return new Card(name, now);
+        });
+        card.lines.addLast(line);
+        while (card.lines.size() > MAX_LINES) card.lines.removeFirst();
     }
 
     public static void render(GuiGraphicsExtractor g) {
-        if (TOASTS.isEmpty()) return;
+        if (CARDS.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
-        if (mc.screen instanceof AnimusScreen || mc.screen instanceof RosterScreen) return;  // already watching
+        if (mc.screen instanceof AnimusScreen || mc.screen instanceof RosterScreen) return;
 
         Font font = mc.font;
         long now = System.currentTimeMillis();
-        int right = g.guiWidth() - MARGIN;
         int y = MARGIN;
-        for (Toast t : new ArrayList<>(TOASTS)) {
-            long age = now - t.bornMs();
-            int off = slideOffset(age);
-            int x = right - W + off;
-            g.fill(x, y, x + W, y + H, BG);
-            g.outline(x, y, W, H, BORDER);
-            g.fill(x, y, x + 2, y + H, t.color());                     // left accent bar
-            g.text(font, Component.literal(t.name()), x + 7, y + 5, NAME);
-            g.text(font, Component.literal(t.line()), x + 7, y + 16, t.color());
-            y += H + GAP;
+        for (Card card : new ArrayList<>(CARDS.values())) {
+            if (card.lines.isEmpty()) continue;
+            int h = HEADER_H + card.lines.size() * LINE_H + PAD;
+            int off = slideIn(now - card.bornMs);          // W → 0 from off-screen left
+            int x = MARGIN - off;
+
+            g.fill(x, y, x + W, y + h, BG);
+            g.outline(x, y, W, h, BORDER);
+            g.fill(x, y, x + 2, y + h, ACCENT);            // left accent bar
+            g.text(font, Component.literal(card.name), x + 7, y + 3, NAME);
+            int ly = y + HEADER_H;
+            for (Line line : card.lines) {
+                g.text(font, Component.literal(line.text()), x + 7, ly, line.color());
+                ly += LINE_H;
+            }
+            y += h + GAP;
         }
     }
 
-    /** Slide-in from the right, hold, slide-out. Returns px to push the card right (0 = docked). */
-    private static int slideOffset(long age) {
-        if (age < SLIDE_MS) {
-            float p = 1f - (float) age / SLIDE_MS;        // 1→0
-            return (int) (W * p * p);
-        }
-        long outStart = SLIDE_MS + HOLD_MS;
-        if (age > outStart) {
-            float p = Math.min(1f, (float) (age - outStart) / SLIDE_MS);
-            return (int) (W * p * p);
-        }
-        return 0;
+    private static int slideIn(long age) {
+        if (age >= SLIDE_MS) return 0;
+        float p = 1f - (float) age / SLIDE_MS;             // 1 → 0
+        return (int) (W * p * p);
     }
 
     private static String snip(String s, int max) {
@@ -140,6 +147,6 @@ public final class AnimusToasts {
 
     public static void clear() {
         SEEN.clear();
-        TOASTS.clear();
+        CARDS.clear();
     }
 }

@@ -19,7 +19,8 @@ import java.util.UUID;
  * in unloaded chunks (or not the requester's) — no contents. Dropped into
  * {@link ClientAnimusInventory} for the Items tab to render read-only.
  */
-public record AnimusInventoryPayload(UUID uuid, boolean loaded, List<ItemStack> items)
+public record AnimusInventoryPayload(UUID uuid, boolean loaded, List<ItemStack> items,
+                                    int foodLevel, float saturation)
         implements CustomPacketPayload {
 
     public static final Type<AnimusInventoryPayload> TYPE = new Type<>(
@@ -30,6 +31,8 @@ public record AnimusInventoryPayload(UUID uuid, boolean loaded, List<ItemStack> 
                     UUIDUtil.STREAM_CODEC, AnimusInventoryPayload::uuid,
                     ByteBufCodecs.BOOL, AnimusInventoryPayload::loaded,
                     ItemStack.OPTIONAL_LIST_STREAM_CODEC, AnimusInventoryPayload::items,
+                    ByteBufCodecs.VAR_INT, AnimusInventoryPayload::foodLevel,
+                    ByteBufCodecs.FLOAT, AnimusInventoryPayload::saturation,
                     AnimusInventoryPayload::new);
 
     @Override
@@ -39,7 +42,7 @@ public record AnimusInventoryPayload(UUID uuid, boolean loaded, List<ItemStack> 
 
     /** Client main thread. */
     public static void handle(AnimusInventoryPayload p) {
-        ClientAnimusInventory.update(p.uuid(),
-                new ClientAnimusInventory.Snapshot(p.loaded(), p.items(), System.currentTimeMillis()));
+        ClientAnimusInventory.update(p.uuid(), new ClientAnimusInventory.Snapshot(
+                p.loaded(), p.items(), p.foodLevel(), p.saturation(), System.currentTimeMillis()));
     }
 }

@@ -30,3 +30,6 @@ logs
 
 # datagen output — regenerated via ./gradlew :fabric:runDatagen + :neoforge:runData
 **/generated/
+
+# Claude local tooling (skills, settings, etc.) — not mod source
+.claude/
