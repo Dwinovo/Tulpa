@@ -57,8 +57,7 @@ public final class TulpaScreen extends Screen {
     private static final int PANEL_W = 380;
     private static final int PANEL_H = 232;
     // Left companion rail (folded-in roster): one avatar per Tulpa, click to switch, + to summon.
-    private static final int RAIL_W = 46;
-    private static final int RAIL_GAP = 6;       // rail → panel
+    private static final int RAIL_W = 46;        // left rail column width (baked into the workspace sprite)
     private static final int RAIL_AV = 26;       // avatar tile size
     private static final int RAIL_SLOT = 32;     // vertical pitch per avatar
     private static final int HEADER_H = 22;
@@ -91,14 +90,11 @@ public final class TulpaScreen extends Screen {
     private static final int OK = TH.ok();
     private static final int RUN = TH.run();
     private static final int FAIL = TH.fail();
-    /** Cottage panel chrome — a vanilla GUI sprite (assets/tulpa/textures/gui/sprites/panel.png,
-     *  loaded into the GUI sprite atlas at resource-load), drawn with blitSprite like vanilla widgets. */
-    private static final net.minecraft.resources.Identifier PANEL_SPRITE =
-            net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, "panel");
     private static net.minecraft.resources.Identifier railSpr(String n) {
         return net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, n);
     }
-    private static final net.minecraft.resources.Identifier RAIL_SPRITE = railSpr("rail");
+    /** rail + panel composited into ONE sprite (continuous header, no gap; panel's left border = divider). */
+    private static final net.minecraft.resources.Identifier WORKSPACE_SPRITE = railSpr("workspace");
     private static final net.minecraft.resources.Identifier AVATAR_FRAME = railSpr("avatar_frame");
     private static final net.minecraft.resources.Identifier AVATAR_FRAME_ACTIVE = railSpr("avatar_frame_active");
     private static final net.minecraft.resources.Identifier SUMMON_SPRITE = railSpr("summon");
@@ -188,9 +184,9 @@ public final class TulpaScreen extends Screen {
 
     @Override
     protected void init() {
-        int composite = RAIL_W + RAIL_GAP + PANEL_W;
+        int composite = RAIL_W + PANEL_W;        // rail flush against the panel — one merged sprite
         this.railX = (this.width - composite) / 2;
-        this.left = railX + RAIL_W + RAIL_GAP;
+        this.left = railX + RAIL_W;
         this.top = (this.height - PANEL_H) / 2;
         layoutTabs();
         rebuild();
@@ -499,12 +495,10 @@ public final class TulpaScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
         super.extractRenderState(g, mouseX, mouseY, partial);
 
-        renderRail(g, mouseX, mouseY);   // left companion rail (folded-in roster)
-
-        // Cottage panel — 100% the GUI sprite (warm tan ground + dot-grid + sage band + warm-brown
-        // border), drawn the vanilla way. No procedural draw.
+        // ONE merged Cottage sprite: left rail column + panel, continuous header, no gap.
         g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
-                PANEL_SPRITE, left, top, PANEL_W, PANEL_H);
+                WORKSPACE_SPRITE, railX, top, RAIL_W + PANEL_W, PANEL_H);
+        renderRail(g, mouseX, mouseY);   // avatars + status + summon tile on the rail column
 
         txt(g, Component.literal(name == null ? "Tulpa" : name), left + PAD, top + 7, ON_BAND);
         renderTabs(g, mouseX, mouseY);
@@ -546,14 +540,14 @@ public final class TulpaScreen extends Screen {
 
     // ---- left companion rail ----
 
-    /** The folded-in roster: one avatar head per companion, active one framed gold, a status dot each. */
+    /** The folded-in roster (on the merged sprite's rail column): one avatar head per companion below the
+     *  green header, active one framed gold, a status dot each, + tile at the bottom. */
     private void renderRail(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         var pipe = net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED;
-        g.blitSprite(pipe, RAIL_SPRITE, railX, top, RAIL_W, PANEL_H);
         List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
         int ax = railX + (RAIL_W - RAIL_AV) / 2;
         for (int i = 0; i < entries.size(); i++) {
-            int ay = top + PAD + i * RAIL_SLOT;
+            int ay = top + HEADER_H + 4 + i * RAIL_SLOT;             // start BELOW the green header
             if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;   // reserve the bottom + slot
             TulpaRoster.Entry e = entries.get(i);
             boolean active = e.uuid().equals(uuid);
@@ -595,8 +589,8 @@ public final class TulpaScreen extends Screen {
         if (mx < ax || mx >= ax + RAIL_AV) return -1;
         List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
         for (int i = 0; i < entries.size(); i++) {
-            int ay = top + PAD + i * RAIL_SLOT;
-            if (ay + RAIL_AV > top + PANEL_H - PAD) break;
+            int ay = top + HEADER_H + 4 + i * RAIL_SLOT;
+            if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;
             if (my >= ay && my < ay + RAIL_AV) return i;
         }
         return -1;
