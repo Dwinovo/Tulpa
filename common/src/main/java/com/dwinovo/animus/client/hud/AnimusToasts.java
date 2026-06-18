@@ -6,7 +6,9 @@ import com.dwinovo.animus.agent.provider.LlmToolCall;
 import com.dwinovo.animus.client.agent.AgentLoopRegistry;
 import com.dwinovo.animus.client.agent.AnimusRoster;
 import com.dwinovo.animus.client.screen.AnimusScreen;
+import com.dwinovo.animus.client.screen.Nb;
 import com.dwinovo.animus.client.screen.RosterScreen;
+import com.dwinovo.animus.client.screen.UiTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -39,13 +41,6 @@ public final class AnimusToasts {
     private static final int MAX_CARDS = 4;
     private static final long LINE_LIFE_MS = 5000;
     private static final long SLIDE_MS = 220;
-
-    private static final int BG = 0xF00E1116;
-    private static final int BORDER = 0xFF2B313B;
-    private static final int ACCENT = 0xFF4F8CC9;
-    private static final int NAME = 0xFFE6E8EB;
-    private static final int REPLY = 0xFF6FC3FF;
-    private static final int ACTION = 0xFF7FD4C8;
 
     private static final Map<UUID, Integer> SEEN = new HashMap<>();
     /** Insertion-ordered so cards stack stably. */
@@ -86,13 +81,14 @@ public final class AnimusToasts {
 
     /** Append one line for an assistant turn: spoken reply if any, else the action it started. */
     private static void addLine(UUID uuid, String name, AssistantTurn turn, long now) {
+        UiTheme th = UiTheme.current();
         Line line;
         if (turn.content() != null && !turn.content().isBlank()) {
-            line = new Line(snip(turn.content(), 36), REPLY, now);
+            line = new Line(snip(turn.content(), 36), th.reply(), now);
         } else if (!turn.toolCalls().isEmpty()) {
             LlmToolCall tc = turn.toolCalls().get(turn.toolCalls().size() - 1);
             String extra = turn.toolCalls().size() > 1 ? " +" + (turn.toolCalls().size() - 1) : "";
-            line = new Line("▸ " + tc.name() + extra, ACTION, now);
+            line = new Line("▸ " + tc.name() + extra, th.run(), now);
         } else {
             return;
         }
@@ -113,6 +109,7 @@ public final class AnimusToasts {
         if (mc.screen instanceof AnimusScreen || mc.screen instanceof RosterScreen) return;
 
         Font font = mc.font;
+        UiTheme th = UiTheme.current();
         long now = System.currentTimeMillis();
         int y = MARGIN;
         for (Card card : new ArrayList<>(CARDS.values())) {
@@ -121,13 +118,14 @@ public final class AnimusToasts {
             int off = slideIn(now - card.bornMs);          // W → 0 from off-screen left
             int x = MARGIN - off;
 
-            g.fill(x, y, x + W, y + h, BG);
-            g.outline(x, y, W, h, BORDER);
-            g.fill(x, y, x + 2, y + h, ACCENT);            // left accent bar
-            g.text(font, Component.literal(card.name), x + 7, y + 3, NAME);
+            // Cottage card: sage header strip + warm tan body + thick warm-brown border.
+            g.fill(x, y, x + W, y + h, th.ground());
+            g.fill(x, y, x + W, y + HEADER_H - 1, th.band());     // sage name strip
+            Nb.border(g, x, y, W, h, 2, th.border());
+            Nb.text(g, font, card.name, x + 7, y + 3, th.onBand());
             int ly = y + HEADER_H;
             for (Line line : card.lines) {
-                g.text(font, Component.literal(line.text()), x + 7, ly, line.color());
+                Nb.text(g, font, line.text(), x + 7, ly, line.color());
                 ly += LINE_H;
             }
             y += h + GAP;

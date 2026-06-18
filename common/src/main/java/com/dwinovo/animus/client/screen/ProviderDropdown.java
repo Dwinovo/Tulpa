@@ -14,14 +14,6 @@ import net.minecraft.network.chat.Component;
 public final class ProviderDropdown {
 
     private static final int ROW = 16;
-    private static final int BG = 0x40000000;
-    private static final int OPEN_BG = 0xF0151A20;
-    private static final int HOVER = 0x60FFFFFF;
-    private static final int BORDER = 0xFF2B313B;
-    private static final int ACCENT = 0xFF4F8CC9;
-    private static final int TXT = 0xFFE6E8EB;
-    private static final int TXT_MUTED = 0xFF8A929C;
-
     private int x, y, w, h = 18;
     private boolean open;
     private String selectedId;
@@ -39,25 +31,26 @@ public final class ProviderDropdown {
     public void close() { open = false; }
 
     public void render(GuiGraphicsExtractor g, Font font, int mouseX, int mouseY) {
-        g.fill(x, y, x + w, y + h, BG);
-        g.outline(x, y, w, h, open ? ACCENT : BORDER);
+        UiTheme th = UiTheme.current();
+        g.fill(x, y, x + w, y + h, th.field());                     // parchment box (clickable)
+        Nb.border(g, x, y, w, h, 2, open ? th.cta() : th.border());
         int ty = y + (h - 8) / 2;
-        g.text(font, Component.literal(LlmProviders.byId(selectedId).displayName()), x + 6, ty, TXT);
-        g.text(font, Component.literal(open ? "▴" : "▾"), x + w - 12, ty, TXT_MUTED);
+        Nb.text(g, font, LlmProviders.byId(selectedId).displayName(), x + 6, ty, th.text());
+        Nb.text(g, font, open ? "▴" : "▾", x + w - 12, ty, th.textDim());
 
         if (open) {
             int oy = y + h;
             int n = LlmProviders.ALL.size();
-            g.fill(x, oy, x + w, oy + n * ROW, OPEN_BG);
+            g.fill(x, oy, x + w, oy + n * ROW, th.ground());
             for (int i = 0; i < n; i++) {
                 LlmProviders.Option o = LlmProviders.ALL.get(i);
                 int ry = oy + i * ROW;
                 boolean hover = mouseX >= x && mouseX < x + w && mouseY >= ry && mouseY < ry + ROW;
-                if (hover) g.fill(x, ry, x + w, ry + ROW, HOVER);
+                if (hover) g.fill(x, ry, x + w, ry + ROW, 0x33000000);
                 boolean sel = o.id().equals(selectedId);
-                g.text(font, Component.literal(o.displayName()), x + 6, ry + (ROW - 8) / 2, sel ? ACCENT : TXT);
+                Nb.text(g, font, o.displayName(), x + 6, ry + (ROW - 8) / 2, sel ? th.cta() : th.text());
             }
-            g.outline(x, oy, w, n * ROW, ACCENT);
+            Nb.border(g, x, oy, w, n * ROW, 2, th.border());
         }
     }
 

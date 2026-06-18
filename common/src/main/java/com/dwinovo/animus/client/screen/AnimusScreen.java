@@ -406,7 +406,7 @@ public final class AnimusScreen extends Screen {
         for (AbstractWidget w : overlay) {
             if (w instanceof EditBox eb) {
                 g.fill(eb.getX(), eb.getY(), eb.getX() + eb.getWidth(), eb.getY() + eb.getHeight(), FIELD);
-                SimpleButton.thickBorder(g, eb.getX(), eb.getY(), eb.getWidth(), eb.getHeight(), 2, BORDER);
+                Nb.border(g, eb.getX(), eb.getY(), eb.getWidth(), eb.getHeight(), 2, BORDER);
             }
         }
         for (AbstractWidget w : overlay) {
@@ -687,10 +687,12 @@ public final class AnimusScreen extends Screen {
         }
     }
 
+    private static final net.minecraft.resources.Identifier SLOT_SPRITE =
+            net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.animus.Constants.MOD_ID, "slot");
+
     private void drawSlot(GuiGraphicsExtractor g, List<ItemStack> items, int index,
                           int x, int y, int mouseX, int mouseY) {
-        g.fill(x, y, x + 16, y + 16, 0x40000000);
-        g.outline(x, y, 16, 16, BORDER);
+        g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, SLOT_SPRITE, x, y, 16, 16);
         ItemStack st = index < items.size() ? items.get(index) : ItemStack.EMPTY;
         if (!st.isEmpty()) {
             g.item(st, x, y);

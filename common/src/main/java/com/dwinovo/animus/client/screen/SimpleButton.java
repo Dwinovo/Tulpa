@@ -1,27 +1,29 @@
 package com.dwinovo.animus.client.screen;
 
+import com.dwinovo.animus.Constants;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 /**
- * Vanilla {@link Button} subclass with a flat, half-transparent black skin
- * — used throughout the Animus GUI so the busier Minecraft beveled-button
- * style doesn't clash with the dark preview backdrop.
- *
- * <h2>States</h2>
- * <ul>
- *   <li><b>Idle</b>: 54%-opaque black fill, faint white border</li>
- *   <li><b>Hover</b>: slightly brighter fill, full-opacity warm-white
- *       border, top edge highlight</li>
- *   <li><b>Disabled</b> (also used to mark the currently-selected entry):
- *       30%-opaque black fill, muted border</li>
- * </ul>
- *
- * <p>Pattern lifted from the music-box screen in {@code minecraft-chiikawa}
- * (same author) — staying consistent across both projects' GUIs.
+ * The Animus button: a vanilla GUI sprite (nine-slice, so it stretches to any width
+ * with a crisp border), drawn with {@code blitSprite} like vanilla widgets — idle /
+ * highlighted / disabled states from three sprites under
+ * {@code textures/gui/sprites/button*.png}. Label is flat (shadowless) + coloured.
  */
 public final class SimpleButton extends Button {
+
+    private static final Identifier IDLE = sprite("button");
+    private static final Identifier HOVER = sprite("button_highlighted");
+    private static final Identifier DISABLED = sprite("button_disabled");
+
+    private static Identifier sprite(String name) {
+        return Identifier.fromNamespaceAndPath(Constants.MOD_ID, name);
+    }
 
     public SimpleButton(int x, int y, int width, int height, Component message, Button.OnPress onPress) {
         super(x, y, width, height, message, onPress,
@@ -29,31 +31,15 @@ public final class SimpleButton extends Button {
     }
 
     @Override
-    protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        // BlockFrame button: warm parchment fill + thick warm-brown border + hard offset shadow
-        // (the filled look marks it CLICKABLE). Disabled / pressed flattens the shadow.
-        UiTheme t = UiTheme.current();
+    protected void extractContents(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
         boolean hovered = active && isHoveredOrFocused();
-        int border = t.border();
-        int fill = !active ? 0xFFB6A988 : (hovered ? 0xFFF2E4C2 : 0xFFE7D7B2);
+        Identifier sprite = !active ? DISABLED : (hovered ? HOVER : IDLE);
+        g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, w, h);
 
-        int sh = active ? (hovered ? 2 : 3) : 0;
-        int oy = active && hovered ? 1 : 0;             // nudge down on hover (button "press")
-        if (sh > 0) graphics.fill(x + sh, y + sh, x + w + sh, y + h + sh, border);
-        graphics.fill(x, y + oy, x + w, y + h + oy, fill);
-        thickBorder(graphics, x, y + oy, w, h, 2, border);
-        net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
-        int color = active ? t.text() : 0xFF6E5E48;
+        Font font = Minecraft.getInstance().font;
+        int color = active ? UiTheme.current().text() : 0xFF6E5E48;
         int tw = font.width(getMessage());
-        graphics.text(font, getMessage(), x + (w - tw) / 2, y + oy + (h - 8) / 2, color, false);  // flat, no shadow
-    }
-
-    /** Square thick border = four filled edge rects (no rounded corners). */
-    static void thickBorder(GuiGraphicsExtractor g, int x, int y, int w, int h, int t, int color) {
-        g.fill(x, y, x + w, y + t, color);
-        g.fill(x, y + h - t, x + w, y + h, color);
-        g.fill(x, y, x + t, y + h, color);
-        g.fill(x + w - t, y, x + w, y + h, color);
+        Nb.text(g, font, getMessage(), x + (w - tw) / 2, y + (h - 8) / 2, color);   // flat, coloured
     }
 }
