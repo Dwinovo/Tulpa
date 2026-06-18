@@ -183,13 +183,22 @@ public final class AnimusScreen extends Screen {
     }
 
     // Shadowless text — BlockFrame is flat, and a drop shadow on DARK text over a LIGHT ground makes
-    // the glyph merge with its own shadow ("smudged" look). Light text on the band is fine flat too.
+    // the glyph merge with its own shadow ("smudged"). This build's shadowless path ignores the colour
+    // PARAM, so we bake the colour into the text's Style instead.
     private void txt(GuiGraphicsExtractor g, Component c, int x, int y, int color) {
-        g.text(font, c, x, y, color, false);
+        g.text(font, c.copy().withStyle(s -> s.withColor(
+                net.minecraft.network.chat.TextColor.fromRgb(color & 0xFFFFFF))), x, y, -1, false);
     }
 
+    /** The FormattedCharSequence must already carry its colour (see {@link #colored}). */
     private void txt(GuiGraphicsExtractor g, FormattedCharSequence c, int x, int y, int color) {
-        g.text(font, c, x, y, color, false);
+        g.text(font, c, x, y, -1, false);
+    }
+
+    /** A coloured text Component (colour in the Style, so shadowless rendering keeps it). */
+    private static Component colored(String s, int color) {
+        return Component.literal(s).withStyle(st -> st.withColor(
+                net.minecraft.network.chat.TextColor.fromRgb(color & 0xFFFFFF)));
     }
 
     private void buildChatWidgets() {
@@ -536,8 +545,7 @@ public final class AnimusScreen extends Screen {
                         wrap(out, turn.content(), TXT, width, null);
                     }
                     for (LlmToolCall tc : turn.toolCalls()) {
-                        out.add(new Row(FormattedCharSequence.forward(toolLine(tc), net.minecraft.network.chat.Style.EMPTY),
-                                TOOL, tc.id()));
+                        out.add(new Row(colored(toolLine(tc), TOOL).getVisualOrderText(), TOOL, tc.id()));
                     }
                 }
                 case ConvoState.Msg.Tool ignored -> { /* result drives done/fail, not a row */ }
@@ -559,7 +567,7 @@ public final class AnimusScreen extends Screen {
     }
 
     private void wrap(List<Row> out, String text, int color, int width, String toolId) {
-        for (FormattedCharSequence seq : font.split(Component.literal(text), width - 2)) {
+        for (FormattedCharSequence seq : font.split(colored(text, color), width - 2)) {   // colour baked in
             out.add(new Row(seq, color, toolId));
         }
     }
@@ -603,12 +611,13 @@ public final class AnimusScreen extends Screen {
             String glyph = switch (status) { case "completed" -> "✔"; case "in_progress" -> "▸"; default -> "○"; };
             int color = switch (status) { case "completed" -> OK; case "in_progress" -> RUN; default -> TXT_MUTED; };
             txt(g, Component.literal(glyph), x, ly, color);
-            // one wrapped line of the content beside the glyph
-            List<FormattedCharSequence> lines = font.split(Component.literal(content), PLAN_W - 14);
+            // one wrapped line of the content beside the glyph (colour baked into the FCS)
+            int textColor = status.equals("pending") ? TXT_MUTED : TXT;
+            List<FormattedCharSequence> lines = font.split(colored(content, textColor), PLAN_W - 14);
             int sub = 0;
             for (FormattedCharSequence seq : lines) {
                 if (ly + LINE_H >= bottom) break;
-                txt(g, seq, x + 10, ly, status.equals("pending") ? TXT_MUTED : TXT);
+                txt(g, seq, x + 10, ly, textColor);
                 ly += LINE_H;
                 if (++sub >= 2) break;   // cap each item at 2 lines
             }
