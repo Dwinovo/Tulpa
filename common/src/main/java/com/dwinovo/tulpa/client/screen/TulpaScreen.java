@@ -95,8 +95,14 @@ public final class TulpaScreen extends Screen {
      *  loaded into the GUI sprite atlas at resource-load), drawn with blitSprite like vanilla widgets. */
     private static final net.minecraft.resources.Identifier PANEL_SPRITE =
             net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, "panel");
-    private static final net.minecraft.resources.Identifier RAIL_SPRITE =
-            net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, "bubble");
+    private static net.minecraft.resources.Identifier railSpr(String n) {
+        return net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, n);
+    }
+    private static final net.minecraft.resources.Identifier RAIL_SPRITE = railSpr("rail");
+    private static final net.minecraft.resources.Identifier AVATAR_FRAME = railSpr("avatar_frame");
+    private static final net.minecraft.resources.Identifier AVATAR_FRAME_ACTIVE = railSpr("avatar_frame_active");
+    private static final net.minecraft.resources.Identifier SUMMON_SPRITE = railSpr("summon");
+    private static final net.minecraft.resources.Identifier SUMMON_ACTIVE = railSpr("summon_active");
 
     private static final String[] SPIN = {"|", "/", "-", "\\"};
     /** Armor column on the Items tab (top → bottom); offhand is drawn separately below it. */
@@ -551,21 +557,16 @@ public final class TulpaScreen extends Screen {
             if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;   // reserve the bottom + slot
             TulpaRoster.Entry e = entries.get(i);
             boolean active = e.uuid().equals(uuid);
-            boolean hover = mouseX >= ax && mouseX < ax + RAIL_AV && mouseY >= ay && mouseY < ay + RAIL_AV;
+            // textured socket behind the head (gold-bordered when active), then the avatar, then a status LED
+            g.blitSprite(pipe, active ? AVATAR_FRAME_ACTIVE : AVATAR_FRAME, ax - 2, ay - 2, RAIL_AV + 4, RAIL_AV + 4);
             PlayerFaceExtractor.extractRenderState(g, skinFor(e.uuid()), ax, ay, RAIL_AV);
             int d = ax + RAIL_AV - 6, e2 = ay + RAIL_AV - 6;          // status dot, bottom-right
             g.fill(d, e2, d + 5, e2 + 5, statusColor(e.uuid()));
             Nb.border(g, d, e2, 5, 5, 1, BORDER);
-            Nb.border(g, ax - 1, ay - 1, RAIL_AV + 2, RAIL_AV + 2,
-                    active ? 2 : 1, active ? CTA : (hover ? ON_BAND : BORDER));
         }
-        // "+" summon tile, pinned to the rail bottom
+        // "+" summon tile (baked "+" glyph), pinned to the rail bottom
         int py = top + PANEL_H - PAD - RAIL_AV;
-        boolean ph = mouseX >= ax && mouseX < ax + RAIL_AV && mouseY >= py && mouseY < py + RAIL_AV;
-        g.fill(ax, py, ax + RAIL_AV, py + RAIL_AV, FIELD);
-        Nb.border(g, ax, py, RAIL_AV, RAIL_AV, 2, summoning ? CTA : (ph ? ON_BAND : BORDER));
-        txt(g, Component.literal("+"), ax + (RAIL_AV - font.width("+")) / 2, py + (RAIL_AV - 8) / 2,
-                summoning ? CTA : TXT);
+        g.blitSprite(pipe, summoning ? SUMMON_ACTIVE : SUMMON_SPRITE, ax, py, RAIL_AV, RAIL_AV);
     }
 
     private boolean railPlusAt(int mx, int my) {
