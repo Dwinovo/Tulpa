@@ -830,7 +830,7 @@ public final class TulpaScreen extends Screen {
 
     /** Scroll-affordance chevron sprite (amber pixel-art triangle, up = more above / down = more below).
      *  Blitted at its native 11×6 so the pixels stay crisp (no scaling, no AA). */
-    private void chevron(GuiGraphicsExtractor g, int cx, int y, boolean up) {
+    private void chevron(GuiGraphics g, int cx, int y, boolean up) {
         g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
                 up ? CHEVRON_UP : CHEVRON_DOWN, cx - 5, y, 11, 6);
     }
