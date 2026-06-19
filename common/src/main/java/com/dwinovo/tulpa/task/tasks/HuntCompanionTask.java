@@ -9,11 +9,16 @@ import com.dwinovo.tulpa.task.CompanionTask;
 import com.dwinovo.tulpa.task.TaskResult;
 import com.dwinovo.tulpa.task.TaskState;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -58,9 +63,6 @@ public final class HuntCompanionTask implements CompanionTask {
     private LivingEntity target;
     private PlayerNav nav;
     private String doneReason = "done";
-    /** The weapon the owner had in hand when the hunt began — restored before every swing so a
-     *  scaffold block the pathfinder put in the hand while bridging is never used as the weapon. */
-    private ItemStack weapon = ItemStack.EMPTY;
 
     public HuntCompanionTask(TulpaPlayer player, HuntTaskRecord record) {
         this.player = player;
@@ -71,8 +73,6 @@ public final class HuntCompanionTask implements CompanionTask {
     public void start() {
         currentRadius = Math.min(INITIAL_RADIUS, r.maxRadius);
         phase = Phase.SCAN;
-        Inventory inv = player.getInventory();
-        weapon = inv.getItem(inv.getSelectedSlot());   // the owner's chosen weapon for this hunt
     }
 
     @Override
@@ -207,7 +207,7 @@ public final class HuntCompanionTask implements CompanionTask {
      *  cooldown has recovered (full-charge damage). */
     private void swing() {
         if (target == null) return;
-        holdWeapon();   // undo any scaffold-swap the pathfinder did while bridging — fight with the sword
+        switchToBestWeapon();   // pathfinder may have swapped a scaffold block into the hand while bridging
         InputDriver.lookAt(player, target.getEyePosition());
         HitResult hit = Interaction.nativeRaytrace(player, ATTACK_REACH);
         boolean onTarget = hit.getType() == HitResult.Type.ENTITY
@@ -223,21 +223,40 @@ public final class HuntCompanionTask implements CompanionTask {
         }
     }
 
-    /** Put the hunt's weapon back in the main hand if the pathfinder's scaffolding swapped it out.
-     *  Mining survives the same swap because {@code BlockDigger} re-picks its tool every dig; combat
-     *  had no equivalent. Restores the EXACT stack the owner equipped (matched by identity), never an
-     *  auto-picked "best" weapon, so it doesn't second-guess the owner's choice. */
-    private void holdWeapon() {
-        if (weapon.isEmpty()) return;                              // fought bare-handed — nothing to restore
+    /** Hold the highest-attack-damage weapon from the WHOLE inventory in the main hand — the combat
+     *  twin of {@code BlockDigger.switchToBestTool} (whole inventory, not just the hotbar). Mining
+     *  survives the pathfinder's bridging scaffold-swap because it re-picks its tool every dig; this
+     *  gives hunt the same guarantee, so a swing never lands with cobblestone instead of a sword. */
+    private void switchToBestWeapon() {
         Inventory inv = player.getInventory();
-        if (inv.getItem(inv.getSelectedSlot()) == weapon) return; // already in hand
+        int best = inv.getSelectedSlot();
+        double bestDmg = weaponDamage(inv.getItem(best));
         for (int i = 0; i < inv.getContainerSize(); i++) {
-            if (inv.getItem(i) == weapon) {
-                player.holdInHand(i);
-                return;
+            double d = weaponDamage(inv.getItem(i));
+            if (d > bestDmg) {
+                bestDmg = d;
+                best = i;
             }
         }
-        // weapon no longer in the pack (broke / dropped) — leave the current hand as-is
+        player.holdInHand(best);
+    }
+
+    /** The flat main-hand attack-damage an item grants (ADD_VALUE modifiers on {@code ATTACK_DAMAGE}) —
+     *  the ranking key for {@link #switchToBestWeapon}, the combat analogue of {@code getDestroySpeed}.
+     *  Sword/axe carry the largest; a block or food scores 0 so it's never chosen over a real weapon. */
+    private static double weaponDamage(ItemStack stack) {
+        if (stack.isEmpty()) return 0.0;
+        ItemAttributeModifiers mods = stack.getOrDefault(
+                DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        double sum = 0.0;
+        for (ItemAttributeModifiers.Entry e : mods.modifiers()) {
+            if (e.slot().test(EquipmentSlot.MAINHAND)
+                    && e.attribute().is(Attributes.ATTACK_DAMAGE)
+                    && e.modifier().operation() == AttributeModifier.Operation.ADD_VALUE) {
+                sum += e.modifier().amount();
+            }
+        }
+        return sum;
     }
 
     private BlockPos targetCell() {
