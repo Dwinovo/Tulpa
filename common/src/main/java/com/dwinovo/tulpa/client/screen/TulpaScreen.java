@@ -62,6 +62,8 @@ public final class TulpaScreen extends Screen {
     private static final int RAIL_W = 46;        // left rail column width (baked into the workspace sprite)
     private static final int RAIL_AV = 26;       // avatar tile size
     private static final int RAIL_SLOT = 32;     // vertical pitch per avatar
+    private static final int RAIL_TOP = 12;      // top margin before the first avatar (clears the active crown)
+    private static final int RAIL_BOT_GAP = 6;   // gap kept above the pinned "+" tile
     private static final int HEADER_H = 22;
     private static final int INPUT_H = 18;
     /** Text fields are inset inside their parchment frame: the EditBox is shrunk by this much
@@ -337,7 +339,7 @@ public final class TulpaScreen extends Screen {
         input.setBordered(false);
         input.setTextShadow(false);
         input.setTextColor(TXT);
-        input.setHint(Component.literal("Talk to " + name + "…"));
+        // No setHint — the EditBox hint renders with a drop shadow; we draw a shadowless one in render().
         if (!savedInput.isEmpty()) { input.setValue(savedInput); savedInput = ""; }
         add(input);
         setInitialFocus(input);
@@ -755,6 +757,12 @@ public final class TulpaScreen extends Screen {
                     : LlmProviders.byId(providerDropdown.selectedId()).defaultModel());
             if (addingSite) placeholder(g, siteNameInput, "e.g. My Proxy");
         }
+        // Chat input placeholder — shadowless, shown whenever empty (the input is focus-by-default,
+        // so placeholder()'s unfocused-only gate won't fire here).
+        if (tab == Tab.CHAT && input != null && input.getValue().isEmpty()) {
+            txt(g, Component.literal("Talk to " + (name == null ? "" : name) + "…"),
+                    input.getX(), input.getY(), TXT_FAINT);
+        }
         // The provider dropdown's open list must sit above even the fields.
         if (tab == Tab.SETTINGS) {
             // render the non-open one first so the open list draws on top
@@ -778,9 +786,10 @@ public final class TulpaScreen extends Screen {
         int ax = railX + (RAIL_W - RAIL_AV) / 2;
         railScroll = Math.clamp(railScroll, 0, maxRailScroll());     // keep valid as the roster grows/shrinks
         int first = railScroll;
+        int startY = railStartY();
         for (int i = first; i < entries.size(); i++) {
-            int ay = top + 8 + (i - first) * RAIL_SLOT;              // rail has no header — start near the top
-            if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;   // reserve the bottom + slot
+            int ay = startY + (i - first) * RAIL_SLOT;
+            if (ay + RAIL_AV > railBottomEdge()) break;
             TulpaRoster.Entry e = entries.get(i);
             boolean active = e.uuid().equals(uuid);
             // textured socket behind the head (gold-bordered when active), then the avatar, then a status LED
@@ -823,10 +832,15 @@ public final class TulpaScreen extends Screen {
                 up ? CHEVRON_UP : CHEVRON_DOWN, cx - 5, y, 11, 6);
     }
 
+    /** Bottom edge an avatar may reach (a gap above the pinned "+" tile). */
+    private int railBottomEdge() {
+        return top + PANEL_H - PAD - RAIL_AV - RAIL_BOT_GAP;
+    }
+
     /** How many avatar slots fit in the rail above the pinned "+" tile. */
     private int railVisibleSlots() {
         int slots = 0;
-        while (top + 8 + slots * RAIL_SLOT + RAIL_AV <= top + PANEL_H - PAD - RAIL_SLOT) slots++;
+        while (top + RAIL_TOP + slots * RAIL_SLOT + RAIL_AV <= railBottomEdge()) slots++;
         return Math.max(1, slots);
     }
 
@@ -834,14 +848,25 @@ public final class TulpaScreen extends Screen {
         return Math.max(0, TulpaRoster.instance().entries().size() - railVisibleSlots());
     }
 
+    /** Y of the first (visible) avatar: centred vertically when the whole roster fits, top-aligned once
+     *  it overflows and scrolls. Fixes the big bottom gap + the first avatar poking past the top edge. */
+    private int railStartY() {
+        int n = TulpaRoster.instance().entries().size();
+        if (n > railVisibleSlots()) return top + RAIL_TOP;          // scrolling — top-align
+        int blockH = Math.max(0, n - 1) * RAIL_SLOT + RAIL_AV;
+        int span = railBottomEdge() - (top + RAIL_TOP);
+        return top + RAIL_TOP + Math.max(0, (span - blockH) / 2);   // centre the block
+    }
+
     /** The companion whose hover-✕ badge is under (mx,my), or null. Mirrors renderRail geometry. */
     private UUID railCloseAt(int mx, int my) {
         int ax = railX + (RAIL_W - RAIL_AV) / 2;
         List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
         int first = Math.clamp(railScroll, 0, maxRailScroll());
+        int startY = railStartY();
         for (int i = first; i < entries.size(); i++) {
-            int ay = top + 8 + (i - first) * RAIL_SLOT;
-            if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;
+            int ay = startY + (i - first) * RAIL_SLOT;
+            if (ay + RAIL_AV > railBottomEdge()) break;
             int bx = ax + RAIL_AV - 9, by = ay - 1;
             if (mx >= bx && mx < bx + 9 && my >= by && my < by + 9) return entries.get(i).uuid();
         }
@@ -874,9 +899,10 @@ public final class TulpaScreen extends Screen {
         if (mx < ax || mx >= ax + RAIL_AV) return -1;
         List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
         int first = Math.clamp(railScroll, 0, maxRailScroll());
+        int startY = railStartY();
         for (int i = first; i < entries.size(); i++) {
-            int ay = top + 8 + (i - first) * RAIL_SLOT;
-            if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;
+            int ay = startY + (i - first) * RAIL_SLOT;
+            if (ay + RAIL_AV > railBottomEdge()) break;
             if (my >= ay && my < ay + RAIL_AV) return i;
         }
         return -1;
