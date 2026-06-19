@@ -8,7 +8,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -104,11 +103,11 @@ public final class SettingsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean dbl) {
-        if (event.button() == 0 && provider != null && provider.mouseClicked(event.x(), event.y())) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && provider != null && provider.mouseClicked(mouseX, mouseY)) {
             return true;
         }
-        return super.mouseClicked(event, dbl);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     private void onSave() {

@@ -17,7 +17,7 @@ public final class TulpaKeys {
     public static final KeyMapping OPEN_ROSTER = new KeyMapping(
             com.dwinovo.tulpa.data.ModLanguageData.Keys.KEY_OPEN_ROSTER,
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G,
-            KeyMapping.Category.MISC);
+            "key.categories.misc");
 
     private TulpaKeys() {}
 

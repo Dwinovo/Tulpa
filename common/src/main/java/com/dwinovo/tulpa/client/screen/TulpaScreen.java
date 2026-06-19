@@ -23,12 +23,10 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
-import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -416,7 +414,7 @@ public final class TulpaScreen extends Screen {
     private void buildApiKeyRow(int x, int y, int w) {
         int eyeW = 22;
         apiKeyInput = field(x, y, w - eyeW - 2, 512, wApiKey);
-        apiKeyInput.addFormatter((text, idx) -> showKey
+        apiKeyInput.setFormatter((text, idx) -> showKey
                 ? FormattedCharSequence.forward(text, net.minecraft.network.chat.Style.EMPTY)
                 : FormattedCharSequence.forward("•".repeat(text.length()), net.minecraft.network.chat.Style.EMPTY));
         // Eye icon instead of a 见/隐 glyph: open eye when masked (click to show), slashed when shown.
@@ -561,22 +559,22 @@ public final class TulpaScreen extends Screen {
     // ---- input ----
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        int k = event.key();
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        int k = keyCode;
         if (dismissPending != null) {
             if (k == 256) { dismissPending = null; rebuild(); return true; }   // Esc cancels the confirm
-            return super.keyPressed(event);
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
         if (summoning) {
             if (k == 257 || k == 335) { doSummon(); return true; }    // Enter
             if (k == 256) { summoning = false; rebuild(); return true; } // Esc cancels (doesn't close panel)
-            return super.keyPressed(event);
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
         if ((k == 257 || k == 335) && input != null && input.isFocused()) {
             onSend();
             return true;
         }
-        return super.keyPressed(event);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     private void doSummon() {
@@ -588,19 +586,19 @@ public final class TulpaScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean dbl) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (dismissPending != null) {
-            return super.mouseClicked(event, dbl);   // modal confirm — let its Cancel/Delete buttons handle it
+            return super.mouseClicked(mouseX, mouseY, button);   // modal confirm — let its Cancel/Delete buttons handle it
         }
-        if (event.button() == 0) {
-            UUID close = railCloseAt((int) event.x(), (int) event.y());
+        if (button == 0) {
+            UUID close = railCloseAt((int) mouseX, (int) mouseY);
             if (close != null) { dismissPending = close; rebuild(); return true; }   // ✕ → confirm bar
-            if (railPlusAt((int) event.x(), (int) event.y())) {   // + → start the summon name prompt
+            if (railPlusAt((int) mouseX, (int) mouseY)) {   // + → start the summon name prompt
                 summoning = !summoning;
                 rebuild();
                 return true;
             }
-            int rail = railIndexAt((int) event.x(), (int) event.y());
+            int rail = railIndexAt((int) mouseX, (int) mouseY);
             if (rail >= 0) {
                 List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
                 if (rail < entries.size()) {
@@ -614,7 +612,7 @@ public final class TulpaScreen extends Screen {
             }
             if (tab == Tab.SETTINGS && providerDropdown != null) {
                 String before = providerDropdown.selectedId();
-                if (providerDropdown.mouseClicked(event.x(), event.y())) {
+                if (providerDropdown.mouseClicked(mouseX, mouseY)) {
                     if (modelDropdown != null) modelDropdown.close();
                     String sel = providerDropdown.selectedId();
                     if (ProviderDropdown.ADD_SITE.equals(sel)) {            // "+ 添加站点" → add-site editor
@@ -633,7 +631,7 @@ public final class TulpaScreen extends Screen {
                 }
             }
             if (tab == Tab.SETTINGS && modelDropdown != null
-                    && modelDropdown.mouseClicked(event.x(), event.y())) {
+                    && modelDropdown.mouseClicked(mouseX, mouseY)) {
                 providerDropdown.close();
                 if (CUSTOM_MODEL.equals(modelDropdown.selectedId())) {       // "自定义…" → free-text box
                     preserveKeyUrl();
@@ -643,18 +641,18 @@ public final class TulpaScreen extends Screen {
                 }
                 return true;
             }
-            int my = (int) event.y();
+            int my = (int) mouseY;
             if (my >= top && my < top + HEADER_H) {
                 for (int i = 0; i < 3; i++) {
-                    if (event.x() >= tabX[i] && event.x() < tabX[i] + tabW[i]) {
+                    if (mouseX >= tabX[i] && mouseX < tabX[i] + tabW[i]) {
                         selectTab(Tab.values()[i]);
                         return true;
                     }
                 }
             }
-            if (tab == Tab.CHAT && toggleFoldAt((int) event.x(), my)) return true;
+            if (tab == Tab.CHAT && toggleFoldAt((int) mouseX, my)) return true;
         }
-        return super.mouseClicked(event, dbl);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     /** If a chat fold-toggle row sits under (mx,my), flip its expanded state. Mirrors renderChat geometry. */

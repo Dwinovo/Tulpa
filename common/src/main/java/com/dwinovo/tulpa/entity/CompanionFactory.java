@@ -7,7 +7,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Set;
@@ -71,8 +70,10 @@ public final class CompanionFactory {
      * {@code loadPlayerData}. No-op on first summon (no file yet).
      */
     private static void loadPlayerData(MinecraftServer server, TulpaPlayer player) {
-        server.getPlayerList().loadPlayerData(player.nameAndId())
-                .map(tag -> TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), tag))
+        // 1.21.8: PlayerList.load(player, reporter) returns the ValueInput directly
+        // (the tag→ValueInput wrapping is internal here, unlike the newer
+        // loadPlayerData(nameAndId)→CompoundTag path).
+        server.getPlayerList().load(player, ProblemReporter.DISCARDING)
                 .ifPresent(player::load);
     }
 
