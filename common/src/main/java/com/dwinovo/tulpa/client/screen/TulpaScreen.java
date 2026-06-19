@@ -104,6 +104,8 @@ public final class TulpaScreen extends Screen {
     /** API-key reveal toggle icons: open eye = "click to show", slashed eye = "click to hide". */
     private static final net.minecraft.resources.Identifier EYE = railSpr("eye");
     private static final net.minecraft.resources.Identifier EYE_OFF = railSpr("eye_off");
+    private static final net.minecraft.resources.Identifier CHEVRON_UP = railSpr("chevron_up");
+    private static final net.minecraft.resources.Identifier CHEVRON_DOWN = railSpr("chevron_down");
 
     private static final String[] SPIN = {"|", "/", "-", "\\"};
     /** Armor column on the Items tab (top → bottom); offhand is drawn separately below it. */
@@ -123,6 +125,7 @@ public final class TulpaScreen extends Screen {
     // "+" summon flow: a transient name field shown over the panel
     private boolean summoning;
     private EditBox summonInput;
+    private UUID dismissPending;   // non-null = showing the "delete companion?" confirm bar for this uuid
 
     // settings tab widgets
     private ProviderDropdown providerDropdown;
@@ -231,6 +234,7 @@ public final class TulpaScreen extends Screen {
         modelDropdown = null;
         summonInput = null;
         if (summoning) { buildSummonField(); return; }
+        if (dismissPending != null) { buildDismissConfirm(); return; }
         switch (tab) {
             case CHAT -> { if (uuid != null) buildChatWidgets(); }
             case SETTINGS -> buildSettingsWidgets();
@@ -249,6 +253,42 @@ public final class TulpaScreen extends Screen {
         summonInput.setHint(Component.literal("New companion name…"));
         add(summonInput);
         setInitialFocus(summonInput);
+    }
+
+    /** Two buttons for the "delete companion?" confirm bar — Cancel and the destructive Delete. */
+    private void buildDismissConfirm() {
+        UUID target = dismissPending;
+        int bw = 64, gap = 8, totalW = bw * 2 + gap;
+        int bx = left + (PANEL_W - totalW) / 2;
+        int by = top + HEADER_H + 52;
+        add(new SimpleButton(bx, by, bw, 18, Component.literal("取消"),
+                b -> { dismissPending = null; rebuild(); }));
+        add(new SimpleButton(bx + bw + gap, by, bw, 18, Component.literal("删除"), b -> {
+            Services.NETWORK.sendToServer(
+                    new com.dwinovo.tulpa.network.payload.DismissRequestPayload(target));
+            dismissPending = null;
+            if (target.equals(uuid)) {                       // active one is leaving — jump to another / empty
+                TulpaRoster.Entry next = firstOther(target);
+                if (next != null) { switchTo(next.uuid(), next.name()); return; }
+                uuid = null; name = null;
+            }
+            rebuild();
+        }));
+    }
+
+    /** First roster companion that isn't {@code exclude}, or null if none. */
+    private TulpaRoster.Entry firstOther(UUID exclude) {
+        for (TulpaRoster.Entry e : TulpaRoster.instance().entries()) {
+            if (!e.uuid().equals(exclude)) return e;
+        }
+        return null;
+    }
+
+    private String nameFor(UUID u) {
+        for (TulpaRoster.Entry e : TulpaRoster.instance().entries()) {
+            if (e.uuid().equals(u)) return e.name();
+        }
+        return "?";
     }
 
     /** Register a widget for EVENTS only; it's rendered manually (on top of the panel) in {@link
@@ -521,6 +561,10 @@ public final class TulpaScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int k = event.key();
+        if (dismissPending != null) {
+            if (k == 256) { dismissPending = null; rebuild(); return true; }   // Esc cancels the confirm
+            return super.keyPressed(event);
+        }
         if (summoning) {
             if (k == 257 || k == 335) { doSummon(); return true; }    // Enter
             if (k == 256) { summoning = false; rebuild(); return true; } // Esc cancels (doesn't close panel)
@@ -543,7 +587,12 @@ public final class TulpaScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean dbl) {
+        if (dismissPending != null) {
+            return super.mouseClicked(event, dbl);   // modal confirm — let its Cancel/Delete buttons handle it
+        }
         if (event.button() == 0) {
+            UUID close = railCloseAt((int) event.x(), (int) event.y());
+            if (close != null) { dismissPending = close; rebuild(); return true; }   // ✕ → confirm bar
             if (railPlusAt((int) event.x(), (int) event.y())) {   // + → start the summon name prompt
                 summoning = !summoning;
                 rebuild();
@@ -656,7 +705,12 @@ public final class TulpaScreen extends Screen {
         }
         renderTabs(g, mouseX, mouseY);
 
-        if (summoning) {
+        if (dismissPending != null) {
+            txt(g, Component.literal("删除同伴 \"" + nameFor(dismissPending) + "\"？"),
+                    left + PAD, top + HEADER_H + 12, TXT);
+            txt(g, Component.literal("永久删除 · 背包会掉落在原地 · 无法撤销"),
+                    left + PAD, top + HEADER_H + 30, FAIL);
+        } else if (summoning) {
             txt(g, Component.literal("Summon a companion"), left + PAD, top + HEADER_H + 8, TXT);
             txt(g, Component.literal("type a name · Enter to confirm · Esc to cancel"),
                     left + PAD, top + HEADER_H + 48, TXT_FAINT);
@@ -744,22 +798,29 @@ public final class TulpaScreen extends Screen {
                 g.fill(d, e2, d + 5, e2 + 5, statusColor(e.uuid()));
                 Nb.border(g, d, e2, 5, 5, 1, BORDER);
             }
+            // hover → a small ✕ badge (top-right) that starts the delete-confirm bar
+            if (dismissPending == null && mouseX >= ax && mouseX < ax + RAIL_AV
+                    && mouseY >= ay && mouseY < ay + RAIL_AV) {
+                int bx = ax + RAIL_AV - 9, by = ay - 1;
+                g.fill(bx, by, bx + 9, by + 9, FAIL);
+                Nb.border(g, bx, by, 9, 9, 1, BORDER);
+                txt(g, Component.literal("✕"), bx + 2, by + 1, ON_BAND);
+            }
         }
         // "+" summon tile (baked "+" glyph), pinned to the rail bottom
         int py = top + PANEL_H - PAD - RAIL_AV;
         // scroll cues — gold chevrons when the roster overflows the rail in either direction
         int cx = ax + RAIL_AV / 2;
-        if (railScroll > 0) chevron(g, cx, top + 3, true);
-        if (railScroll < maxRailScroll()) chevron(g, cx, py - 7, false);
+        if (railScroll > 0) chevron(g, cx, top + 1, true);
+        if (railScroll < maxRailScroll()) chevron(g, cx, py - 9, false);
         g.blitSprite(pipe, summoning ? SUMMON_ACTIVE : SUMMON_SPRITE, ax, py, RAIL_AV, RAIL_AV);
     }
 
-    /** A tiny 5px gold scroll chevron (points up = more above, down = more below). */
+    /** Scroll-affordance chevron sprite (amber pixel-art triangle, up = more above / down = more below).
+     *  Blitted at its native 11×6 so the pixels stay crisp (no scaling, no AA). */
     private void chevron(GuiGraphicsExtractor g, int cx, int y, boolean up) {
-        for (int r = 0; r < 3; r++) {
-            int half = up ? r : (2 - r);
-            g.fill(cx - half, y + r, cx + half + 1, y + r + 1, CTA);
-        }
+        g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
+                up ? CHEVRON_UP : CHEVRON_DOWN, cx - 5, y, 11, 6);
     }
 
     /** How many avatar slots fit in the rail above the pinned "+" tile. */
@@ -771,6 +832,20 @@ public final class TulpaScreen extends Screen {
 
     private int maxRailScroll() {
         return Math.max(0, TulpaRoster.instance().entries().size() - railVisibleSlots());
+    }
+
+    /** The companion whose hover-✕ badge is under (mx,my), or null. Mirrors renderRail geometry. */
+    private UUID railCloseAt(int mx, int my) {
+        int ax = railX + (RAIL_W - RAIL_AV) / 2;
+        List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
+        int first = Math.clamp(railScroll, 0, maxRailScroll());
+        for (int i = first; i < entries.size(); i++) {
+            int ay = top + 8 + (i - first) * RAIL_SLOT;
+            if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;
+            int bx = ax + RAIL_AV - 9, by = ay - 1;
+            if (mx >= bx && mx < bx + 9 && my >= by && my < by + 9) return entries.get(i).uuid();
+        }
+        return null;
     }
 
     private boolean railPlusAt(int mx, int my) {

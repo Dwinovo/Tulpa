@@ -107,5 +107,11 @@ public final class TulpaNetwork {
                 com.dwinovo.tulpa.network.payload.SummonRequestPayload.TYPE,
                 com.dwinovo.tulpa.network.payload.SummonRequestPayload.STREAM_CODEC,
                 com.dwinovo.tulpa.network.payload.SummonRequestPayload::handle);
+
+        // C→S: the rail ✕ → confirm asks to permanently delete a companion (drops its inventory first).
+        Services.NETWORK.registerClientToServer(
+                com.dwinovo.tulpa.network.payload.DismissRequestPayload.TYPE,
+                com.dwinovo.tulpa.network.payload.DismissRequestPayload.STREAM_CODEC,
+                com.dwinovo.tulpa.network.payload.DismissRequestPayload::handle);
     }
 }
