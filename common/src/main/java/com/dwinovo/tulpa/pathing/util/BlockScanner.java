@@ -133,8 +133,8 @@ public final class BlockScanner {
         List<Hit> matches = new ArrayList<>();
         outer:
         for (ChunkAccess chunk : chunks) {
-            int cx = chunk.getPos().x();
-            int cz = chunk.getPos().z();
+            int cx = chunk.getPos().x;
+            int cz = chunk.getPos().z;
             try {
                 for (int sy = minSectionY; sy <= maxSectionY; sy++) {
                     scanChunkSection(level, chunk, cx, sy, cz, center, radius, radiusSq, filter, matches);

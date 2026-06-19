@@ -5,7 +5,7 @@ import com.dwinovo.tulpa.data.ModLanguageData;
 import com.dwinovo.tulpa.platform.Services;
 import com.dwinovo.tulpa.platform.services.ITulpaConfig;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -84,22 +84,22 @@ public final class SettingsScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        super.extractRenderState(g, mouseX, mouseY, partial);
-        g.centeredText(font, getTitle(), this.width / 2, top - 6, 0xFFFFFFFF);
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partial) {
+        super.render(g, mouseX, mouseY, partial);
+        g.drawCenteredString(font, getTitle(), this.width / 2, top - 6, 0xFFFFFFFF);
 
         LlmProviders.Option opt = LlmProviders.byId(provider.selectedId());
         modelInput.setHint(Component.literal(opt.defaultModel()));
         baseUrlInput.setHint(Component.literal(opt.defaultBaseUrl()));
 
         int y = top + 10;
-        g.text(font, Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_PROVIDER), left, y, TXT_MUTED);
-        g.text(font, Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_API_KEY), left, y + FIELD_GAP, TXT_MUTED);
-        g.text(font, Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_MODEL), left, y + FIELD_GAP * 2, TXT_MUTED);
-        g.text(font, Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_BASE_URL), left, y + FIELD_GAP * 3, TXT_MUTED);
+        g.drawString(font, Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_PROVIDER), left, y, TXT_MUTED);
+        g.drawString(font, Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_API_KEY), left, y + FIELD_GAP, TXT_MUTED);
+        g.drawString(font, Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_MODEL), left, y + FIELD_GAP * 2, TXT_MUTED);
+        g.drawString(font, Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_BASE_URL), left, y + FIELD_GAP * 3, TXT_MUTED);
 
         if (savedFlashUntil > System.currentTimeMillis()) {
-            g.text(font, Component.literal("✔ saved"), left, top + CONTENT_HEIGHT - 14, OK);
+            g.drawString(font, Component.literal("✔ saved"), left, top + CONTENT_HEIGHT - 14, OK);
         }
         provider.render(g, font, mouseX, mouseY);   // last → open list overlays the fields
     }

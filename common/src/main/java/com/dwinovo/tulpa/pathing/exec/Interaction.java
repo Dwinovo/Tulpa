@@ -334,13 +334,11 @@ public final class Interaction {
         }
         InputDriver.halt(player);
         InputDriver.lookAt(player, entity.getEyePosition());
-        // entity-RELATIVE hit point (only interactAt overrides like armor stands read it).
-        Vec3 rel = new Vec3(0.0, entity.getBbHeight() * 0.5, 0.0);
         for (InteractionHand h : HANDS) {
-            if (entity.interact(player, h, rel).consumesAction()) {       // animals / villagers
+            if (entity.interact(player, h).consumesAction()) {       // animals / villagers
                 return true;
             }
-            if (player.interactOn(entity, h, rel).consumesAction()) {     // item frames / leads
+            if (player.interactOn(entity, h).consumesAction()) {     // item frames / leads
                 return true;
             }
         }

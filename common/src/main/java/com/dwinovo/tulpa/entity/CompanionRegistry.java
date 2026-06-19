@@ -56,7 +56,7 @@ public final class CompanionRegistry extends SavedData {
                     .fieldOf("companions").codec();
 
     private static final SavedDataType<CompanionRegistry> TYPE = new SavedDataType<>(
-            Identifier.fromNamespaceAndPath("tulpa", "companions"),
+            "tulpa_companions",
             CompanionRegistry::new, CODEC,
             net.minecraft.util.datafix.DataFixTypes.SAVED_DATA_RANDOM_SEQUENCES);
 

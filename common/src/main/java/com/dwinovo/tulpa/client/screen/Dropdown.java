@@ -1,7 +1,7 @@
 package com.dwinovo.tulpa.client.screen;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -39,7 +39,7 @@ public final class Dropdown {
         return id == null ? "" : id;
     }
 
-    public void render(GuiGraphicsExtractor g, Font font, int mouseX, int mouseY) {
+    public void render(GuiGraphics g, Font font, int mouseX, int mouseY) {
         UiTheme th = UiTheme.current();
         var pipe = net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED;
         g.blitSprite(pipe, FRAME, x, y, w, h);

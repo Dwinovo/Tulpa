@@ -10,8 +10,8 @@ import com.dwinovo.tulpa.client.screen.Nb;
 import com.dwinovo.tulpa.client.screen.UiTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.PlayerFaceExtractor;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.world.entity.player.PlayerSkin;
@@ -118,7 +118,7 @@ public final class TulpaToasts {
         if (wasEmpty) s.bubbleBornMs = now;                 // fresh bubble → restart the slide
     }
 
-    public static void render(GuiGraphicsExtractor g) {
+    public static void render(GuiGraphics g) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.screen instanceof TulpaScreen) return;
         List<TulpaRoster.Entry> entries = new ArrayList<>(TulpaRoster.instance().entries());
@@ -152,15 +152,15 @@ public final class TulpaToasts {
         }
     }
 
-    private static void drawAvatar(GuiGraphicsExtractor g, UUID uuid, int x, int y, UiTheme th) {
+    private static void drawAvatar(GuiGraphics g, UUID uuid, int x, int y, UiTheme th) {
         // textured socket behind the head (same sprite as the panel rail), face on top covering the centre
         g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
                 AVATAR_FRAME, x - 2, y - 2, AVATAR + 4, AVATAR + 4);
-        PlayerFaceExtractor.extractRenderState(g, skinFor(uuid), x, y, AVATAR);
+        PlayerFaceRenderer.draw(g, skinFor(uuid), x, y, AVATAR);
     }
 
 
-    private static void drawBubble(GuiGraphicsExtractor g, Font font, int ax, int ay, Status s, long now) {
+    private static void drawBubble(GuiGraphics g, Font font, int ax, int ay, Status s, long now) {
         int h = s.lines.size() * LINE_H + PADV * 2;
         int targetX = ax + AVATAR + BUBBLE_GAP;
         int bx = targetX - slideOut(now - s.bubbleBornMs, AVATAR + BUBBLE_GAP);

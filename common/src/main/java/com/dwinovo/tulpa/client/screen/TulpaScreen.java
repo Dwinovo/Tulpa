@@ -19,13 +19,13 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.gui.components.PlayerFaceExtractor;
+import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.world.entity.player.PlayerSkin;
@@ -248,7 +248,7 @@ public final class TulpaScreen extends Screen {
     }
 
     /** Register a widget for EVENTS only; it's rendered manually (on top of the panel) in {@link
-     *  #extractRenderState}. */
+     *  #render}. */
     private <T extends AbstractWidget> T add(T w) {
         addWidget(w);
         overlay.add(w);
@@ -258,14 +258,14 @@ public final class TulpaScreen extends Screen {
     // Shadowless text — BlockFrame is flat, and a drop shadow on DARK text over a LIGHT ground makes
     // the glyph merge with its own shadow ("smudged"). This build's shadowless path ignores the colour
     // PARAM, so we bake the colour into the text's Style instead.
-    private void txt(GuiGraphicsExtractor g, Component c, int x, int y, int color) {
-        g.text(font, c.copy().withStyle(s -> s.withColor(
+    private void txt(GuiGraphics g, Component c, int x, int y, int color) {
+        g.drawString(font, c.copy().withStyle(s -> s.withColor(
                 net.minecraft.network.chat.TextColor.fromRgb(color & 0xFFFFFF))), x, y, -1, false);
     }
 
     /** The FormattedCharSequence must already carry its colour (see {@link #colored}). */
-    private void txt(GuiGraphicsExtractor g, FormattedCharSequence c, int x, int y, int color) {
-        g.text(font, c, x, y, -1, false);
+    private void txt(GuiGraphics g, FormattedCharSequence c, int x, int y, int color) {
+        g.drawString(font, c, x, y, -1, false);
     }
 
     /** A coloured text Component (colour in the Style, so shadowless rendering keeps it). */
@@ -410,7 +410,7 @@ public final class TulpaScreen extends Screen {
     }
 
     /** Shadowless placeholder for an empty, unfocused field — the EditBox's own hint renders with a shadow. */
-    private void placeholder(GuiGraphicsExtractor g, EditBox f, String text) {
+    private void placeholder(GuiGraphics g, EditBox f, String text) {
         if (f != null && f.getValue().isEmpty() && !f.isFocused() && text != null && !text.isEmpty()) {
             txt(g, Component.literal(text), f.getX(), f.getY(), TXT_FAINT);
         }
@@ -464,7 +464,7 @@ public final class TulpaScreen extends Screen {
         savedFlashUntil = System.currentTimeMillis() + 1500;
     }
 
-    private void renderSettings(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+    private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
         int x = left + PAD;
         int y0 = top + HEADER_H + 8;
         if (addingSite) {
@@ -484,7 +484,7 @@ public final class TulpaScreen extends Screen {
         if (savedFlashUntil > System.currentTimeMillis()) {
             txt(g, Component.literal("✔ saved"), x, top + PANEL_H - PAD - 14, OK);
         }
-        // the dropdowns themselves render in extractRenderState, AFTER the widgets (open list on top)
+        // the dropdowns themselves render in render, AFTER the widgets (open list on top)
     }
 
     @Override
@@ -633,8 +633,8 @@ public final class TulpaScreen extends Screen {
     // ---- render ----
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        super.extractRenderState(g, mouseX, mouseY, partial);
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partial) {
+        super.render(g, mouseX, mouseY, partial);
 
         // ONE merged Cottage sprite: left rail column + panel, continuous header, no gap.
         g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
@@ -680,7 +680,7 @@ public final class TulpaScreen extends Screen {
             }
         }
         for (AbstractWidget w : overlay) {
-            w.extractRenderState(g, mouseX, mouseY, partial);
+            w.render(g, mouseX, mouseY, partial);
         }
         // Base URL / Proxy placeholders, drawn shadowless by us (the EditBox hint renders with a shadow).
         if (tab == Tab.SETTINGS) {
@@ -706,7 +706,7 @@ public final class TulpaScreen extends Screen {
 
     /** The folded-in roster (on the merged sprite's rail column): one avatar head per companion below the
      *  green header, active one framed gold, a status dot each, + tile at the bottom. */
-    private void renderRail(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+    private void renderRail(GuiGraphics g, int mouseX, int mouseY) {
         var pipe = net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED;
         List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
         int ax = railX + (RAIL_W - RAIL_AV) / 2;
@@ -717,7 +717,7 @@ public final class TulpaScreen extends Screen {
             boolean active = e.uuid().equals(uuid);
             // textured socket behind the head (gold-bordered when active), then the avatar, then a status LED
             g.blitSprite(pipe, active ? AVATAR_FRAME_ACTIVE : AVATAR_FRAME, ax - 2, ay - 2, RAIL_AV + 4, RAIL_AV + 4);
-            PlayerFaceExtractor.extractRenderState(g, skinFor(e.uuid()), ax, ay, RAIL_AV);
+            PlayerFaceRenderer.draw(g, skinFor(e.uuid()), ax, ay, RAIL_AV);
             if (ClientDeaths.isDead(e.uuid())) {                      // dead — dim veil + respawn countdown
                 g.fill(ax, ay, ax + RAIL_AV, ay + RAIL_AV, 0xB0101010);
                 long rem = ClientDeaths.remainingMs(e.uuid());
@@ -769,12 +769,12 @@ public final class TulpaScreen extends Screen {
         return -1;
     }
 
-    private void emptyHint(GuiGraphicsExtractor g) {
+    private void emptyHint(GuiGraphics g) {
         txt(g, Component.literal("No companions. Click + to summon one."),
                 left + PAD, top + HEADER_H + 10, TXT_FAINT);
     }
 
-    private void renderTabs(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+    private void renderTabs(GuiGraphics g, int mouseX, int mouseY) {
         String[] labels = {"Chat", "Items", "Settings"};
         for (int i = 0; i < 3; i++) {
             boolean active = tab == Tab.values()[i];
@@ -793,7 +793,7 @@ public final class TulpaScreen extends Screen {
 
     /** A row of segmented icons for a 0..max stat (2 units per icon): empty sockets first, then
      *  full / half overlaid. Used for hearts (HP) and drumsticks (hunger). */
-    private void renderStatRow(GuiGraphicsExtractor g, int x, int y, float value, float max,
+    private void renderStatRow(GuiGraphics g, int x, int y, float value, float max,
                                net.minecraft.resources.Identifier full,
                                net.minecraft.resources.Identifier half,
                                net.minecraft.resources.Identifier empty) {
@@ -810,31 +810,31 @@ public final class TulpaScreen extends Screen {
 
     /** Live mouse-following 3D portrait of the companion — the body IS a client player entity, so the
      *  vanilla player renderer draws it for free. Sits in a recessed socket (slot_alt stretched). */
-    private void renderPortrait(GuiGraphicsExtractor g, AbstractClientPlayer e,
+    private void renderPortrait(GuiGraphics g, AbstractClientPlayer e,
                                 int x, int y, int w, int h, int mouseX, int mouseY) {
         g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, SLOT_ALT, x, y, w, h);
         if (e == null) return;
         int scale = (int) (h * 0.45f);
-        net.minecraft.client.gui.screens.inventory.InventoryScreen.extractEntityInInventoryFollowsMouse(
+        net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
                 g, x + 2, y + 2, x + w - 2, y + h - 2, scale, 0.0625f,
                 (float) mouseX, (float) mouseY, e);
     }
 
-    private void slotBg(GuiGraphicsExtractor g, net.minecraft.resources.Identifier sprite, int x, int y) {
+    private void slotBg(GuiGraphics g, net.minecraft.resources.Identifier sprite, int x, int y) {
         g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, sprite, x, y, 16, 16);
     }
 
-    private void stackOn(GuiGraphicsExtractor g, ItemStack st, int x, int y, int mouseX, int mouseY) {
+    private void stackOn(GuiGraphics g, ItemStack st, int x, int y, int mouseX, int mouseY) {
         if (st == null || st.isEmpty()) return;
-        g.item(st, x, y);
-        g.itemDecorations(font, st, x, y);
+        g.renderItem(st, x, y);
+        g.renderItemDecorations(font, st, x, y);
         if (mouseX >= x && mouseX < x + 16 && mouseY >= y && mouseY < y + 16) {
             g.setTooltipForNextFrame(font, st, mouseX, mouseY);
         }
     }
 
     /** One equipment/armor socket, read off the live client entity (equipment IS client-synced). */
-    private void drawEquip(GuiGraphicsExtractor g, AbstractClientPlayer e, EquipmentSlot slot,
+    private void drawEquip(GuiGraphics g, AbstractClientPlayer e, EquipmentSlot slot,
                            int x, int y, int mouseX, int mouseY) {
         slotBg(g, SLOT_SPRITE, x, y);
         if (e != null) stackOn(g, e.getItemBySlot(slot), x, y, mouseX, mouseY);
@@ -842,7 +842,7 @@ public final class TulpaScreen extends Screen {
 
     // ---- chat transcript + plan ----
 
-    private void renderChat(GuiGraphicsExtractor g) {
+    private void renderChat(GuiGraphics g) {
         int bodyY = top + HEADER_H + 4;
         int bodyBottom = top + PANEL_H - INPUT_H - PAD - 6;
         int transX = left + PAD;
@@ -1019,7 +1019,7 @@ public final class TulpaScreen extends Screen {
     }
 
     /** Right-side PLAN panel: the companion's latest {@code todowrite}, with status glyphs. */
-    private void renderPlan(GuiGraphicsExtractor g, int x, int y, int bottom) {
+    private void renderPlan(GuiGraphics g, int x, int y, int bottom) {
         txt(g, Component.literal("PLAN"), x, y, TXT_MUTED);
         int ly = y + 13;
         JsonArray todos = latestPlan();
@@ -1080,7 +1080,7 @@ public final class TulpaScreen extends Screen {
      *  mouse-following portrait, the synced 2×2 craft grid + result, segmented heart/drumstick vitals,
      *  and the read-only checkerboard 3×9 storage + hotbar. Body data is fetched on demand via
      *  RequestInventoryPayload (backpack + craft + food); HP + equipment come off the live client entity. */
-    private void renderItems(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+    private void renderItems(GuiGraphics g, int mouseX, int mouseY) {
         var snap = ClientTulpaInventory.get(uuid).orElse(null);
         AbstractClientPlayer e = ClientTulpaLookup.resolve(uuid);
         List<ItemStack> craft = snap != null ? snap.craft() : List.of();

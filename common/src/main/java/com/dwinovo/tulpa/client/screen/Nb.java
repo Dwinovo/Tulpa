@@ -1,7 +1,7 @@
 package com.dwinovo.tulpa.client.screen;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
 
@@ -22,16 +22,16 @@ public final class Nb {
         return Component.literal(s).withStyle(st -> st.withColor(TextColor.fromRgb(color & 0xFFFFFF)));
     }
 
-    public static void text(GuiGraphicsExtractor g, Font font, String s, int x, int y, int color) {
-        g.text(font, colored(s, color), x, y, -1, false);
+    public static void text(GuiGraphics g, Font font, String s, int x, int y, int color) {
+        g.drawString(font, colored(s, color), x, y, -1, false);
     }
 
-    public static void text(GuiGraphicsExtractor g, Font font, Component c, int x, int y, int color) {
-        g.text(font, c.copy().withStyle(st -> st.withColor(TextColor.fromRgb(color & 0xFFFFFF))), x, y, -1, false);
+    public static void text(GuiGraphics g, Font font, Component c, int x, int y, int color) {
+        g.drawString(font, c.copy().withStyle(st -> st.withColor(TextColor.fromRgb(color & 0xFFFFFF))), x, y, -1, false);
     }
 
     /** Square thick border = four filled edge rects (no rounded corners). */
-    public static void border(GuiGraphicsExtractor g, int x, int y, int w, int h, int t, int color) {
+    public static void border(GuiGraphics g, int x, int y, int w, int h, int t, int color) {
         g.fill(x, y, x + w, y + t, color);
         g.fill(x, y + h - t, x + w, y + h, color);
         g.fill(x, y, x + t, y + h, color);
