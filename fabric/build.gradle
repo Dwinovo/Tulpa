@@ -1,12 +1,14 @@
 plugins {
     id 'multiloader-loader'
-    id 'net.fabricmc.fabric-loom'
+    id 'net.fabricmc.fabric-loom-remap'
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    // Obfuscated MC (1.21.11) → loom remaps to Mojang names to match the common source set.
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 }
 
 loom {
