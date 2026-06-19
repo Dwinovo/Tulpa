@@ -1,8 +1,8 @@
 package com.dwinovo.tulpa.data;
 
 import java.util.concurrent.CompletableFuture;
-import net.fabricmc.fabric.api.datagen.v1.FabricPackOutput;
-import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagsProvider;
+import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
+import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
 import net.minecraft.core.HolderLookup;
 
 /**
@@ -10,9 +10,9 @@ import net.minecraft.core.HolderLookup;
  * content lives in {@code common/} and stays loader-agnostic. Mirrors
  * {@link FabricModItemTagsProvider}.
  */
-public final class FabricModBlockTagsProvider extends FabricTagsProvider.BlockTagsProvider {
+public final class FabricModBlockTagsProvider extends FabricTagProvider.BlockTagProvider {
 
-    public FabricModBlockTagsProvider(FabricPackOutput output,
+    public FabricModBlockTagsProvider(FabricDataOutput output,
                                       CompletableFuture<HolderLookup.Provider> registries) {
         super(output, registries);
     }

@@ -3,7 +3,7 @@ package com.dwinovo.tulpa;
 import com.dwinovo.tulpa.agent.skill.BuiltinSkillBootstrap;
 import com.dwinovo.tulpa.agent.skill.SkillRegistry;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.minecraft.client.Minecraft;
@@ -43,7 +43,7 @@ public class TulpaFabricClient implements ClientModInitializer {
                 });
 
         // G → companion roster panel (chat entry + settings/reset live in there).
-        KeyMappingHelper.registerKeyMapping(com.dwinovo.tulpa.client.TulpaKeys.OPEN_ROSTER);
+        KeyBindingHelper.registerKeyBinding(com.dwinovo.tulpa.client.TulpaKeys.OPEN_ROSTER);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
                 .register(client -> {
                     com.dwinovo.tulpa.client.TulpaKeys.tick();
@@ -57,8 +57,8 @@ public class TulpaFabricClient implements ClientModInitializer {
 
         // In-world path overlay for every companion (Baritone PathRenderer port),
         // drawn after translucent terrain so it sits over the world.
-        net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES
-                .register(ctx -> com.dwinovo.tulpa.client.path.PathVizRenderer.render(ctx.poseStack()));
+        net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents.AFTER_ENTITIES
+                .register(ctx -> com.dwinovo.tulpa.client.path.PathVizRenderer.render(ctx.matrices()));
 
         // Drop every path overlay on disconnect so a frozen path can't survive a
         // relog (the server can't send a clear to a player who's already gone).

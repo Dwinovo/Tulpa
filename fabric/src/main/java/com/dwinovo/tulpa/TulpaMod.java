@@ -26,7 +26,7 @@ public class TulpaMod implements ModInitializer {
                 });
 
         // The companion crossed a portal on its own — tell its brain (ambient world event).
-        net.fabricmc.fabric.api.entity.event.v1.ServerEntityLevelChangeEvents.AFTER_PLAYER_CHANGE_LEVEL.register(
+        net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD.register(
                 (player, origin, destination) -> {
                     if (player instanceof com.dwinovo.tulpa.entity.TulpaPlayer ap) {
                         com.dwinovo.tulpa.entity.Companions.onDimensionChanged(ap);
