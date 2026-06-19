@@ -30,6 +30,12 @@ public final class Nb {
         g.drawString(font, c.copy().withStyle(st -> st.withColor(TextColor.fromRgb(color & 0xFFFFFF))), x, y, -1, false);
     }
 
+    /** Render this EditBox's text shadowless. 1.21.5 lacks {@code EditBox.setTextShadow},
+     *  so we flag the box for {@code MixinEditBox} to drop the shadow on its draws. */
+    public static void noTextShadow(net.minecraft.client.gui.components.EditBox e) {
+        ((ShadowlessText) e).tulpa$setNoTextShadow(true);
+    }
+
     /** Square thick border = four filled edge rects (no rounded corners). */
     public static void border(GuiGraphics g, int x, int y, int w, int h, int t, int color) {
         g.fill(x, y, x + w, y + t, color);

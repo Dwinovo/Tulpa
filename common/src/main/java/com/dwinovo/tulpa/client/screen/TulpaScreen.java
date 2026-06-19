@@ -249,6 +249,7 @@ public final class TulpaScreen extends Screen {
         summonInput.setMaxLength(com.dwinovo.tulpa.network.payload.SummonRequestPayload.MAX_NAME);
         summonInput.setBordered(false);
         summonInput.setTextColor(TXT);
+        Nb.noTextShadow(summonInput);
         summonInput.setHint(Component.literal("New companion name…"));
         add(summonInput);
         setInitialFocus(summonInput);
@@ -335,6 +336,7 @@ public final class TulpaScreen extends Screen {
         input.setMaxLength(MAX_PROMPT);
         input.setBordered(false);
         input.setTextColor(TXT);
+        Nb.noTextShadow(input);
         // No setHint — the EditBox hint renders with a drop shadow; we draw a shadowless one in render().
         if (!savedInput.isEmpty()) { input.setValue(savedInput); savedInput = ""; }
         add(input);
@@ -465,6 +467,7 @@ public final class TulpaScreen extends Screen {
         e.setValue(value == null ? "" : value);
         e.setBordered(false);
         e.setTextColor(TXT);
+        Nb.noTextShadow(e);
         add(e);
         return e;
     }
