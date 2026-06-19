@@ -126,6 +126,9 @@ public final class TulpaScreen extends Screen {
     private Dropdown modelDropdown;          // null when in custom-model mode
     private boolean customModel;             // model is a free-text custom id (not a registry preset)
     private static final String CUSTOM_MODEL = "__custom__";
+    // unsaved working state — settings widgets are (re)built from these, NOT from config, so a rebuild
+    // (provider change / custom toggle) doesn't revert what you just picked or typed.
+    private String wProvider = "", wApiKey = "", wModel = "", wBaseUrl = "";
     private EditBox apiKeyInput;
     private EditBox modelInput;
     private EditBox baseUrlInput;
@@ -314,26 +317,34 @@ public final class TulpaScreen extends Screen {
      *  custom text box: custom-provider or a configured model that isn't a known preset → custom. */
     private void initModelMode() {
         ITulpaConfig cfg = Services.CONFIG;
-        ModelRegistry.Provider mp = ModelRegistry.provider(LlmProviders.normalize(cfg.getProvider()));
-        boolean known = mp != null && mp.models().stream().anyMatch(m -> m.id().equals(cfg.getModel()));
-        customModel = (mp != null && mp.custom())
-                || (cfg.getModel() != null && !cfg.getModel().isBlank() && !known);
+        wProvider = cfg.getProvider() == null ? "openai" : cfg.getProvider();
+        wApiKey = cfg.getApiKey() == null ? "" : cfg.getApiKey();
+        wModel = cfg.getModel() == null ? "" : cfg.getModel();
+        wBaseUrl = cfg.getBaseUrl() == null ? "" : cfg.getBaseUrl();
+        ModelRegistry.Provider mp = ModelRegistry.provider(LlmProviders.normalize(wProvider));
+        boolean known = mp != null && mp.models().stream().anyMatch(m -> m.id().equals(wModel));
+        customModel = (mp != null && mp.custom()) || (!wModel.isBlank() && !known);
+    }
+
+    /** Snapshot the API-key + base-URL fields before a settings rebuild so the edits survive it. */
+    private void preserveKeyUrl() {
+        if (apiKeyInput != null) wApiKey = apiKeyInput.getValue();
+        if (baseUrlInput != null) wBaseUrl = baseUrlInput.getValue();
     }
 
     // ---- settings tab ----
 
     private void buildSettingsWidgets() {
-        ITulpaConfig cfg = Services.CONFIG;
         int x = left + PAD, w = PANEL_W - PAD * 2;
         int y = top + HEADER_H + 10;
 
-        providerDropdown = new ProviderDropdown(cfg.getProvider());
+        providerDropdown = new ProviderDropdown(wProvider);   // working state, not config (survives rebuild)
         providerDropdown.setBounds(x, y + 11, w, 18);
 
         // API key: leave room for the eye button, and mask the value until revealed.
         int eyeW = 22;
         int y2 = y + 37;
-        apiKeyInput = field(x, y2 + 11, w - eyeW - 2, 512, cfg.getApiKey());
+        apiKeyInput = field(x, y2 + 11, w - eyeW - 2, 512, wApiKey);
         apiKeyInput.addFormatter((text, idx) -> showKey
                 ? FormattedCharSequence.forward(text, net.minecraft.network.chat.Style.EMPTY)
                 : FormattedCharSequence.forward("•".repeat(text.length()), net.minecraft.network.chat.Style.EMPTY));
@@ -342,9 +353,9 @@ public final class TulpaScreen extends Screen {
                 b -> { showKey = !showKey; b.setMessage(Component.literal(showKey ? "隐" : "见")); }));
 
         int y3 = y2 + 37;
-        buildModelRow(x, y3 + 11, w, cfg);
+        buildModelRow(x, y3 + 11, w);
         int y4 = y3 + 37;
-        baseUrlInput = field(x, y4 + 11, w, 256, cfg.getBaseUrl());
+        baseUrlInput = field(x, y4 + 11, w, 256, wBaseUrl);
 
         int saveW = 64;
         add(new SimpleButton(left + PANEL_W - PAD - saveW, top + PANEL_H - PAD - 18,
@@ -353,21 +364,21 @@ public final class TulpaScreen extends Screen {
 
     /** Model row: a preset dropdown for the provider's known models, or a free-text box (custom mode)
      *  with a "▾" toggle back to presets. A custom provider (openai-compatible) is always free-text. */
-    private void buildModelRow(int x, int y, int w, ITulpaConfig cfg) {
+    private void buildModelRow(int x, int y, int w) {
         ModelRegistry.Provider mp = ModelRegistry.provider(LlmProviders.normalize(providerDropdown.selectedId()));
         boolean providerCustom = mp != null && mp.custom();
         if (customModel || providerCustom) {
             customModel = true;
             modelDropdown = null;
-            modelInput = field(x, y, providerCustom ? w : w - 20, 128, cfg.getModel());
+            modelInput = field(x, y, providerCustom ? w : w - 20, 128, wModel);
             if (!providerCustom) {     // a way back to the preset list (custom providers have none)
                 add(new SimpleButton(x + w - 18, y, 18, 18, Component.literal("▾"),
-                        b -> { customModel = false; rebuild(); }));
+                        b -> { preserveKeyUrl(); customModel = false; rebuild(); }));
             }
         } else {
             modelInput = null;
-            boolean known = mp != null && mp.models().stream().anyMatch(m -> m.id().equals(cfg.getModel()));
-            String sel = known ? cfg.getModel()
+            boolean known = mp != null && mp.models().stream().anyMatch(m -> m.id().equals(wModel));
+            String sel = known ? wModel
                     : (mp != null && !mp.models().isEmpty() ? mp.models().get(0).id() : CUSTOM_MODEL);
             modelDropdown = new Dropdown(modelItems(mp), sel);
             modelDropdown.setBounds(x, y, w, 18);
@@ -502,14 +513,26 @@ public final class TulpaScreen extends Screen {
                 String before = providerDropdown.selectedId();
                 if (providerDropdown.mouseClicked(event.x(), event.y())) {
                     if (modelDropdown != null) modelDropdown.close();
-                    if (!providerDropdown.selectedId().equals(before)) { customModel = false; rebuild(); }
+                    if (!providerDropdown.selectedId().equals(before)) {     // provider changed → reset model
+                        preserveKeyUrl();
+                        wProvider = providerDropdown.selectedId();
+                        ModelRegistry.Provider mp = ModelRegistry.provider(LlmProviders.normalize(wProvider));
+                        customModel = mp != null && mp.custom();
+                        wModel = (mp != null && !mp.models().isEmpty()) ? mp.models().get(0).id() : "";
+                        rebuild();
+                    }
                     return true;
                 }
             }
             if (tab == Tab.SETTINGS && modelDropdown != null
                     && modelDropdown.mouseClicked(event.x(), event.y())) {
                 providerDropdown.close();
-                if (CUSTOM_MODEL.equals(modelDropdown.selectedId())) { customModel = true; rebuild(); }
+                if (CUSTOM_MODEL.equals(modelDropdown.selectedId())) {       // "自定义…" → free-text box
+                    preserveKeyUrl();
+                    customModel = true;
+                    wModel = "";
+                    rebuild();
+                }
                 return true;
             }
             int my = (int) event.y();
