@@ -156,12 +156,39 @@ public final class ModelRegistry {
 
     public static List<Provider> providers() { return PROVIDERS; }
 
-    /** Provider by id, or the first one (or null if the registry is empty). */
+    /** Provider by id (config aliases resolved), or the first one (or null if the registry is empty). */
     public static Provider provider(String id) {
+        String c = canon(id);
         for (Provider p : PROVIDERS) {
-            if (p.id().equals(id)) return p;
+            if (p.id().equals(c)) return p;
         }
         return PROVIDERS.isEmpty() ? null : PROVIDERS.get(0);
+    }
+
+    /** True iff {@code id} (alias-resolved) names a real registered site — no first-entry fallback. */
+    public static boolean has(String id) {
+        String c = canon(id);
+        for (Provider p : PROVIDERS) if (p.id().equals(c)) return true;
+        return false;
+    }
+
+    /** OpenAI-compatible base URL for a site (empty if unknown). */
+    public static String baseUrl(String providerId) {
+        Provider p = provider(providerId);
+        return p == null ? "" : p.baseUrl();
+    }
+
+    /** Map config aliases (kimi/doubao/qwen/glm/silicon) onto canonical registry ids. */
+    private static String canon(String id) {
+        if (id == null) return "openai";
+        return switch (id.toLowerCase()) {
+            case "kimi" -> "moonshot";
+            case "doubao", "ark" -> "volcengine";
+            case "qwen", "tongyi", "aliyun" -> "dashscope";
+            case "glm" -> "zhipu";
+            case "silicon" -> "siliconflow";
+            default -> id.toLowerCase();
+        };
     }
 
     /** Custom request headers for a site (empty if none). */

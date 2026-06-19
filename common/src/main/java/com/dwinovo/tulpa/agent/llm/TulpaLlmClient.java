@@ -62,26 +62,27 @@ public final class TulpaLlmClient {
 
     private TulpaLlmClient(ITulpaConfig config) {
         this.provider = pickProvider(config.getProvider());
-        this.fullUrl = composeUrl(config.getBaseUrl(), provider);
+        String siteBase = com.dwinovo.tulpa.agent.model.ModelRegistry.baseUrl(config.getProvider());
+        this.fullUrl = composeUrl(config.getBaseUrl(), siteBase, provider);
         this.apiKey = config.getApiKey();
         this.transport = new HttpLlmTransport(config.getProxy(),
                 com.dwinovo.tulpa.agent.model.ModelRegistry.headers(config.getProvider()));
         String configured = config.getModel();
-        this.model = (configured == null || configured.isBlank()) ? "gpt-5-2-mini" : configured;
+        this.model = (configured == null || configured.isBlank()) ? "gpt-5.4-mini" : configured;
         Constants.LOG.info("[tulpa-llm] client initialised: provider={}, model={}, url={}, streaming={}",
                 provider.name(), model, fullUrl, provider.supportsStreaming());
     }
 
     /**
-     * Compose the chat completions URL using LiteLLM's logic:
-     * if the user-supplied base URL is empty, use the provider's default;
-     * trim a trailing slash; if the URL doesn't already end with
-     * {@code /chat/completions}, append it. Matches the behaviour of
-     * each LiteLLM provider's {@code get_complete_url} method.
+     * Compose the chat completions URL. Base URL precedence: an explicit per-config override wins;
+     * else the site's registered base URL (from {@code tulpa_models.json} — so "+ add site" URLs and
+     * adapter-less sites like Gemini/Grok actually take effect); else the adapter's hard-coded default.
+     * Then, LiteLLM-style: trim a trailing slash and append {@code /chat/completions} if absent.
      */
-    private static String composeUrl(String userBase, LlmProvider provider) {
-        String base = (userBase == null || userBase.isBlank())
-                ? provider.defaultBaseUrl() : userBase;
+    private static String composeUrl(String userBase, String siteBase, LlmProvider provider) {
+        String base = nonBlank(userBase) ? userBase
+                : nonBlank(siteBase) ? siteBase
+                : provider.defaultBaseUrl();
         if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
         if (base.endsWith(CHAT_COMPLETIONS_SUFFIX)) return base;
         return base + CHAT_COMPLETIONS_SUFFIX;
@@ -213,6 +214,8 @@ public final class TulpaLlmClient {
                 toolSummary, contentSnippet);
     }
 
+    private static boolean nonBlank(String s) { return s != null && !s.isBlank(); }
+
     private static int jsonInt(JsonObject o, String key) {
         if (o == null || !o.has(key) || o.get(key).isJsonNull()) return 0;
         try { return o.get(key).getAsInt(); } catch (RuntimeException ex) { return 0; }
@@ -254,8 +257,12 @@ public final class TulpaLlmClient {
             case com.dwinovo.tulpa.agent.provider.SiliconFlowProvider.NAME, "silicon" ->
                     new com.dwinovo.tulpa.agent.provider.SiliconFlowProvider();
             case OpenAIProvider.NAME, "openai-compatible" -> new OpenAIProvider();
+            // Any other registered site (Gemini, Grok, "+ add site" customs) is OpenAI-compatible — use the
+            // base adapter silently; only a genuinely unknown id (typo) warns.
             default -> {
-                Constants.LOG.warn("[tulpa-llm] unknown provider '{}', falling back to openai", name);
+                if (!com.dwinovo.tulpa.agent.model.ModelRegistry.has(name)) {
+                    Constants.LOG.warn("[tulpa-llm] unknown provider '{}', falling back to openai", name);
+                }
                 yield new OpenAIProvider();
             }
         };

@@ -21,6 +21,13 @@ tasks.withType(Javadoc).configureEach {
     options.encoding = 'UTF-8'
 }
 
+// Source files contain UTF-8 (CJK comments/strings). Pin the compiler charset so the build
+// doesn't depend on the JDK/OS default — without this, a non-UTF-8 platform default (e.g. GBK on
+// Chinese Windows) misreads sources as "illegal character" errors.
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
 repositories {
     mavenCentral()
     // https://docs.gradle.org/current/userguide/declaring_repositories.html#declaring_content_exclusively_found_in_one_repository
