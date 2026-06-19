@@ -8,7 +8,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.UUID;
@@ -29,7 +29,7 @@ import java.util.UUID;
  * </ul>
  */
 public record PathVizPayload(UUID companion,
-                             Identifier dimension,
+                             ResourceLocation dimension,
                              List<BlockPos> nodes,
                              List<BlockPos> toBreak,
                              List<BlockPos> toPlace,
@@ -39,12 +39,12 @@ public record PathVizPayload(UUID companion,
     public static final int MAX = 512;
 
     public static final Type<PathVizPayload> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath(Constants.MOD_ID, "path_viz"));
+            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "path_viz"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PathVizPayload> STREAM_CODEC =
             StreamCodec.composite(
                     UUIDUtil.STREAM_CODEC, PathVizPayload::companion,
-                    Identifier.STREAM_CODEC, PathVizPayload::dimension,
+                    ResourceLocation.STREAM_CODEC, PathVizPayload::dimension,
                     BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::nodes,
                     BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::toBreak,
                     BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::toPlace,

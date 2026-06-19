@@ -61,7 +61,7 @@ public final class GetWorldInfoTool implements TulpaTool {
         var level = entity.level();
 
         JsonObject root = new JsonObject();
-        root.addProperty("dimension", level.dimension().identifier().toString());
+        root.addProperty("dimension", level.dimension().location().toString());
         root.addProperty("game_time", level.getLevelData().getGameTime());
         root.addProperty("is_bright_outside", level.isBrightOutside());
         root.addProperty("is_dark_outside", level.isDarkOutside());

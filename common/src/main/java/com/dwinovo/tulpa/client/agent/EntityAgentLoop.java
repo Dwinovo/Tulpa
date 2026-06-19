@@ -740,7 +740,7 @@ public final class EntityAgentLoop {
         return "<env>\n"
                 + "  entity_uuid: " + entityUuid + "\n"
                 + "  owner_name: " + ownerName + "\n"
-                + "  dimension: " + entity.level().dimension().identifier() + "\n"
+                + "  dimension: " + entity.level().dimension().location() + "\n"
                 + "  today: " + LocalDate.now() + "\n"
                 + "</env>";
     }

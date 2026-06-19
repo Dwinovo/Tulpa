@@ -5,7 +5,7 @@ import com.dwinovo.tulpa.task.TaskRecord;
 import com.dwinovo.tulpa.task.tasks.DropItemsTaskRecord;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -78,7 +78,7 @@ public final class DropItemsTool implements TulpaTool {
             if (!args.has(key) || args.get(key).isJsonNull()) {
                 throw new IllegalArgumentException("missing required argument: " + key);
             }
-            Identifier id = Identifier.tryParse(args.get(key).getAsString());
+            ResourceLocation id = ResourceLocation.tryParse(args.get(key).getAsString());
             Item item = id == null ? null : BuiltInRegistries.ITEM.getValue(id);
             if (item == null || item == Items.AIR) {
                 throw new IllegalArgumentException("unknown item: " + args.get(key).getAsString());

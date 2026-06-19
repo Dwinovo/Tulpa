@@ -7,7 +7,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -143,7 +143,7 @@ public final class MineBlockTool implements TulpaTool {
         Set<Block> out = new LinkedHashSet<>();
         for (JsonElement el : arr) {
             if (el == null || el.isJsonNull()) continue;
-            Identifier id = Identifier.tryParse(el.getAsString());
+            ResourceLocation id = ResourceLocation.tryParse(el.getAsString());
             if (id == null) continue;
             Block b = BuiltInRegistries.BLOCK.getValue(id);
             if (b != null && b != Blocks.AIR) out.add(b);

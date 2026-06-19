@@ -4,9 +4,9 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
@@ -44,10 +44,10 @@ public final class PathVizRenderer {
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
-        Identifier here = mc.level.dimension().identifier();
+        ResourceLocation here = mc.level.dimension().location();
         Vec3 cam = mc.gameRenderer.getMainCamera().position();
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
-        VertexConsumer vc = buffers.getBuffer(RenderTypes.lines());
+        VertexConsumer vc = buffers.getBuffer(RenderType.lines());
         PoseStack.Pose pose = poseStack.last();
 
         for (ClientPathViz.Viz v : active) {
@@ -64,7 +64,7 @@ public final class PathVizRenderer {
         }
         // Flush only our line batch (not endLastBatch, which could flush a foreign
         // open batch in the shared buffer source at this render stage).
-        buffers.endBatch(RenderTypes.lines());
+        buffers.endBatch(RenderType.lines());
     }
 
     /**
@@ -142,7 +142,7 @@ public final class PathVizRenderer {
         Vector3f n = new Vector3f((float) (x2 - x1), (float) (y2 - y1), (float) (z2 - z1));
         if (n.lengthSquared() > 1.0e-6F) n.normalize();
         else n.set(0.0F, 1.0F, 0.0F);
-        vc.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(color).setNormal(pose, n).setLineWidth(LINE_WIDTH);
-        vc.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(color).setNormal(pose, n).setLineWidth(LINE_WIDTH);
+        vc.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(color).setNormal(pose, n);
+        vc.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(color).setNormal(pose, n);
     }
 }

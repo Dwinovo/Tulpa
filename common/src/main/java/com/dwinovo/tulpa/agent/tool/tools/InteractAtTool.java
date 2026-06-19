@@ -6,7 +6,7 @@ import com.dwinovo.tulpa.task.tasks.InteractAtTaskRecord;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -108,7 +108,7 @@ public final class InteractAtTool implements TulpaTool {
         if (!args.has("item_id") || args.get("item_id").isJsonNull()) {
             return null;
         }
-        Identifier id = Identifier.tryParse(args.get("item_id").getAsString());
+        ResourceLocation id = ResourceLocation.tryParse(args.get("item_id").getAsString());
         if (id == null) {
             throw new IllegalArgumentException("item_id is not a valid id: " + args.get("item_id"));
         }

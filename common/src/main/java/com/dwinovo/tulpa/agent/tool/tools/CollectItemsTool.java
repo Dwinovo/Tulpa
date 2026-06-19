@@ -7,7 +7,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 
 import java.util.LinkedHashMap;
@@ -98,7 +98,7 @@ public final class CollectItemsTool implements TulpaTool {
         }
         for (JsonElement el : args.getAsJsonArray("item_ids")) {
             if (el == null || el.isJsonNull()) continue;
-            Identifier id = Identifier.tryParse(el.getAsString());
+            ResourceLocation id = ResourceLocation.tryParse(el.getAsString());
             if (id == null) continue;
             if (BuiltInRegistries.ITEM.containsKey(id)) {
                 out.add(BuiltInRegistries.ITEM.getValue(id));

@@ -18,8 +18,8 @@ public final class ProviderDropdown {
     public static final String ADD_SITE = "__add_site__";
 
     private static final int ROW = 16;
-    private static final net.minecraft.resources.Identifier FRAME =
-            net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, "button");
+    private static final net.minecraft.resources.ResourceLocation FRAME =
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, "button");
 
     private final List<LlmProviders.Option> options;   // live snapshot at construction (rebuilt each settings build)
     private final boolean allowAddSite;

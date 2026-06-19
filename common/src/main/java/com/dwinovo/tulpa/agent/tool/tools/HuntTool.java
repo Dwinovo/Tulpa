@@ -7,7 +7,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 
 import java.util.LinkedHashMap;
@@ -131,7 +131,7 @@ public final class HuntTool implements TulpaTool {
         Set<EntityType<?>> out = new LinkedHashSet<>();
         for (JsonElement el : arr) {
             if (el == null || el.isJsonNull()) continue;
-            Identifier id = Identifier.tryParse(el.getAsString());
+            ResourceLocation id = ResourceLocation.tryParse(el.getAsString());
             if (id == null) continue;
             EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(id);
             // getValue returns the PIG default for unknown ids in some registries;

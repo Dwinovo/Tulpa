@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.ResourceManager;
 
@@ -24,11 +24,11 @@ public class TulpaFabricClient implements ClientModInitializer {
         // Skills live under config/tulpa/skills. Hook the resource reload
         // pipeline so /reload picks up newly added SKILL.md files without a
         // client restart.
-        Identifier skillLoaderId = Identifier.fromNamespaceAndPath(Constants.MOD_ID, "skill_loader");
+        ResourceLocation skillLoaderId = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "skill_loader");
         ResourceManagerHelper.get(PackType.CLIENT_RESOURCES)
                 .registerReloadListener(new SimpleSynchronousResourceReloadListener() {
                     @Override
-                    public Identifier getFabricId() {
+                    public ResourceLocation getFabricId() {
                         return skillLoaderId;
                     }
 
@@ -52,7 +52,7 @@ public class TulpaFabricClient implements ClientModInitializer {
 
         // HUD: advancement-style activity toasts (top-right) when not watching a panel.
         net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry.addLast(
-                Identifier.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_toasts"),
+                ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_toasts"),
                 (g, delta) -> com.dwinovo.tulpa.client.hud.TulpaToasts.render(g));
 
         // In-world path overlay for every companion (Baritone PathRenderer port),

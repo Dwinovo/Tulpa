@@ -9,7 +9,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
@@ -33,7 +33,7 @@ public record LocateTulpaPayload(List<UUID> entityUuids) implements CustomPacket
     public static final int MAX_UUIDS = 16;
 
     public static final Type<LocateTulpaPayload> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath(Constants.MOD_ID, "locate_tulpa"));
+            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "locate_tulpa"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, LocateTulpaPayload> STREAM_CODEC =
             StreamCodec.composite(
@@ -55,7 +55,7 @@ public record LocateTulpaPayload(List<UUID> entityUuids) implements CustomPacket
             if (tulpa != null && tulpa.isOwnedByPlayer(player.getUUID())) {
                 out.add(TulpaLocationsPayload.Snapshot.live(uuid,
                         tulpa.getX(), tulpa.getY(), tulpa.getZ(),
-                        tulpa.level().dimension().identifier().toString(),
+                        tulpa.level().dimension().location().toString(),
                         tulpa.getHealth(), tulpa.getMaxHealth()));
                 continue;
             }
@@ -68,7 +68,7 @@ public record LocateTulpaPayload(List<UUID> entityUuids) implements CustomPacket
                 var pos = entry.pos();
                 out.add(TulpaLocationsPayload.Snapshot.lastSeen(uuid,
                         pos.getX(), pos.getY(), pos.getZ(),
-                        entry.dimension().identifier().toString()));
+                        entry.dimension().location().toString()));
                 continue;
             }
             out.add(TulpaLocationsPayload.Snapshot.notFound(uuid));

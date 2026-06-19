@@ -94,20 +94,20 @@ public final class TulpaScreen extends Screen {
     private static final int OK = TH.ok();
     private static final int RUN = TH.run();
     private static final int FAIL = TH.fail();
-    private static net.minecraft.resources.Identifier railSpr(String n) {
-        return net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, n);
+    private static net.minecraft.resources.ResourceLocation railSpr(String n) {
+        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, n);
     }
     /** rail + panel composited into ONE sprite (continuous header, no gap; panel's left border = divider). */
-    private static final net.minecraft.resources.Identifier WORKSPACE_SPRITE = railSpr("workspace");
-    private static final net.minecraft.resources.Identifier AVATAR_FRAME = railSpr("avatar_frame");
-    private static final net.minecraft.resources.Identifier AVATAR_FRAME_ACTIVE = railSpr("avatar_frame_active");
-    private static final net.minecraft.resources.Identifier SUMMON_SPRITE = railSpr("summon");
-    private static final net.minecraft.resources.Identifier SUMMON_ACTIVE = railSpr("summon_active");
+    private static final net.minecraft.resources.ResourceLocation WORKSPACE_SPRITE = railSpr("workspace");
+    private static final net.minecraft.resources.ResourceLocation AVATAR_FRAME = railSpr("avatar_frame");
+    private static final net.minecraft.resources.ResourceLocation AVATAR_FRAME_ACTIVE = railSpr("avatar_frame_active");
+    private static final net.minecraft.resources.ResourceLocation SUMMON_SPRITE = railSpr("summon");
+    private static final net.minecraft.resources.ResourceLocation SUMMON_ACTIVE = railSpr("summon_active");
     /** API-key reveal toggle icons: open eye = "click to show", slashed eye = "click to hide". */
-    private static final net.minecraft.resources.Identifier EYE = railSpr("eye");
-    private static final net.minecraft.resources.Identifier EYE_OFF = railSpr("eye_off");
-    private static final net.minecraft.resources.Identifier CHEVRON_UP = railSpr("chevron_up");
-    private static final net.minecraft.resources.Identifier CHEVRON_DOWN = railSpr("chevron_down");
+    private static final net.minecraft.resources.ResourceLocation EYE = railSpr("eye");
+    private static final net.minecraft.resources.ResourceLocation EYE_OFF = railSpr("eye_off");
+    private static final net.minecraft.resources.ResourceLocation CHEVRON_UP = railSpr("chevron_up");
+    private static final net.minecraft.resources.ResourceLocation CHEVRON_DOWN = railSpr("chevron_down");
 
     private static final String[] SPIN = {"|", "/", "-", "\\"};
     /** Armor column on the Items tab (top → bottom); offhand is drawn separately below it. */
@@ -936,9 +936,9 @@ public final class TulpaScreen extends Screen {
     /** A row of segmented icons for a 0..max stat (2 units per icon): empty sockets first, then
      *  full / half overlaid. Used for hearts (HP) and drumsticks (hunger). */
     private void renderStatRow(GuiGraphics g, int x, int y, float value, float max,
-                               net.minecraft.resources.Identifier full,
-                               net.minecraft.resources.Identifier half,
-                               net.minecraft.resources.Identifier empty) {
+                               net.minecraft.resources.ResourceLocation full,
+                               net.minecraft.resources.ResourceLocation half,
+                               net.minecraft.resources.ResourceLocation empty) {
         var pipe = net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED;
         int units = Math.max(1, (int) Math.ceil(max / 2f));
         for (int i = 0; i < units; i++) {
@@ -962,7 +962,7 @@ public final class TulpaScreen extends Screen {
                 (float) mouseX, (float) mouseY, e);
     }
 
-    private void slotBg(GuiGraphics g, net.minecraft.resources.Identifier sprite, int x, int y) {
+    private void slotBg(GuiGraphics g, net.minecraft.resources.ResourceLocation sprite, int x, int y) {
         g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, sprite, x, y, 16, 16);
     }
 
@@ -1286,21 +1286,21 @@ public final class TulpaScreen extends Screen {
         }
     }
 
-    private static net.minecraft.resources.Identifier spr(String name) {
-        return net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, name);
+    private static net.minecraft.resources.ResourceLocation spr(String name) {
+        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, name);
     }
-    private static final net.minecraft.resources.Identifier SLOT_SPRITE = spr("slot");
-    private static final net.minecraft.resources.Identifier SLOT_ALT = spr("slot_alt");        // checkerboard
+    private static final net.minecraft.resources.ResourceLocation SLOT_SPRITE = spr("slot");
+    private static final net.minecraft.resources.ResourceLocation SLOT_ALT = spr("slot_alt");        // checkerboard
     /** Parchment frame (reuses the button sprite) behind text fields. */
-    private static final net.minecraft.resources.Identifier FIELD_SPRITE = spr("button");
-    private static final net.minecraft.resources.Identifier HEART_FULL = spr("heart_full");
-    private static final net.minecraft.resources.Identifier HEART_HALF = spr("heart_half");
-    private static final net.minecraft.resources.Identifier HEART_EMPTY = spr("heart_empty");
-    private static final net.minecraft.resources.Identifier FOOD_FULL = spr("food_full");
-    private static final net.minecraft.resources.Identifier FOOD_HALF = spr("food_half");
-    private static final net.minecraft.resources.Identifier FOOD_EMPTY = spr("food_empty");
-    private static final net.minecraft.resources.Identifier SCROLL_TRACK = spr("scroll_track");
-    private static final net.minecraft.resources.Identifier SCROLL_THUMB = spr("scroll_thumb");
+    private static final net.minecraft.resources.ResourceLocation FIELD_SPRITE = spr("button");
+    private static final net.minecraft.resources.ResourceLocation HEART_FULL = spr("heart_full");
+    private static final net.minecraft.resources.ResourceLocation HEART_HALF = spr("heart_half");
+    private static final net.minecraft.resources.ResourceLocation HEART_EMPTY = spr("heart_empty");
+    private static final net.minecraft.resources.ResourceLocation FOOD_FULL = spr("food_full");
+    private static final net.minecraft.resources.ResourceLocation FOOD_HALF = spr("food_half");
+    private static final net.minecraft.resources.ResourceLocation FOOD_EMPTY = spr("food_empty");
+    private static final net.minecraft.resources.ResourceLocation SCROLL_TRACK = spr("scroll_track");
+    private static final net.minecraft.resources.ResourceLocation SCROLL_THUMB = spr("scroll_thumb");
 
     @Override
     public boolean isPauseScreen() {

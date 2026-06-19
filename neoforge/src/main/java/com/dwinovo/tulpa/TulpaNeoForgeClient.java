@@ -3,7 +3,7 @@ package com.dwinovo.tulpa;
 import com.dwinovo.tulpa.agent.skill.BuiltinSkillBootstrap;
 import com.dwinovo.tulpa.agent.skill.SkillRegistry;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -48,7 +48,7 @@ public class TulpaNeoForgeClient {
     static void registerGuiLayers(net.neoforged.neoforge.client.event.RegisterGuiLayersEvent event) {
         // HUD: advancement-style activity toasts (top-right) when not watching a panel.
         event.registerAboveAll(
-                Identifier.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_toasts"),
+                ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_toasts"),
                 (g, delta) -> com.dwinovo.tulpa.client.hud.TulpaToasts.render(g));
     }
 
@@ -59,7 +59,7 @@ public class TulpaNeoForgeClient {
         Path skillsDir = tulpaConfigRoot.resolve("skills");
 
         event.addListener(
-                Identifier.fromNamespaceAndPath(Constants.MOD_ID, "skill_loader"),
+                ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "skill_loader"),
                 (ResourceManagerReloadListener) rm -> {
                     BuiltinSkillBootstrap.bootstrap(tulpaConfigRoot, skillsDir);
                     SkillRegistry.instance().scan(skillsDir);

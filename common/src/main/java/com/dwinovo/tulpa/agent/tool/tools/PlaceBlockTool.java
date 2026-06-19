@@ -7,7 +7,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -118,7 +118,7 @@ public final class PlaceBlockTool implements TulpaTool {
         if (!args.has("block_id") || args.get("block_id").isJsonNull()) {
             throw new IllegalArgumentException("missing required argument: block_id");
         }
-        Identifier id = Identifier.tryParse(args.get("block_id").getAsString());
+        ResourceLocation id = ResourceLocation.tryParse(args.get("block_id").getAsString());
         if (id == null) {
             throw new IllegalArgumentException("block_id is not a valid id: " + args.get("block_id"));
         }

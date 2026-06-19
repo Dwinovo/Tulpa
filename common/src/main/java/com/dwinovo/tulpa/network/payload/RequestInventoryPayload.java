@@ -7,7 +7,7 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -30,7 +30,7 @@ public record RequestInventoryPayload(UUID uuid) implements CustomPacketPayload 
     public static final int MAIN_SLOTS = 36;
 
     public static final Type<RequestInventoryPayload> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath(Constants.MOD_ID, "request_inventory"));
+            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "request_inventory"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, RequestInventoryPayload> STREAM_CODEC =
             StreamCodec.composite(UUIDUtil.STREAM_CODEC, RequestInventoryPayload::uuid,

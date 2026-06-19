@@ -92,7 +92,7 @@ public final class GetOwnerStatusTool implements TulpaTool {
 
         boolean sameDimension = entity.level().dimension().equals(player.level().dimension());
         root.addProperty("same_dimension", sameDimension);
-        root.addProperty("owner_dimension", player.level().dimension().identifier().toString());
+        root.addProperty("owner_dimension", player.level().dimension().location().toString());
         if (sameDimension) {
             root.addProperty("distance_to_me", entity.distanceTo(player));
         } else {

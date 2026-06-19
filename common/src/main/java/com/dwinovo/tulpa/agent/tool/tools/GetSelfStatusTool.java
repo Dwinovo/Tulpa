@@ -8,7 +8,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -90,15 +90,15 @@ public final class GetSelfStatusTool implements TulpaTool {
         pos.addProperty("z", entity.getZ());
         root.add("position", pos);
 
-        root.addProperty("dimension", entity.level().dimension().identifier().toString());
+        root.addProperty("dimension", entity.level().dimension().location().toString());
         root.addProperty("biome", entity.level().getBiome(entity.blockPosition())
-                .unwrapKey().map(k -> k.identifier().toString()).orElse("unknown"));
+                .unwrapKey().map(k -> k.location().toString()).orElse("unknown"));
         // Structures whose bounding box contains us right now (e.g. village, mineshaft).
         JsonArray structures = new JsonArray();
         if (entity.level() instanceof ServerLevel sl) {
             Registry<Structure> reg = sl.registryAccess().lookupOrThrow(Registries.STRUCTURE);
             for (Structure s : sl.structureManager().getAllStructuresAt(entity.blockPosition()).keySet()) {
-                Identifier key = reg.getKey(s);
+                ResourceLocation key = reg.getKey(s);
                 if (key != null) structures.add(key.toString());
             }
         }

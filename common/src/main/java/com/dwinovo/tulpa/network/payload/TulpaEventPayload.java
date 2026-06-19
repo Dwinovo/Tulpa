@@ -7,7 +7,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.UUID;
 
@@ -22,7 +22,7 @@ import java.util.UUID;
 public record TulpaEventPayload(UUID entityUuid, String xml, boolean urgent) implements CustomPacketPayload {
 
     public static final Type<TulpaEventPayload> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_event"));
+            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_event"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TulpaEventPayload> STREAM_CODEC =
             StreamCodec.composite(

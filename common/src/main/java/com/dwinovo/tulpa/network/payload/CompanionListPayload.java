@@ -7,7 +7,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.UUID;
@@ -36,7 +36,7 @@ public record CompanionListPayload(List<Entry> companions) implements CustomPack
     }
 
     public static final Type<CompanionListPayload> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath(Constants.MOD_ID, "companion_list"));
+            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "companion_list"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, CompanionListPayload> STREAM_CODEC =
             StreamCodec.composite(

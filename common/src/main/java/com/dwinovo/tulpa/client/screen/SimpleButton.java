@@ -7,7 +7,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * The Tulpa button: a vanilla GUI sprite (nine-slice, so it stretches to any width
@@ -17,16 +17,16 @@ import net.minecraft.resources.Identifier;
  */
 public final class SimpleButton extends Button {
 
-    private static final Identifier IDLE = sprite("button");
-    private static final Identifier HOVER = sprite("button_highlighted");
-    private static final Identifier DISABLED = sprite("button_disabled");
+    private static final ResourceLocation IDLE = sprite("button");
+    private static final ResourceLocation HOVER = sprite("button_highlighted");
+    private static final ResourceLocation DISABLED = sprite("button_disabled");
 
-    private static Identifier sprite(String name) {
-        return Identifier.fromNamespaceAndPath(Constants.MOD_ID, name);
+    private static ResourceLocation sprite(String name) {
+        return ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, name);
     }
 
     /** Optional centered icon sprite; when set it replaces the text label (e.g. the eye toggle). */
-    private Identifier icon;
+    private ResourceLocation icon;
 
     public SimpleButton(int x, int y, int width, int height, Component message, Button.OnPress onPress) {
         super(x, y, width, height, message, onPress,
@@ -34,16 +34,16 @@ public final class SimpleButton extends Button {
     }
 
     /** Draw a centered icon sprite instead of a text label. Returns {@code this} for chaining. */
-    public SimpleButton icon(Identifier icon) {
+    public SimpleButton icon(ResourceLocation icon) {
         this.icon = icon;
         return this;
     }
 
     @Override
-    protected void renderContents(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
         boolean hovered = active && isHoveredOrFocused();
-        Identifier sprite = !active ? DISABLED : (hovered ? HOVER : IDLE);
+        ResourceLocation sprite = !active ? DISABLED : (hovered ? HOVER : IDLE);
         g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, w, h);
 
         if (icon != null) {   // icon button: a centered square sprite, no text label

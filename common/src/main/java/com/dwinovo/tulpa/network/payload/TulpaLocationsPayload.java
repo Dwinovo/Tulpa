@@ -7,7 +7,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.UUID;
@@ -59,7 +59,7 @@ public record TulpaLocationsPayload(List<Snapshot> snapshots) implements CustomP
     }
 
     public static final Type<TulpaLocationsPayload> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_locations"));
+            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_locations"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TulpaLocationsPayload> STREAM_CODEC =
             StreamCodec.composite(

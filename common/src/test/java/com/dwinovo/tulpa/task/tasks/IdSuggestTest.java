@@ -1,6 +1,6 @@
 package com.dwinovo.tulpa.task.tasks;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -12,10 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 /** The "did you mean" healer must catch the classic id traps and stay quiet otherwise. */
 class IdSuggestTest {
 
-    private static final List<Identifier> STRUCTURES = Stream.of(
+    private static final List<ResourceLocation> STRUCTURES = Stream.of(
                     "mansion", "monument", "jungle_pyramid", "desert_pyramid",
                     "stronghold", "fortress", "ancient_city", "village_plains")
-            .map(p -> Identifier.fromNamespaceAndPath("minecraft", p))
+            .map(p -> ResourceLocation.fromNamespaceAndPath("minecraft", p))
             .toList();
 
     private static String closest(String input) {

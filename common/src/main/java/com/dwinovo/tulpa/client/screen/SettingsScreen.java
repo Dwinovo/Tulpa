@@ -10,7 +10,6 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Standalone global-settings screen (provider / API key / model / base URL),
@@ -29,7 +28,7 @@ public final class SettingsScreen extends Screen {
     private static final int TXT_MUTED = 0xFFAAAAAA;
     private static final int OK = 0xFF74D17A;
 
-    private final @Nullable Screen parent;
+    private final Screen parent;
 
     private ProviderDropdown provider;
     private EditBox apiKeyInput;
@@ -39,12 +38,12 @@ public final class SettingsScreen extends Screen {
 
     private int left, top;
 
-    public SettingsScreen(@Nullable Screen parent) {
+    public SettingsScreen(Screen parent) {
         super(Component.translatable(ModLanguageData.Keys.GUI_SETTINGS_TITLE));
         this.parent = parent;
     }
 
-    public static void open(@Nullable Screen parent) {
+    public static void open(Screen parent) {
         Minecraft.getInstance().setScreen(new SettingsScreen(parent));
     }
 

@@ -4,7 +4,7 @@ import com.dwinovo.tulpa.agent.tool.TulpaTool;
 import com.dwinovo.tulpa.entity.TulpaPlayer;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -258,7 +258,7 @@ public final class LookupRecipeTool implements TulpaTool {
     }
 
     private static Item readItem(String id) {
-        Identifier rl = Identifier.tryParse(id);
+        ResourceLocation rl = ResourceLocation.tryParse(id);
         if (rl == null) {
             throw new IllegalArgumentException("not a valid item id: " + id);
         }

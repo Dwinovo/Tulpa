@@ -2,7 +2,7 @@ package com.dwinovo.tulpa.client.path;
 
 import com.dwinovo.tulpa.network.payload.PathVizPayload;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collection;
 import java.util.List;
@@ -22,7 +22,7 @@ public final class ClientPathViz {
     /** One companion's overlay snapshot. {@code companion} is the body UUID so the
      *  renderer can resolve its live position and draw the path line from where it
      *  currently is (Baritone's per-frame renderBegin — the line shrinks as it walks). */
-    public record Viz(UUID companion, Identifier dimension, List<BlockPos> nodes,
+    public record Viz(UUID companion, ResourceLocation dimension, List<BlockPos> nodes,
                       List<BlockPos> toBreak, List<BlockPos> toPlace, List<BlockPos> targets) {}
 
     private static final Map<UUID, Viz> ACTIVE = new ConcurrentHashMap<>();

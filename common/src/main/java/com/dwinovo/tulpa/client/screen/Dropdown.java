@@ -16,8 +16,8 @@ public final class Dropdown {
     public record Item(String id, String label) {}
 
     private static final int ROW = 16;
-    private static final net.minecraft.resources.Identifier FRAME =
-            net.minecraft.resources.Identifier.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, "button");
+    private static final net.minecraft.resources.ResourceLocation FRAME =
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, "button");
 
     private int x, y, w, h = 18;
     private boolean open;
