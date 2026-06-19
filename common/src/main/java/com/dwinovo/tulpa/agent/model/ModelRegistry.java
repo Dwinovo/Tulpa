@@ -32,9 +32,57 @@ public final class ModelRegistry {
     /** Fallback context window for an unknown model (e.g. a custom one). */
     public static final int DEFAULT_CTX = 64_000;
 
-    private static final List<Provider> PROVIDERS = load();
+    private static volatile List<Provider> PROVIDERS = load();
 
     private ModelRegistry() {}
+
+    /** Re-read the user file (after an edit / a site was added). */
+    public static void reload() { PROVIDERS = load(); }
+
+    /** Append a user-defined OpenAI-compatible site to {@code config/tulpa/models.json} and reload.
+     *  Returns the new site id, or null on failure. */
+    public static String addCustomSite(String name, String baseUrl, String modelId) {
+        try {
+            Path file = Services.PLATFORM.getConfigDir().resolve("tulpa").resolve("models.json");
+            String json = Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : readBundled();
+            com.google.gson.JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+            com.google.gson.JsonArray providers = root.getAsJsonArray("providers");
+            String id = uniqueId(slug(name), providers);
+            com.google.gson.JsonObject p = new com.google.gson.JsonObject();
+            p.addProperty("id", id);
+            p.addProperty("name", name == null || name.isBlank() ? id : name.trim());
+            p.addProperty("baseUrl", baseUrl == null ? "" : baseUrl.trim());
+            com.google.gson.JsonArray models = new com.google.gson.JsonArray();
+            if (modelId != null && !modelId.isBlank()) {
+                com.google.gson.JsonObject m = new com.google.gson.JsonObject();
+                m.addProperty("id", modelId.trim());
+                models.add(m);
+            }
+            p.add("models", models);
+            providers.add(p);
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(root),
+                    StandardCharsets.UTF_8);
+            reload();
+            return id;
+        } catch (Exception e) {
+            Constants.LOG.error("[tulpa] failed to add custom site '{}'", name, e);
+            return null;
+        }
+    }
+
+    private static String slug(String name) {
+        if (name == null) return "site";
+        String s = name.toLowerCase().replaceAll("[^a-z0-9]+", "_").replaceAll("^_+|_+$", "");
+        return s.isEmpty() ? "site" : s;
+    }
+
+    private static String uniqueId(String base, com.google.gson.JsonArray providers) {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (var e : providers) ids.add(e.getAsJsonObject().get("id").getAsString());
+        if (!ids.contains(base)) return base;
+        for (int i = 2; ; i++) if (!ids.contains(base + "_" + i)) return base + "_" + i;
+    }
 
     private static List<Provider> load() {
         String bundled = readBundled();

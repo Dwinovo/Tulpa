@@ -56,7 +56,7 @@ public final class SettingsScreen extends Screen {
         ITulpaConfig cfg = Services.CONFIG;
 
         int y = top + 10;
-        provider = new ProviderDropdown(cfg.getProvider());
+        provider = new ProviderDropdown(cfg.getProvider(), false);
         provider.setBounds(left, y + LABEL_H, CONTENT_WIDTH, 18);
 
         int y2 = y + FIELD_GAP;

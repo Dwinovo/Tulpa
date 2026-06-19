@@ -12,10 +12,8 @@ import java.util.List;
  */
 public final class LlmProviders {
 
-    /** Every provider, in registry order; defaultModel = the registry's first model (empty for custom). */
-    public static final List<Option> ALL = build();
-
-    private static List<Option> build() {
+    /** Every provider, live from the registry (so a newly-added site shows up immediately). */
+    public static List<Option> all() {
         List<Option> out = new ArrayList<>();
         for (ModelRegistry.Provider p : ModelRegistry.providers()) {
             String defaultModel = p.models().isEmpty() ? "" : p.models().get(0).id();
@@ -30,10 +28,11 @@ public final class LlmProviders {
 
     public static Option byId(String id) {
         String norm = normalize(id);
-        for (Option o : ALL) {
+        List<Option> all = all();
+        for (Option o : all) {
             if (o.id().equals(norm)) return o;
         }
-        return ALL.get(0);
+        return all.isEmpty() ? new Option("openai", "OpenAI", "", "") : all.get(0);
     }
 
     /** Map config aliases (kimi/doubao/qwen/…) onto canonical provider ids. */

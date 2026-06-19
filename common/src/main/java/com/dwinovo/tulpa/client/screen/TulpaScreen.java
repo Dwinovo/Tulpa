@@ -128,7 +128,10 @@ public final class TulpaScreen extends Screen {
     private static final String CUSTOM_MODEL = "__custom__";
     // unsaved working state — settings widgets are (re)built from these, NOT from config, so a rebuild
     // (provider change / custom toggle) doesn't revert what you just picked or typed.
-    private String wProvider = "", wApiKey = "", wModel = "", wBaseUrl = "";
+    private String wProvider = "", wApiKey = "", wModel = "", wBaseUrl = "", wProxy = "", wSiteName = "";
+    private boolean addingSite;              // "+ 添加站点" mode: name + base URL + model → writes a site
+    private EditBox proxyInput;
+    private EditBox siteNameInput;
     private EditBox apiKeyInput;
     private EditBox modelInput;
     private EditBox baseUrlInput;
@@ -220,7 +223,7 @@ public final class TulpaScreen extends Screen {
         overlay.clear();
         input = null;
         sendButton = stopButton = compactButton = null;
-        apiKeyInput = modelInput = baseUrlInput = null;
+        apiKeyInput = modelInput = baseUrlInput = proxyInput = siteNameInput = null;
         modelDropdown = null;
         summonInput = null;
         if (summoning) { buildSummonField(); return; }
@@ -321,6 +324,8 @@ public final class TulpaScreen extends Screen {
         wApiKey = cfg.getApiKey() == null ? "" : cfg.getApiKey();
         wModel = cfg.getModel() == null ? "" : cfg.getModel();
         wBaseUrl = cfg.getBaseUrl() == null ? "" : cfg.getBaseUrl();
+        wProxy = cfg.getProxy() == null ? "" : cfg.getProxy();
+        addingSite = false;
         ModelRegistry.Provider mp = ModelRegistry.provider(LlmProviders.normalize(wProvider));
         boolean known = mp != null && mp.models().stream().anyMatch(m -> m.id().equals(wModel));
         customModel = (mp != null && mp.custom()) || (!wModel.isBlank() && !known);
@@ -330,36 +335,50 @@ public final class TulpaScreen extends Screen {
     private void preserveKeyUrl() {
         if (apiKeyInput != null) wApiKey = apiKeyInput.getValue();
         if (baseUrlInput != null) wBaseUrl = baseUrlInput.getValue();
+        if (proxyInput != null) wProxy = proxyInput.getValue();
     }
 
     // ---- settings tab ----
 
+    private static final int SET_SP = 33;     // settings row pitch (5 rows + Save must fit)
+
     private void buildSettingsWidgets() {
         int x = left + PAD, w = PANEL_W - PAD * 2;
-        int y = top + HEADER_H + 10;
+        int y0 = top + HEADER_H + 8;
 
-        providerDropdown = new ProviderDropdown(wProvider);   // working state, not config (survives rebuild)
-        providerDropdown.setBounds(x, y + 11, w, 18);
+        if (addingSite) {
+            // row0: site name + cancel
+            siteNameInput = field(x, y0 + 11, w - 20, 64, wSiteName);
+            siteNameInput.setHint(Component.literal("e.g. My Proxy"));
+            add(new SimpleButton(x + w - 18, y0 + 11, 18, 18, Component.literal("✕"),
+                    b -> { addingSite = false; rebuild(); }));
+            buildApiKeyRow(x, y0 + SET_SP + 11, w);
+            modelInput = field(x, y0 + 2 * SET_SP + 11, w, 128, wModel);
+            modelInput.setHint(Component.literal("model id"));
+            baseUrlInput = field(x, y0 + 3 * SET_SP + 11, w, 256, wBaseUrl);
+            baseUrlInput.setHint(Component.literal("https://… (OpenAI-compatible)"));
+        } else {
+            providerDropdown = new ProviderDropdown(wProvider, true);   // live + "+ 添加站点"
+            providerDropdown.setBounds(x, y0 + 11, w, 18);
+            buildApiKeyRow(x, y0 + SET_SP + 11, w);
+            buildModelRow(x, y0 + 2 * SET_SP + 11, w);
+            baseUrlInput = field(x, y0 + 3 * SET_SP + 11, w, 256, wBaseUrl);
+            proxyInput = field(x, y0 + 4 * SET_SP + 11, w, 128, wProxy);
+            proxyInput.setHint(Component.literal("host:port (optional)"));
+        }
 
-        // API key: leave room for the eye button, and mask the value until revealed.
+        add(new SimpleButton(left + PANEL_W - PAD - 64, top + PANEL_H - PAD - 18,
+                64, 18, Component.literal("Save"), b -> onSaveSettings()));
+    }
+
+    private void buildApiKeyRow(int x, int y, int w) {
         int eyeW = 22;
-        int y2 = y + 37;
-        apiKeyInput = field(x, y2 + 11, w - eyeW - 2, 512, wApiKey);
+        apiKeyInput = field(x, y, w - eyeW - 2, 512, wApiKey);
         apiKeyInput.addFormatter((text, idx) -> showKey
                 ? FormattedCharSequence.forward(text, net.minecraft.network.chat.Style.EMPTY)
                 : FormattedCharSequence.forward("•".repeat(text.length()), net.minecraft.network.chat.Style.EMPTY));
-        add(new SimpleButton(x + w - eyeW, y2 + 11, eyeW, 18,
-                Component.literal(showKey ? "隐" : "见"),
+        add(new SimpleButton(x + w - eyeW, y, eyeW, 18, Component.literal(showKey ? "隐" : "见"),
                 b -> { showKey = !showKey; b.setMessage(Component.literal(showKey ? "隐" : "见")); }));
-
-        int y3 = y2 + 37;
-        buildModelRow(x, y3 + 11, w);
-        int y4 = y3 + 37;
-        baseUrlInput = field(x, y4 + 11, w, 256, wBaseUrl);
-
-        int saveW = 64;
-        add(new SimpleButton(left + PANEL_W - PAD - saveW, top + PANEL_H - PAD - 18,
-                saveW, 18, Component.literal("Save"), b -> onSaveSettings()));
     }
 
     /** Model row: a preset dropdown for the provider's known models, or a free-text box (custom mode)
@@ -406,6 +425,26 @@ public final class TulpaScreen extends Screen {
 
     private void onSaveSettings() {
         ITulpaConfig cfg = Services.CONFIG;
+        if (addingSite) {                          // create a new user site, then select it
+            String name = siteNameInput.getValue().trim();
+            String url = baseUrlInput.getValue().trim();
+            String mdl = modelInput.getValue().trim();
+            if (name.isEmpty() || url.isEmpty()) { warnUntil = System.currentTimeMillis() + 4000; return; }
+            String id = ModelRegistry.addCustomSite(name, url, mdl);
+            if (id == null) { warnUntil = System.currentTimeMillis() + 4000; return; }
+            cfg.setProvider(id);
+            cfg.setModel(mdl);
+            cfg.setApiKey(apiKeyInput.getValue());
+            cfg.setBaseUrl("");                    // site carries the URL now
+            cfg.setProxy(wProxy);
+            cfg.save();
+            TulpaLlmClient.reset();
+            addingSite = false;
+            wProvider = id; wModel = mdl; wBaseUrl = ""; customModel = false;
+            rebuild();
+            savedFlashUntil = System.currentTimeMillis() + 1500;
+            return;
+        }
         cfg.setProvider(providerDropdown.selectedId());
         cfg.setApiKey(apiKeyInput.getValue());
         String model = customModel
@@ -414,6 +453,7 @@ public final class TulpaScreen extends Screen {
                         ? modelDropdown.selectedId() : "");
         cfg.setModel(model);
         cfg.setBaseUrl(baseUrlInput.getValue());
+        cfg.setProxy(proxyInput == null ? wProxy : proxyInput.getValue());
         cfg.save();
         TulpaLlmClient.reset();
         savedFlashUntil = System.currentTimeMillis() + 1500;
@@ -421,20 +461,26 @@ public final class TulpaScreen extends Screen {
 
     private void renderSettings(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         int x = left + PAD;
-        int y = top + HEADER_H + 10;
-        LlmProviders.Option opt = LlmProviders.byId(providerDropdown.selectedId());
-        if (modelInput != null) modelInput.setHint(Component.literal(opt.defaultModel()));   // custom mode only
-        if (baseUrlInput != null) baseUrlInput.setHint(Component.literal(opt.defaultBaseUrl()));
-
-        txt(g, Component.literal("Provider"), x, y, TXT_MUTED);
-        txt(g, Component.literal("API Key"), x, y + 37, TXT_MUTED);
-        txt(g, Component.literal("Model"), x, y + 74, TXT_MUTED);
-        txt(g, Component.literal("Base URL"), x, y + 111, TXT_MUTED);
-
+        int y0 = top + HEADER_H + 8;
+        if (addingSite) {
+            txt(g, Component.literal("Site name"), x, y0, TXT_MUTED);
+            txt(g, Component.literal("API Key"), x, y0 + SET_SP, TXT_MUTED);
+            txt(g, Component.literal("Model"), x, y0 + 2 * SET_SP, TXT_MUTED);
+            txt(g, Component.literal("Base URL"), x, y0 + 3 * SET_SP, TXT_MUTED);
+        } else {
+            LlmProviders.Option opt = LlmProviders.byId(providerDropdown.selectedId());
+            if (modelInput != null) modelInput.setHint(Component.literal(opt.defaultModel()));   // custom mode only
+            if (baseUrlInput != null) baseUrlInput.setHint(Component.literal(opt.defaultBaseUrl()));
+            txt(g, Component.literal("Provider"), x, y0, TXT_MUTED);
+            txt(g, Component.literal("API Key"), x, y0 + SET_SP, TXT_MUTED);
+            txt(g, Component.literal("Model"), x, y0 + 2 * SET_SP, TXT_MUTED);
+            txt(g, Component.literal("Base URL"), x, y0 + 3 * SET_SP, TXT_MUTED);
+            txt(g, Component.literal("Proxy"), x, y0 + 4 * SET_SP, TXT_MUTED);
+        }
         if (savedFlashUntil > System.currentTimeMillis()) {
             txt(g, Component.literal("✔ saved"), x, top + PANEL_H - PAD - 14, OK);
         }
-        // the dropdown itself is rendered in extractRenderState, AFTER the widgets (open list on top)
+        // the dropdowns themselves render in extractRenderState, AFTER the widgets (open list on top)
     }
 
     @Override
@@ -513,9 +559,14 @@ public final class TulpaScreen extends Screen {
                 String before = providerDropdown.selectedId();
                 if (providerDropdown.mouseClicked(event.x(), event.y())) {
                     if (modelDropdown != null) modelDropdown.close();
-                    if (!providerDropdown.selectedId().equals(before)) {     // provider changed → reset model
+                    String sel = providerDropdown.selectedId();
+                    if (ProviderDropdown.ADD_SITE.equals(sel)) {            // "+ 添加站点" → add-site editor
                         preserveKeyUrl();
-                        wProvider = providerDropdown.selectedId();
+                        addingSite = true; wSiteName = ""; wBaseUrl = ""; wModel = "";
+                        rebuild();
+                    } else if (!sel.equals(before)) {                      // provider changed → reset model
+                        preserveKeyUrl();
+                        wProvider = sel;
                         ModelRegistry.Provider mp = ModelRegistry.provider(LlmProviders.normalize(wProvider));
                         customModel = mp != null && mp.custom();
                         wModel = (mp != null && !mp.models().isEmpty()) ? mp.models().get(0).id() : "";
