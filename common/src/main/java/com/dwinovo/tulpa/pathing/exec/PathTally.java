@@ -9,15 +9,15 @@ import java.util.Map;
 /**
  * Per-task tally of the terrain the pathfinder modified <em>while travelling</em>
  * — obstruction blocks dug through and scaffolding blocks placed by
- * {@link PathExecutor}. Lives on the entity (not the executor) so it survives
- * the executor churn of mid-path replans; {@code LlmTaskGoal} resets it at task
+ * {@link PlayerPathExecutor}. Lives on the entity (not the executor) so it survives
+ * the executor churn of mid-path replans; {@code CompanionTickDispatcher} resets it at task
  * start and folds it into the task result so the model learns the real side
  * effects of a move ("reached the target, but dug 4 dirt and spent 6 cobblestone
  * bridging") rather than treating navigation as free.
  *
  * <p>This is the {@code auto_mine} target harvest's counterpart for travel:
  * intentional harvests/placements go through other code paths and are reported
- * by their own goals; this only counts what pathing incidentally consumed.
+ * by their own tasks; this only counts what pathing incidentally consumed.
  */
 public final class PathTally {
 

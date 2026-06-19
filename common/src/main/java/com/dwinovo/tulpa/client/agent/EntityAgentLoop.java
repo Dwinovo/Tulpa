@@ -842,8 +842,8 @@ public final class EntityAgentLoop {
             }
             // World-action tool: ship to server with our vanilla entity id.
             // No client-side timeout — the server always returns a result, even
-            // on entity death/removal (TulpaEntity.remove flushes CANCELLED
-            // results synchronously), so the loop never waits forever.
+            // on companion death/removal (CompanionTickDispatcher.onCompanionRemoved
+            // + TaskQueue.cancelAll flush CANCELLED results), so the loop never waits forever.
             pendingToolCalls.put(tc.id(), tc.name());
             Services.NETWORK.sendToServer(new ExecuteToolPayload(
                     entityUuid, tc.id(), tc.name(), tc.arguments()));

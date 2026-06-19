@@ -9,13 +9,13 @@ import java.util.Map;
  * LLM-facing surface of a single action the entity can take. Sits one layer
  * above {@link TaskRecord}: a tool declares its parameter schema for the
  * model, validates JSON args coming back from the API, and translates them
- * into a typed task record that the {@link com.dwinovo.tulpa.task.LlmTaskGoal goal layer} executes.
+ * into a typed task record that the {@link com.dwinovo.tulpa.task.CompanionTask task layer} executes.
  *
  * <h2>Three tool categories</h2>
  * <ul>
  *   <li><b>World-action tools</b> (default) — move_to, auto_mine, …: ship to
  *       the server as {@code ExecuteToolPayload}, run through the
- *       {@code TaskQueue}/{@code LlmTaskGoal} machinery (they occupy the body),
+ *       {@code TaskQueue}/{@code CompanionTickDispatcher} machinery (they occupy the body),
  *       result returns via {@code TaskResultPayload}.</li>
  *   <li><b>Query tools</b> ({@link #isQuery()}) — the perception family:
  *       read-only, server-side, executed synchronously by the payload handler
@@ -61,7 +61,7 @@ import java.util.Map;
  * <ul>
  *   <li><b>World-action tools</b> ({@code isLocal() == false}, default) — like
  *       {@code move_to}: dispatch to the server via {@code ExecuteToolPayload},
- *       run as a {@code TaskRecord}/{@code LlmTaskGoal} on the server tick
+ *       run as a {@code TaskRecord}/{@code CompanionTask} on the server tick
  *       thread, result comes back via {@code TaskResultPayload}. The
  *       {@link #toTaskRecord} method is the one the server invokes.</li>
  *   <li><b>Local (client-side) tools</b> ({@code isLocal() == true}) — like

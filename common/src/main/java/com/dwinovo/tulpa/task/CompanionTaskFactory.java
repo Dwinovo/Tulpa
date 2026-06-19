@@ -24,9 +24,8 @@ import com.dwinovo.tulpa.task.tasks.WaitTaskRecord;
 
 /**
  * Maps a queued {@link TaskRecord} to the {@link CompanionTask} that runs it on
- * the player body. Phase 0 wires {@code move_to} and {@code auto_mine}; every
- * other tool resolves to {@link UnsupportedCompanionTask} until its executor is
- * ported off the old Mob {@code LlmTaskGoal}.
+ * the player body — one {@code instanceof} branch per record type, no reflection.
+ * Record types with no branch fall back to {@link UnsupportedCompanionTask}.
  */
 public final class CompanionTaskFactory {
 

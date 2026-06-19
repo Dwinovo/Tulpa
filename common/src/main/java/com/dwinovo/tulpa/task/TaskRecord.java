@@ -3,17 +3,17 @@ package com.dwinovo.tulpa.task;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Mutable descriptor of an in-flight task. The {@link com.dwinovo.tulpa.task.tool.TulpaTool tool layer}
- * builds one record per LLM {@code tool_call} and enqueues it; the matching
- * {@link LlmTaskGoal} picks it up, drives lifecycle, and writes a
+ * Mutable descriptor of an in-flight task. The {@link com.dwinovo.tulpa.agent.tool.TulpaTool tool layer}
+ * builds one record per LLM {@code tool_call} and enqueues it;
+ * {@code CompanionTickDispatcher} picks it up (running the matching
+ * {@link CompanionTask}), drives lifecycle, and writes a
  * {@link TaskResult} back before completion.
  *
  * <h2>Type pattern</h2>
  * Concrete subclasses (e.g. {@code MoveToTaskRecord}) carry the typed input
- * parameters as final fields. {@link LlmTaskGoal} is generic over the
- * subclass type and {@link Class#cast}s the queue head against the
- * registered class — no reflection at runtime, just one {@code instanceof}
- * check at the dispatch boundary.
+ * parameters as final fields. {@link CompanionTaskFactory} dispatches the queue
+ * head against the registered record types — no reflection at runtime, just one
+ * {@code instanceof} check per record at the dispatch boundary.
  *
  * <h2>Threading</h2>
  * Records are constructed off-tick (in the LLM async callback) and read on
@@ -72,7 +72,7 @@ public abstract class TaskRecord {
         if (gameTime > deadlineGameTime) deadlineGameTime = gameTime;
     }
 
-    /** Called by {@link LlmTaskGoal} as the record transitions through lifecycle. */
+    /** Called by {@code CompanionTickDispatcher} as the record transitions through lifecycle. */
     public final void setState(TaskState state) { this.state = state; }
     public final void setResult(TaskResult result) { this.result = result; }
 

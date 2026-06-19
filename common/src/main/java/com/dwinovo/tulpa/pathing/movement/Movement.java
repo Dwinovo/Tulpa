@@ -13,7 +13,7 @@ import java.util.Set;
  * mineflayer {@code Move} node.
  *
  * <p>Immutable value object produced by {@link Moves} during A* expansion and
- * consumed by the {@code PathExecutor} at runtime. The {@link #cost} already
+ * consumed by the {@code PlayerPathExecutor} at runtime. The {@link #cost} already
  * folds in walk-time + mining-time + placement-penalty (or
  * {@link com.dwinovo.tulpa.pathing.util.ActionCosts#COST_INF} if infeasible —
  * such movements are never emitted, {@link Moves} returns {@code null}).
