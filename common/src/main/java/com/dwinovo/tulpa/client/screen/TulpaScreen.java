@@ -157,6 +157,7 @@ public final class TulpaScreen extends Screen {
     private int scroll;            // px scrolled down from the top of the content
     private boolean pinBottom = true;
     private int lastMaxScroll;
+    private int railScroll;        // index of the first visible rail avatar (wheel-scroll when many companions)
     /** Completed tool-call groups the user clicked open (keyed by the group's first call id). */
     private final Set<String> expandedGroups = new HashSet<>();
 
@@ -623,6 +624,11 @@ public final class TulpaScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double sx, double sy) {
+        // Wheel over the left rail column scrolls the roster (works on any tab).
+        if (sy != 0 && mx >= railX && mx < railX + RAIL_W && maxRailScroll() > 0) {
+            railScroll = Math.clamp((long) (railScroll - sy), 0, maxRailScroll());
+            return true;
+        }
         if (tab == Tab.CHAT && sy != 0) {
             scroll = Math.clamp((long) (scroll - sy * LINE_H * 3), 0, lastMaxScroll);
             pinBottom = scroll >= lastMaxScroll;
@@ -716,8 +722,10 @@ public final class TulpaScreen extends Screen {
         var pipe = net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED;
         List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
         int ax = railX + (RAIL_W - RAIL_AV) / 2;
-        for (int i = 0; i < entries.size(); i++) {
-            int ay = top + 8 + i * RAIL_SLOT;                        // rail has no header — start near the top
+        railScroll = Math.clamp(railScroll, 0, maxRailScroll());     // keep valid as the roster grows/shrinks
+        int first = railScroll;
+        for (int i = first; i < entries.size(); i++) {
+            int ay = top + 8 + (i - first) * RAIL_SLOT;              // rail has no header — start near the top
             if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;   // reserve the bottom + slot
             TulpaRoster.Entry e = entries.get(i);
             boolean active = e.uuid().equals(uuid);
@@ -739,7 +747,30 @@ public final class TulpaScreen extends Screen {
         }
         // "+" summon tile (baked "+" glyph), pinned to the rail bottom
         int py = top + PANEL_H - PAD - RAIL_AV;
+        // scroll cues — gold chevrons when the roster overflows the rail in either direction
+        int cx = ax + RAIL_AV / 2;
+        if (railScroll > 0) chevron(g, cx, top + 3, true);
+        if (railScroll < maxRailScroll()) chevron(g, cx, py - 7, false);
         g.blitSprite(pipe, summoning ? SUMMON_ACTIVE : SUMMON_SPRITE, ax, py, RAIL_AV, RAIL_AV);
+    }
+
+    /** A tiny 5px gold scroll chevron (points up = more above, down = more below). */
+    private void chevron(GuiGraphicsExtractor g, int cx, int y, boolean up) {
+        for (int r = 0; r < 3; r++) {
+            int half = up ? r : (2 - r);
+            g.fill(cx - half, y + r, cx + half + 1, y + r + 1, CTA);
+        }
+    }
+
+    /** How many avatar slots fit in the rail above the pinned "+" tile. */
+    private int railVisibleSlots() {
+        int slots = 0;
+        while (top + 8 + slots * RAIL_SLOT + RAIL_AV <= top + PANEL_H - PAD - RAIL_SLOT) slots++;
+        return Math.max(1, slots);
+    }
+
+    private int maxRailScroll() {
+        return Math.max(0, TulpaRoster.instance().entries().size() - railVisibleSlots());
     }
 
     private boolean railPlusAt(int mx, int my) {
@@ -767,8 +798,9 @@ public final class TulpaScreen extends Screen {
         int ax = railX + (RAIL_W - RAIL_AV) / 2;
         if (mx < ax || mx >= ax + RAIL_AV) return -1;
         List<TulpaRoster.Entry> entries = TulpaRoster.instance().entries();
-        for (int i = 0; i < entries.size(); i++) {
-            int ay = top + 8 + i * RAIL_SLOT;
+        int first = Math.clamp(railScroll, 0, maxRailScroll());
+        for (int i = first; i < entries.size(); i++) {
+            int ay = top + 8 + (i - first) * RAIL_SLOT;
             if (ay + RAIL_AV > top + PANEL_H - PAD - RAIL_SLOT) break;
             if (my >= ay && my < ay + RAIL_AV) return i;
         }
