@@ -1,5 +1,5 @@
 {
-  "_comment": "Tulpa model registry (litellm-style). Per provider: base URL + known models with their context window (tokens, fed into auto-compaction). Every provider also accepts a custom model id via the settings 'custom' escape hatch. 'openai-compatible' is free-form (any OpenAI-compatible endpoint).",
+  "_comment": "Tulpa LLM sites (OpenAI-compatible). Per site: base URL + optional custom headers + known models with their context window (tokens, fed into auto-compaction). USER-EDITABLE: this is copied to config/tulpa/models.json on first run; edit that file to add your own sites/models or override URLs. Every model field also accepts a custom id via the settings 'custom' escape hatch; override a site's base URL in settings for any other OpenAI-compatible endpoint.",
   "providers": [
     {
       "id": "openai", "name": "OpenAI", "baseUrl": "https://api.openai.com/v1",
@@ -62,8 +62,16 @@
       ]
     },
     {
-      "id": "openai-compatible", "name": "OpenAI 兼容 (自定义)", "baseUrl": "", "custom": true,
-      "models": []
+      "id": "openrouter", "name": "OpenRouter", "baseUrl": "https://openrouter.ai/api/v1",
+      "headers": {
+        "HTTP-Referer": "https://github.com/Dwinovo/Tulpa",
+        "X-Title": "Tulpa (Minecraft)"
+      },
+      "models": [
+        { "id": "deepseek/deepseek-chat", "ctx": 64000 },
+        { "id": "google/gemini-2.5-flash", "ctx": 1000000 },
+        { "id": "x-ai/grok-4-fast", "ctx": 256000 }
+      ]
     }
   ]
 }
