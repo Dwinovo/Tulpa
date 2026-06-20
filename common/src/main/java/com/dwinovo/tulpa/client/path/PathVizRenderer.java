@@ -143,7 +143,7 @@ public final class PathVizRenderer {
         if (n.lengthSquared() > 1.0e-6F) n.normalize();
         else n.set(0.0F, 1.0F, 0.0F);
         // 1.20.6 VertexConsumer: the old vertex(matrix,…).color(…).normal(…).endVertex() chain.
-        vc.vertex(pose.pose(), (float) x1, (float) y1, (float) z1).color(color).normal(pose, n.x(), n.y(), n.z()).endVertex();
-        vc.vertex(pose.pose(), (float) x2, (float) y2, (float) z2).color(color).normal(pose, n.x(), n.y(), n.z()).endVertex();
+        vc.vertex(pose.pose(), (float) x1, (float) y1, (float) z1).color(color).normal(pose.normal(), n.x(), n.y(), n.z()).endVertex();
+        vc.vertex(pose.pose(), (float) x2, (float) y2, (float) z2).color(color).normal(pose.normal(), n.x(), n.y(), n.z()).endVertex();
     }
 }

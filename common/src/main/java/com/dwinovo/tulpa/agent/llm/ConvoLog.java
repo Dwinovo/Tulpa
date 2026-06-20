@@ -188,36 +188,33 @@ public final class ConvoLog {
 
     private static JsonObject encode(ConvoState.Msg msg) {
         JsonObject o = new JsonObject();
-        switch (msg) {
-            case ConvoState.Msg.User u -> {
-                o.addProperty("role", "user");
-                o.addProperty("content", u.content());
-            }
-            case ConvoState.Msg.Assistant a -> {
-                o.addProperty("role", "assistant");
-                o.addProperty("content", a.turn().content());
-                if (a.turn().hasToolCalls()) {
-                    JsonArray calls = new JsonArray();
-                    for (LlmToolCall tc : a.turn().toolCalls()) {
-                        JsonObject c = new JsonObject();
-                        c.addProperty("id", tc.id());
-                        c.addProperty("name", tc.name());
-                        c.addProperty("arguments", tc.arguments());
-                        calls.add(c);
-                    }
-                    o.add("tool_calls", calls);
+        // Java 17 (1.20.4): instanceof chain instead of switch-on-type patterns (a Java 21 feature).
+        if (msg instanceof ConvoState.Msg.User u) {
+            o.addProperty("role", "user");
+            o.addProperty("content", u.content());
+        } else if (msg instanceof ConvoState.Msg.Assistant a) {
+            o.addProperty("role", "assistant");
+            o.addProperty("content", a.turn().content());
+            if (a.turn().hasToolCalls()) {
+                JsonArray calls = new JsonArray();
+                for (LlmToolCall tc : a.turn().toolCalls()) {
+                    JsonObject c = new JsonObject();
+                    c.addProperty("id", tc.id());
+                    c.addProperty("name", tc.name());
+                    c.addProperty("arguments", tc.arguments());
+                    calls.add(c);
                 }
-                // Provider extras (e.g. DeepSeek reasoning_content) must survive
-                // the round-trip — they are required on the next request.
-                if (!a.turn().extras().entrySet().isEmpty()) {
-                    o.add("extras", a.turn().extras());
-                }
+                o.add("tool_calls", calls);
             }
-            case ConvoState.Msg.Tool t -> {
-                o.addProperty("role", "tool");
-                o.addProperty("tool_call_id", t.toolCallId());
-                o.addProperty("content", t.content());
+            // Provider extras (e.g. DeepSeek reasoning_content) must survive
+            // the round-trip — they are required on the next request.
+            if (!a.turn().extras().entrySet().isEmpty()) {
+                o.add("extras", a.turn().extras());
             }
+        } else if (msg instanceof ConvoState.Msg.Tool t) {
+            o.addProperty("role", "tool");
+            o.addProperty("tool_call_id", t.toolCallId());
+            o.addProperty("content", t.content());
         }
         return o;
     }

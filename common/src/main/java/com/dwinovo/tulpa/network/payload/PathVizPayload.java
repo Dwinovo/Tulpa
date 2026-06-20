@@ -3,13 +3,10 @@ package com.dwinovo.tulpa.network.payload;
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.client.path.ClientPathViz;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,27 +30,30 @@ public record PathVizPayload(UUID companion,
                              List<BlockPos> nodes,
                              List<BlockPos> toBreak,
                              List<BlockPos> toPlace,
-                             List<BlockPos> targets) implements CustomPacketPayload {
+                             List<BlockPos> targets) {
 
     /** Cap per list — paths are trimmed well below this; defends against absurd input. */
     public static final int MAX = 512;
 
-    public static final Type<PathVizPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "path_viz"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "path_viz");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, PathVizPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    UUIDUtil.STREAM_CODEC, PathVizPayload::companion,
-                    ResourceLocation.STREAM_CODEC, PathVizPayload::dimension,
-                    BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::nodes,
-                    BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::toBreak,
-                    BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::toPlace,
-                    BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX)), PathVizPayload::targets,
-                    PathVizPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeUUID(companion);
+        buf.writeResourceLocation(dimension);
+        buf.writeCollection(nodes, FriendlyByteBuf::writeBlockPos);
+        buf.writeCollection(toBreak, FriendlyByteBuf::writeBlockPos);
+        buf.writeCollection(toPlace, FriendlyByteBuf::writeBlockPos);
+        buf.writeCollection(targets, FriendlyByteBuf::writeBlockPos);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static PathVizPayload read(FriendlyByteBuf buf) {
+        return new PathVizPayload(
+                buf.readUUID(),
+                buf.readResourceLocation(),
+                buf.readCollection(ArrayList::new, FriendlyByteBuf::readBlockPos),
+                buf.readCollection(ArrayList::new, FriendlyByteBuf::readBlockPos),
+                buf.readCollection(ArrayList::new, FriendlyByteBuf::readBlockPos),
+                buf.readCollection(ArrayList::new, FriendlyByteBuf::readBlockPos));
     }
 
     /** Client-side handler. Runs on the client main thread (network layer arranges that). */

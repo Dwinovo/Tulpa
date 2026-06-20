@@ -2,13 +2,10 @@ package com.dwinovo.tulpa.network.payload;
 
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.client.data.ClientTulpaLocations;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,7 +15,7 @@ import java.util.UUID;
  * {@code found=false} otherwise. The client drops them into
  * {@link ClientTulpaLocations} for the roster panel / vitals strip to read.
  */
-public record TulpaLocationsPayload(List<Snapshot> snapshots) implements CustomPacketPayload {
+public record TulpaLocationsPayload(List<Snapshot> snapshots) {
 
     /**
      * Wire shape of one located (or not) companion. {@code loaded=false} with
@@ -44,40 +41,36 @@ public record TulpaLocationsPayload(List<Snapshot> snapshots) implements CustomP
             return new Snapshot(uuid, true, false, x, y, z, dimension, 0, 0);
         }
 
-        // 1.21.4: StreamCodec.composite caps at 8 fields; this record has 9, so encode by hand.
-        static final StreamCodec<RegistryFriendlyByteBuf, Snapshot> CODEC =
-                StreamCodec.of(
-                        (buf, s) -> {
-                            UUIDUtil.STREAM_CODEC.encode(buf, s.uuid());
-                            buf.writeBoolean(s.found());
-                            buf.writeBoolean(s.loaded());
-                            buf.writeDouble(s.x());
-                            buf.writeDouble(s.y());
-                            buf.writeDouble(s.z());
-                            buf.writeUtf(s.dimension(), 256);
-                            buf.writeFloat(s.hp());
-                            buf.writeFloat(s.maxHp());
-                        },
-                        buf -> new Snapshot(
-                                UUIDUtil.STREAM_CODEC.decode(buf),
-                                buf.readBoolean(), buf.readBoolean(),
-                                buf.readDouble(), buf.readDouble(), buf.readDouble(),
-                                buf.readUtf(256),
-                                buf.readFloat(), buf.readFloat()));
+        void write(FriendlyByteBuf buf) {
+            buf.writeUUID(uuid);
+            buf.writeBoolean(found);
+            buf.writeBoolean(loaded);
+            buf.writeDouble(x);
+            buf.writeDouble(y);
+            buf.writeDouble(z);
+            buf.writeUtf(dimension, 256);
+            buf.writeFloat(hp);
+            buf.writeFloat(maxHp);
+        }
+
+        static Snapshot read(FriendlyByteBuf buf) {
+            return new Snapshot(
+                    buf.readUUID(),
+                    buf.readBoolean(), buf.readBoolean(),
+                    buf.readDouble(), buf.readDouble(), buf.readDouble(),
+                    buf.readUtf(256),
+                    buf.readFloat(), buf.readFloat());
+        }
     }
 
-    public static final Type<TulpaLocationsPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "tulpa_locations"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "tulpa_locations");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, TulpaLocationsPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    Snapshot.CODEC.apply(ByteBufCodecs.list(LocateTulpaPayload.MAX_UUIDS)),
-                    TulpaLocationsPayload::snapshots,
-                    TulpaLocationsPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeCollection(snapshots, (b, s) -> s.write(b));
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static TulpaLocationsPayload read(FriendlyByteBuf buf) {
+        return new TulpaLocationsPayload(buf.readCollection(ArrayList::new, Snapshot::read));
     }
 
     /** Client-side handler. Runs on the client main thread (network layer arranges that). */

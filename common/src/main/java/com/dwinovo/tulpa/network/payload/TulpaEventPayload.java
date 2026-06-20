@@ -2,11 +2,7 @@ package com.dwinovo.tulpa.network.payload;
 
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.client.agent.AgentLoopRegistry;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.UUID;
@@ -19,21 +15,18 @@ import java.util.UUID;
  * boundary. {@code urgent} wakes an idle brain to react now; otherwise it rides along on the next
  * owner-driven turn (no extra LLM call). Death is its own bespoke freeze/thaw pair, not this.
  */
-public record TulpaEventPayload(UUID entityUuid, String xml, boolean urgent) implements CustomPacketPayload {
+public record TulpaEventPayload(UUID entityUuid, String xml, boolean urgent) {
 
-    public static final Type<TulpaEventPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "tulpa_event"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "tulpa_event");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, TulpaEventPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    UUIDUtil.STREAM_CODEC, TulpaEventPayload::entityUuid,
-                    ByteBufCodecs.STRING_UTF8, TulpaEventPayload::xml,
-                    ByteBufCodecs.BOOL, TulpaEventPayload::urgent,
-                    TulpaEventPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeUUID(entityUuid);
+        buf.writeUtf(xml);
+        buf.writeBoolean(urgent);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static TulpaEventPayload read(FriendlyByteBuf buf) {
+        return new TulpaEventPayload(buf.readUUID(), buf.readUtf(), buf.readBoolean());
     }
 
     /** Client-side handler. Runs on the client main thread (network layer arranges that). */

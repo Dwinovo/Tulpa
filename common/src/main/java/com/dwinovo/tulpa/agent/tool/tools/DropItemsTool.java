@@ -1,5 +1,6 @@
 package com.dwinovo.tulpa.agent.tool.tools;
 
+import net.minecraft.util.Mth;
 import com.dwinovo.tulpa.agent.tool.TulpaTool;
 import com.dwinovo.tulpa.task.TaskRecord;
 import com.dwinovo.tulpa.task.tasks.DropItemsTaskRecord;
@@ -63,7 +64,7 @@ public final class DropItemsTool implements TulpaTool {
     @Override
     public TaskRecord toTaskRecord(String toolCallId, JsonObject args, long currentGameTime) {
         Item item = ToolArgs.readItem(args, "item_id");
-        int count = Math.clamp(ToolArgs.requireInt(args, "count"), 1, MAX_COUNT);
+        int count = Mth.clamp(ToolArgs.requireInt(args, "count"), 1, MAX_COUNT);
         String label = BuiltInRegistries.ITEM.getKey(item).getPath();
         return new DropItemsTaskRecord(toolCallId, currentGameTime + TIMEOUT_TICKS,
                 item, count, label);

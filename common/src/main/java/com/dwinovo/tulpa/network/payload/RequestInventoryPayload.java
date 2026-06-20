@@ -3,10 +3,7 @@ package com.dwinovo.tulpa.network.payload;
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.entity.TulpaPlayer;
 import com.dwinovo.tulpa.platform.Services;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
@@ -24,21 +21,19 @@ import java.util.UUID;
  * <p>Only the owner of a LOADED companion gets the contents; otherwise the reply
  * is {@code loaded=false} (asleep / not yours — no inventory oracle).
  */
-public record RequestInventoryPayload(UUID uuid) implements CustomPacketPayload {
+public record RequestInventoryPayload(UUID uuid) {
 
     /** The 36 main backpack slots (hotbar + storage); equipment is already client-synced. */
     public static final int MAIN_SLOTS = 36;
 
-    public static final Type<RequestInventoryPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "request_inventory"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "request_inventory");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, RequestInventoryPayload> STREAM_CODEC =
-            StreamCodec.composite(UUIDUtil.STREAM_CODEC, RequestInventoryPayload::uuid,
-                    RequestInventoryPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeUUID(uuid);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static RequestInventoryPayload read(FriendlyByteBuf buf) {
+        return new RequestInventoryPayload(buf.readUUID());
     }
 
     /** Server main thread. */

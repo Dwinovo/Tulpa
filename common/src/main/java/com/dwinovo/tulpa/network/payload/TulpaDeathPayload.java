@@ -2,11 +2,7 @@ package com.dwinovo.tulpa.network.payload;
 
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.client.agent.AgentLoopRegistry;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.UUID;
@@ -29,22 +25,18 @@ import java.util.UUID;
  * cause (so the conversation stays valid and the brain learns WHY it stopped) and latches it idle.
  * {@code cause} is the vanilla death message ("X was slain by a zombie") for that tool result.
  */
-public record TulpaDeathPayload(UUID entityUuid, String cause, long respawnDelayMs)
-        implements CustomPacketPayload {
+public record TulpaDeathPayload(UUID entityUuid, String cause, long respawnDelayMs) {
 
-    public static final Type<TulpaDeathPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "tulpa_death"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "tulpa_death");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, TulpaDeathPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    UUIDUtil.STREAM_CODEC, TulpaDeathPayload::entityUuid,
-                    ByteBufCodecs.STRING_UTF8, TulpaDeathPayload::cause,
-                    ByteBufCodecs.VAR_LONG, TulpaDeathPayload::respawnDelayMs,
-                    TulpaDeathPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeUUID(entityUuid);
+        buf.writeUtf(cause);
+        buf.writeVarLong(respawnDelayMs);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static TulpaDeathPayload read(FriendlyByteBuf buf) {
+        return new TulpaDeathPayload(buf.readUUID(), buf.readUtf(), buf.readVarLong());
     }
 
     /** Client-side handler. Runs on the client main thread (network layer arranges that). */

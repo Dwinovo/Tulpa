@@ -2,10 +2,7 @@ package com.dwinovo.tulpa.network.payload;
 
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.entity.Companions;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,20 +12,18 @@ import net.minecraft.server.level.ServerPlayer;
  * "+" button. Mirrors the {@code /tulpa player summon} command — summon is
  * idempotent per (owner, name), so re-summoning an existing name just wakes it.
  */
-public record SummonRequestPayload(String name) implements CustomPacketPayload {
+public record SummonRequestPayload(String name) {
 
     public static final int MAX_NAME = 32;
 
-    public static final Type<SummonRequestPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "summon_request"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "summon_request");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, SummonRequestPayload> STREAM_CODEC =
-            StreamCodec.composite(ByteBufCodecs.stringUtf8(MAX_NAME), SummonRequestPayload::name,
-                    SummonRequestPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeUtf(name, MAX_NAME);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static SummonRequestPayload read(FriendlyByteBuf buf) {
+        return new SummonRequestPayload(buf.readUtf(MAX_NAME));
     }
 
     /** Server main thread. */

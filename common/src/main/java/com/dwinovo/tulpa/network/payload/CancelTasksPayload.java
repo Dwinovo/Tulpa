@@ -2,10 +2,7 @@ package com.dwinovo.tulpa.network.payload;
 
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.entity.TulpaPlayer;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -27,19 +24,16 @@ import java.util.UUID;
  * synthesized "interrupted by owner" results for those tool-call ids and drops
  * the real ones as late arrivals. This payload's job is purely the body stop.
  */
-public record CancelTasksPayload(UUID entityUuid) implements CustomPacketPayload {
+public record CancelTasksPayload(UUID entityUuid) {
 
-    public static final Type<CancelTasksPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "cancel_tasks"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "cancel_tasks");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, CancelTasksPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    UUIDUtil.STREAM_CODEC, CancelTasksPayload::entityUuid,
-                    CancelTasksPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeUUID(entityUuid);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static CancelTasksPayload read(FriendlyByteBuf buf) {
+        return new CancelTasksPayload(buf.readUUID());
     }
 
     /** Handler invoked on the server main thread. */

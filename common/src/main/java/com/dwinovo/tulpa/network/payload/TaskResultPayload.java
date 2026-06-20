@@ -2,11 +2,7 @@ package com.dwinovo.tulpa.network.payload;
 
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.client.agent.AgentLoopRegistry;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.UUID;
@@ -30,24 +26,24 @@ import java.util.UUID;
  */
 public record TaskResultPayload(UUID entityUuid,
                                  String toolCallId,
-                                 String resultJson) implements CustomPacketPayload {
+                                 String resultJson) {
 
     public static final int MAX_TOOL_CALL_ID_LENGTH = 128;
     public static final int MAX_RESULT_JSON_LENGTH = 16 * 1024;
 
-    public static final Type<TaskResultPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "task_result"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "task_result");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, TaskResultPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    UUIDUtil.STREAM_CODEC, TaskResultPayload::entityUuid,
-                    ByteBufCodecs.stringUtf8(MAX_TOOL_CALL_ID_LENGTH), TaskResultPayload::toolCallId,
-                    ByteBufCodecs.stringUtf8(MAX_RESULT_JSON_LENGTH), TaskResultPayload::resultJson,
-                    TaskResultPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeUUID(entityUuid);
+        buf.writeUtf(toolCallId, MAX_TOOL_CALL_ID_LENGTH);
+        buf.writeUtf(resultJson, MAX_RESULT_JSON_LENGTH);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static TaskResultPayload read(FriendlyByteBuf buf) {
+        return new TaskResultPayload(
+                buf.readUUID(),
+                buf.readUtf(MAX_TOOL_CALL_ID_LENGTH),
+                buf.readUtf(MAX_RESULT_JSON_LENGTH));
     }
 
     /** Client-side handler. Runs on client main thread (network layer arranges that). */

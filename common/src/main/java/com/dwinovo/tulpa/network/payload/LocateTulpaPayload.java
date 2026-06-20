@@ -4,11 +4,7 @@ import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.entity.TulpaPlayer;
 import com.dwinovo.tulpa.entity.CompanionRegistry;
 import com.dwinovo.tulpa.platform.Services;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -27,23 +23,19 @@ import java.util.UUID;
  * to a pet owned by the sender come back {@code found=false} (no oracle for
  * other players' pets).
  */
-public record LocateTulpaPayload(List<UUID> entityUuids) implements CustomPacketPayload {
+public record LocateTulpaPayload(List<UUID> entityUuids) {
 
     /** Roster panels are small; cap defends against garbage input. */
     public static final int MAX_UUIDS = 16;
 
-    public static final Type<LocateTulpaPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "locate_tulpa"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "locate_tulpa");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, LocateTulpaPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    UUIDUtil.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_UUIDS)),
-                    LocateTulpaPayload::entityUuids,
-                    LocateTulpaPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeCollection(entityUuids, FriendlyByteBuf::writeUUID);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static LocateTulpaPayload read(FriendlyByteBuf buf) {
+        return new LocateTulpaPayload(buf.readCollection(ArrayList::new, FriendlyByteBuf::readUUID));
     }
 
     /** Handler invoked on the server main thread. */

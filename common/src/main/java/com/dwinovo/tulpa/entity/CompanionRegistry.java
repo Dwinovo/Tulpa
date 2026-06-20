@@ -3,7 +3,6 @@ package com.dwinovo.tulpa.entity;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -57,20 +56,20 @@ public final class CompanionRegistry extends SavedData {
                     .xmap(CompanionRegistry::new, d -> d.entries)
                     .fieldOf("companions").codec();
 
-    // 1.21.4 predates the codec-based SavedDataType; register with the old SavedData.Factory
-    // (Supplier + deserializer + DataFixType) and drive (de)serialization through CODEC ourselves.
+    // 1.20.4 predates the HolderLookup-aware save/load; the SavedData.Factory deserializer is a
+    // single-arg Function<CompoundTag, T>, and we (de)serialise through CODEC ourselves.
     private static final SavedData.Factory<CompanionRegistry> FACTORY = new SavedData.Factory<>(
             CompanionRegistry::new, CompanionRegistry::load,
             net.minecraft.util.datafix.DataFixTypes.SAVED_DATA_RANDOM_SEQUENCES);
 
     @Override
-    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+    public CompoundTag save(CompoundTag tag) {
         CODEC.encodeStart(NbtOps.INSTANCE, this).result()
                 .ifPresent(t -> { if (t instanceof CompoundTag c) tag.merge(c); });
         return tag;
     }
 
-    private static CompanionRegistry load(CompoundTag tag, HolderLookup.Provider registries) {
+    private static CompanionRegistry load(CompoundTag tag) {
         return CODEC.parse(NbtOps.INSTANCE, tag).result().orElseGet(CompanionRegistry::new);
     }
 

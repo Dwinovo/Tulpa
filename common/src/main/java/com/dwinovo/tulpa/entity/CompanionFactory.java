@@ -1,6 +1,7 @@
 package com.dwinovo.tulpa.entity;
 
 import com.mojang.authlib.GameProfile;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
@@ -39,7 +40,7 @@ public final class CompanionFactory {
         TulpaPlayer player = new TulpaPlayer(server, level, profile, ClientInformation.createDefault());
         FakeConnection connection = new FakeConnection();
         server.getPlayerList().placeNewPlayer(connection, player,
-                CommonListenerCookie.createInitial(profile, false));
+                CommonListenerCookie.createInitial(profile));   // 1.20.4: single-arg (no 'transferred' flag)
         // placeNewPlayer does NOT load a hand-built fake player's .dat, so restore
         // it ourselves (Carpet's model): position, inventory, health, owner from
         // disk. Without this a respawned companion spawns at 0,0,0 with no items.
@@ -69,10 +70,12 @@ public final class CompanionFactory {
      * {@code loadPlayerData}. No-op on first summon (no file yet).
      */
     private static void loadPlayerData(MinecraftServer server, TulpaPlayer player) {
-        // 1.21.5: PlayerList.load(player) returns Optional<CompoundTag> (predates the
-        // ValueInput IO refactor); Entity.load(CompoundTag) consumes it directly.
-        server.getPlayerList().load(player)
-                .ifPresent(player::load);
+        // 1.20.4: PlayerList.load(player) returns a nullable CompoundTag (predates the
+        // Optional return); Entity.load(CompoundTag) consumes it directly.
+        CompoundTag tag = server.getPlayerList().load(player);
+        if (tag != null) {
+            player.load(tag);
+        }
     }
 
     /** Save the companion's data and remove it from the world (dormancy). */

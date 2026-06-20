@@ -2,13 +2,10 @@ package com.dwinovo.tulpa.network.payload;
 
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.client.agent.TulpaRoster;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,32 +18,31 @@ import java.util.UUID;
  * panel always reflects the truth without the player having to seek each body
  * out physically.
  */
-public record CompanionListPayload(List<Entry> companions) implements CustomPacketPayload {
+public record CompanionListPayload(List<Entry> companions) {
 
     /** Cap defends against absurd input; nobody owns hundreds of companions. */
     public static final int MAX = 64;
 
     /** One companion's roster line. */
     public record Entry(UUID uuid, String name) {
-        static final StreamCodec<RegistryFriendlyByteBuf, Entry> CODEC =
-                StreamCodec.composite(
-                        UUIDUtil.STREAM_CODEC, Entry::uuid,
-                        ByteBufCodecs.stringUtf8(256), Entry::name,
-                        Entry::new);
+        void write(FriendlyByteBuf buf) {
+            buf.writeUUID(uuid);
+            buf.writeUtf(name, 256);
+        }
+
+        static Entry read(FriendlyByteBuf buf) {
+            return new Entry(buf.readUUID(), buf.readUtf(256));
+        }
     }
 
-    public static final Type<CompanionListPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "companion_list"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "companion_list");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, CompanionListPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    Entry.CODEC.apply(ByteBufCodecs.list(MAX)),
-                    CompanionListPayload::companions,
-                    CompanionListPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeCollection(companions, (b, e) -> e.write(b));
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static CompanionListPayload read(FriendlyByteBuf buf) {
+        return new CompanionListPayload(buf.readCollection(ArrayList::new, Entry::read));
     }
 
     /** Client-side handler. Runs on the client main thread (network layer arranges that). */

@@ -1,5 +1,6 @@
 package com.dwinovo.tulpa.agent.tool.tools;
 
+import net.minecraft.util.Mth;
 import com.dwinovo.tulpa.agent.tool.TulpaTool;
 import com.dwinovo.tulpa.task.TaskRecord;
 import com.dwinovo.tulpa.task.tasks.WaitTaskRecord;
@@ -72,7 +73,7 @@ public final class WaitTool implements TulpaTool {
         } catch (RuntimeException ex) {
             throw new IllegalArgumentException("'seconds' must be an integer");
         }
-        seconds = Math.clamp(seconds, 1, MAX_SECONDS);
+        seconds = Mth.clamp(seconds, 1, MAX_SECONDS);
         String reason = args.has("reason") && !args.get("reason").isJsonNull()
                 ? args.get("reason").getAsString() : "";
         long deadline = currentGameTime + seconds * 20L + DEADLINE_MARGIN_TICKS;

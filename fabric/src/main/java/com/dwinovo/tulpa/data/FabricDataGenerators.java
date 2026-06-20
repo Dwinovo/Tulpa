@@ -17,8 +17,10 @@ public final class FabricDataGenerators implements DataGeneratorEntrypoint {
     @Override
     public void onInitializeDataGenerator(FabricDataGenerator generator) {
         FabricDataGenerator.Pack pack = generator.createPack();
-        pack.addProvider((output, registries) -> new FabricModLanguageProvider(output, "en_us", registries));
-        pack.addProvider((output, registries) -> new FabricModLanguageProvider(output, "zh_cn", registries));
+        // 2-arg lambda picks Fabric's RegistryDependentFactory unambiguously (a 1-arg lambda is
+        // ambiguous between vanilla and Fabric Factory); the 1.20.4 lang provider ignores registries.
+        pack.addProvider((output, registries) -> new FabricModLanguageProvider(output, "en_us"));
+        pack.addProvider((output, registries) -> new FabricModLanguageProvider(output, "zh_cn"));
         pack.addProvider(FabricModItemTagsProvider::new);
         pack.addProvider(FabricModBlockTagsProvider::new);
     }

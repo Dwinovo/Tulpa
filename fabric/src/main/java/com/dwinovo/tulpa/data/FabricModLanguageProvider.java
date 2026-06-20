@@ -1,9 +1,7 @@
 package com.dwinovo.tulpa.data;
 
-import java.util.concurrent.CompletableFuture;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricLanguageProvider;
-import net.minecraft.core.HolderLookup;
 
 /**
  * Fabric-side translation provider. One instance per locale; both feed the
@@ -14,14 +12,13 @@ public final class FabricModLanguageProvider extends FabricLanguageProvider {
 
     private final String locale;
 
-    public FabricModLanguageProvider(FabricDataOutput output, String locale,
-                                     CompletableFuture<HolderLookup.Provider> registries) {
-        super(output, locale, registries);
+    public FabricModLanguageProvider(FabricDataOutput output, String locale) {
+        super(output, locale);   // 1.20.4: no HolderLookup.Provider future
         this.locale = locale;
     }
 
     @Override
-    public void generateTranslations(HolderLookup.Provider registries, TranslationBuilder builder) {
+    public void generateTranslations(TranslationBuilder builder) {   // 1.20.4: no registries arg
         ModLanguageData.addTranslations(locale, builder::add);
     }
 }

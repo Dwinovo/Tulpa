@@ -2,11 +2,7 @@ package com.dwinovo.tulpa.network.payload;
 
 import com.dwinovo.tulpa.Constants;
 import com.dwinovo.tulpa.client.agent.AgentLoopRegistry;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.UUID;
@@ -18,20 +14,17 @@ import java.util.UUID;
  * in-memory death state. The owner's {@link com.dwinovo.tulpa.client.agent.EntityAgentLoop} is created
  * if needed and reawakened with a death {@code <event>}.
  */
-public record TulpaRespawnPayload(UUID entityUuid, String cause) implements CustomPacketPayload {
+public record TulpaRespawnPayload(UUID entityUuid, String cause) {
 
-    public static final Type<TulpaRespawnPayload> TYPE = new Type<>(
-            new ResourceLocation(Constants.MOD_ID, "tulpa_respawn"));
+    public static final ResourceLocation ID = new ResourceLocation(Constants.MOD_ID, "tulpa_respawn");
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, TulpaRespawnPayload> STREAM_CODEC =
-            StreamCodec.composite(
-                    UUIDUtil.STREAM_CODEC, TulpaRespawnPayload::entityUuid,
-                    ByteBufCodecs.STRING_UTF8, TulpaRespawnPayload::cause,
-                    TulpaRespawnPayload::new);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeUUID(entityUuid);
+        buf.writeUtf(cause);
+    }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static TulpaRespawnPayload read(FriendlyByteBuf buf) {
+        return new TulpaRespawnPayload(buf.readUUID(), buf.readUtf());
     }
 
     /** Client-side handler. Runs on the client main thread (network layer arranges that).
