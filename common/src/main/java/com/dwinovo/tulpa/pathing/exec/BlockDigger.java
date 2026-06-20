@@ -160,7 +160,7 @@ public final class BlockDigger {
      *  break cost still matches the tool actually used. */
     private void switchToBestTool(BlockState state) {
         Inventory inv = player.getInventory();
-        int best = inv.getSelectedSlot();
+        int best = inv.selected;
         float bestSpeed = inv.getItem(best).getDestroySpeed(state);
         for (int i = 0; i < inv.getContainerSize(); i++) {
             float s = inv.getItem(i).getDestroySpeed(state);

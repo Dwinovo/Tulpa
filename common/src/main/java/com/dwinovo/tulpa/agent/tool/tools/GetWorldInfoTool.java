@@ -63,8 +63,8 @@ public final class GetWorldInfoTool implements TulpaTool {
         JsonObject root = new JsonObject();
         root.addProperty("dimension", level.dimension().location().toString());
         root.addProperty("game_time", level.getLevelData().getGameTime());
-        root.addProperty("is_bright_outside", level.isBrightOutside());
-        root.addProperty("is_dark_outside", level.isDarkOutside());
+        root.addProperty("is_bright_outside", level.isDay());
+        root.addProperty("is_dark_outside", level.isNight());
 
         String weather;
         if (level.isThundering()) weather = "thunder";

@@ -137,10 +137,10 @@ public final class TulpaPlayer extends ServerPlayer {
         }
         var inv = getInventory();
         if (net.minecraft.world.entity.player.Inventory.isHotbarSlot(slot)) {
-            inv.setSelectedSlot(slot);
+            inv.selected = slot;
             return;
         }
-        int selected = inv.getSelectedSlot();
+        int selected = inv.selected;
         net.minecraft.world.item.ItemStack held = inv.getItem(selected);
         inv.setItem(selected, inv.getItem(slot));
         inv.setItem(slot, held);
@@ -187,13 +187,13 @@ public final class TulpaPlayer extends ServerPlayer {
     public void addAdditionalSaveData(CompoundTag output) {
         super.addAdditionalSaveData(output);
         if (ownerUuid != null) {
-            output.store(NBT_KEY_OWNER, UUIDUtil.CODEC, ownerUuid);
+            output.putUUID(NBT_KEY_OWNER, ownerUuid);   // 1.21.4: no CompoundTag.store(Codec)
         }
     }
 
     @Override
     public void readAdditionalSaveData(CompoundTag input) {
         super.readAdditionalSaveData(input);
-        input.read(NBT_KEY_OWNER, UUIDUtil.CODEC).ifPresent(uuid -> this.ownerUuid = uuid);
+        if (input.hasUUID(NBT_KEY_OWNER)) this.ownerUuid = input.getUUID(NBT_KEY_OWNER);
     }
 }

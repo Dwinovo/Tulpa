@@ -4,7 +4,6 @@ import com.dwinovo.tulpa.agent.tool.TulpaTool;
 import com.dwinovo.tulpa.entity.TulpaPlayer;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.entity.EntityReference;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;

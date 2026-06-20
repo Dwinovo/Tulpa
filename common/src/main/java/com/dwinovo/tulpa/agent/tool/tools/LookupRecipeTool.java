@@ -215,7 +215,8 @@ public final class LookupRecipeTool implements TulpaTool {
 
     /** A smithing recipe (smithing table): base + addition, plus an optional template. */
     private static String formatSmithing(SmithingRecipe recipe, ItemStack result) {
-        StringBuilder sb = new StringBuilder("[smithing] base " + describeIngredient(recipe.baseIngredient()));
+        StringBuilder sb = new StringBuilder("[smithing] base "
+                + recipe.baseIngredient().map(b -> describeIngredient(b)).orElse("(any)"));   // 1.21.4: Optional
         recipe.additionIngredient().ifPresent(a -> sb.append(" + addition ").append(describeIngredient(a)));
         recipe.templateIngredient().ifPresent(t -> sb.append(" + template ").append(describeIngredient(t)));
         return sb.append(" -> makes ").append(result.getCount()).toString();

@@ -229,7 +229,7 @@ public final class HuntCompanionTask implements CompanionTask {
      *  gives hunt the same guarantee, so a swing never lands with cobblestone instead of a sword. */
     private void switchToBestWeapon() {
         Inventory inv = player.getInventory();
-        int best = inv.getSelectedSlot();
+        int best = inv.selected;
         double bestDmg = weaponDamage(inv.getItem(best));
         for (int i = 0; i < inv.getContainerSize(); i++) {
             double d = weaponDamage(inv.getItem(i));

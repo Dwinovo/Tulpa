@@ -3,14 +3,16 @@ package com.dwinovo.tulpa.entity;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraft.world.level.saveddata.SavedDataType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -55,10 +57,22 @@ public final class CompanionRegistry extends SavedData {
                     .xmap(CompanionRegistry::new, d -> d.entries)
                     .fieldOf("companions").codec();
 
-    private static final SavedDataType<CompanionRegistry> TYPE = new SavedDataType<>(
-            "tulpa_companions",
-            CompanionRegistry::new, CODEC,
+    // 1.21.4 predates the codec-based SavedDataType; register with the old SavedData.Factory
+    // (Supplier + deserializer + DataFixType) and drive (de)serialization through CODEC ourselves.
+    private static final SavedData.Factory<CompanionRegistry> FACTORY = new SavedData.Factory<>(
+            CompanionRegistry::new, CompanionRegistry::load,
             net.minecraft.util.datafix.DataFixTypes.SAVED_DATA_RANDOM_SEQUENCES);
+
+    @Override
+    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+        CODEC.encodeStart(NbtOps.INSTANCE, this).result()
+                .ifPresent(t -> { if (t instanceof CompoundTag c) tag.merge(c); });
+        return tag;
+    }
+
+    private static CompanionRegistry load(CompoundTag tag, HolderLookup.Provider registries) {
+        return CODEC.parse(NbtOps.INSTANCE, tag).result().orElseGet(CompanionRegistry::new);
+    }
 
     private final Map<UUID, Entry> entries;
 
@@ -71,7 +85,7 @@ public final class CompanionRegistry extends SavedData {
     }
 
     public static CompanionRegistry get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(TYPE);
+        return server.overworld().getDataStorage().computeIfAbsent(FACTORY, "tulpa_companions");
     }
 
     /** Add or update a companion's catalog entry. */
