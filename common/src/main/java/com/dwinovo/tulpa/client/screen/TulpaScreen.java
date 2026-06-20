@@ -93,7 +93,7 @@ public final class TulpaScreen extends Screen {
     private static final int RUN = TH.run();
     private static final int FAIL = TH.fail();
     private static net.minecraft.resources.ResourceLocation railSpr(String n) {
-        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, n);
+        return new net.minecraft.resources.ResourceLocation(com.dwinovo.tulpa.Constants.MOD_ID, n);
     }
     /** rail + panel composited into ONE sprite (continuous header, no gap; panel's left border = divider). */
     private static final net.minecraft.resources.ResourceLocation WORKSPACE_SPRITE = railSpr("workspace");
@@ -1278,7 +1278,7 @@ public final class TulpaScreen extends Screen {
     }
 
     private static net.minecraft.resources.ResourceLocation spr(String name) {
-        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, name);
+        return new net.minecraft.resources.ResourceLocation(com.dwinovo.tulpa.Constants.MOD_ID, name);
     }
     private static final net.minecraft.resources.ResourceLocation SLOT_SPRITE = spr("slot");
     private static final net.minecraft.resources.ResourceLocation SLOT_ALT = spr("slot_alt");        // checkerboard

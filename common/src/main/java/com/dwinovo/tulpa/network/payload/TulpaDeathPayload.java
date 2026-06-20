@@ -33,7 +33,7 @@ public record TulpaDeathPayload(UUID entityUuid, String cause, long respawnDelay
         implements CustomPacketPayload {
 
     public static final Type<TulpaDeathPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_death"));
+            new ResourceLocation(Constants.MOD_ID, "tulpa_death"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TulpaDeathPayload> STREAM_CODEC =
             StreamCodec.composite(

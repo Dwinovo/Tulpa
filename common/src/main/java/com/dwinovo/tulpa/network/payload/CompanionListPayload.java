@@ -36,7 +36,7 @@ public record CompanionListPayload(List<Entry> companions) implements CustomPack
     }
 
     public static final Type<CompanionListPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "companion_list"));
+            new ResourceLocation(Constants.MOD_ID, "companion_list"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, CompanionListPayload> STREAM_CODEC =
             StreamCodec.composite(

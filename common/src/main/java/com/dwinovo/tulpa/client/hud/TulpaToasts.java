@@ -56,7 +56,7 @@ public final class TulpaToasts {
     private static final long SLIDE_MS = 220;
 
     private static net.minecraft.resources.ResourceLocation spr(String n) {
-        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, n);
+        return new net.minecraft.resources.ResourceLocation(com.dwinovo.tulpa.Constants.MOD_ID, n);
     }
     private static final net.minecraft.resources.ResourceLocation BUBBLE_SPRITE = spr("bubble");
     private static final net.minecraft.resources.ResourceLocation TIP_SPRITE = spr("bubble_tip");

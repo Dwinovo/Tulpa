@@ -67,7 +67,7 @@ public record TulpaLocationsPayload(List<Snapshot> snapshots) implements CustomP
     }
 
     public static final Type<TulpaLocationsPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_locations"));
+            new ResourceLocation(Constants.MOD_ID, "tulpa_locations"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TulpaLocationsPayload> STREAM_CODEC =
             StreamCodec.composite(

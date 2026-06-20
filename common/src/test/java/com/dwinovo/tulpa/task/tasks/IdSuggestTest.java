@@ -15,7 +15,7 @@ class IdSuggestTest {
     private static final List<ResourceLocation> STRUCTURES = Stream.of(
                     "mansion", "monument", "jungle_pyramid", "desert_pyramid",
                     "stronghold", "fortress", "ancient_city", "village_plains")
-            .map(p -> ResourceLocation.fromNamespaceAndPath("minecraft", p))
+            .map(p -> new ResourceLocation("minecraft", p))
             .toList();
 
     private static String closest(String input) {

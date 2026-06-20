@@ -10,16 +10,13 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
-import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.ShapedRecipe;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.item.crafting.SmithingRecipe;
-import net.minecraft.world.item.crafting.SmithingRecipeInput;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
 
 import java.util.ArrayList;
@@ -106,7 +103,7 @@ public final class LookupRecipeTool implements TulpaTool {
                 }
                 ItemStack result;
                 try {
-                    result = cr.assemble(CraftingInput.EMPTY, level.registryAccess());   // shaped/shapeless ignore input
+                    result = cr.getResultItem(level.registryAccess());   // 1.20.6: no CraftingInput; result item is static
                 } catch (RuntimeException inputDependent) {
                     continue;
                 }
@@ -117,7 +114,7 @@ public final class LookupRecipeTool implements TulpaTool {
             } else if (r instanceof AbstractCookingRecipe cook) {
                 ItemStack result;
                 try {
-                    result = cook.assemble(new SingleRecipeInput(ItemStack.EMPTY), level.registryAccess());   // ignores input
+                    result = cook.getResultItem(level.registryAccess());   // 1.20.6: static result item
                 } catch (RuntimeException inputDependent) {
                     continue;
                 }
@@ -128,7 +125,7 @@ public final class LookupRecipeTool implements TulpaTool {
             } else if (r instanceof StonecutterRecipe sc) {
                 ItemStack result;
                 try {
-                    result = sc.assemble(new SingleRecipeInput(ItemStack.EMPTY), level.registryAccess());     // ignores input
+                    result = sc.getResultItem(level.registryAccess());     // 1.20.6: static result item
                 } catch (RuntimeException inputDependent) {
                     continue;
                 }
@@ -140,10 +137,9 @@ public final class LookupRecipeTool implements TulpaTool {
             } else if (r instanceof SmithingRecipe sm) {
                 ItemStack result;
                 try {
-                    // Empty input: a transform recipe (netherite upgrade etc.) still yields its result
-                    // item; a cosmetic trim recipe yields the (empty) base, so it self-excludes.
-                    result = sm.assemble(new SmithingRecipeInput(
-                            ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY), level.registryAccess());
+                    // A transform recipe (netherite upgrade etc.) yields its result item; a cosmetic
+                    // trim recipe yields the (empty) base, so it self-excludes.
+                    result = sm.getResultItem(level.registryAccess());
                 } catch (RuntimeException inputDependent) {
                     continue;
                 }

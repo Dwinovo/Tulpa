@@ -22,7 +22,7 @@ import java.util.UUID;
 public record TulpaEventPayload(UUID entityUuid, String xml, boolean urgent) implements CustomPacketPayload {
 
     public static final Type<TulpaEventPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_event"));
+            new ResourceLocation(Constants.MOD_ID, "tulpa_event"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TulpaEventPayload> STREAM_CODEC =
             StreamCodec.composite(

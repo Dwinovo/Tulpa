@@ -33,7 +33,7 @@ public record LocateTulpaPayload(List<UUID> entityUuids) implements CustomPacket
     public static final int MAX_UUIDS = 16;
 
     public static final Type<LocateTulpaPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "locate_tulpa"));
+            new ResourceLocation(Constants.MOD_ID, "locate_tulpa"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, LocateTulpaPayload> STREAM_CODEC =
             StreamCodec.composite(

@@ -30,7 +30,7 @@ public record RequestInventoryPayload(UUID uuid) implements CustomPacketPayload 
     public static final int MAIN_SLOTS = 36;
 
     public static final Type<RequestInventoryPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "request_inventory"));
+            new ResourceLocation(Constants.MOD_ID, "request_inventory"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, RequestInventoryPayload> STREAM_CODEC =
             StreamCodec.composite(UUIDUtil.STREAM_CODEC, RequestInventoryPayload::uuid,

@@ -30,7 +30,7 @@ import java.util.function.BiFunction;
 public class FlatEditBox extends EditBox {
 
     /** Cottage-style caret sprite (brown-capped amber bar, HyperFrames pixel art, native 3x10). */
-    private static final ResourceLocation CARET = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "caret");
+    private static final ResourceLocation CARET = new ResourceLocation(Constants.MOD_ID, "caret");
     private static final int CARET_W = 3, CARET_H = 10;
     private static final int SELECT_COLOR = 0x804E7480;   // translucent reply-teal
     private static final long BLINK_MS = 300L;

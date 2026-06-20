@@ -24,7 +24,7 @@ public class TulpaFabricClient implements ClientModInitializer {
         // Skills live under config/tulpa/skills. Hook the resource reload
         // pipeline so /reload picks up newly added SKILL.md files without a
         // client restart.
-        ResourceLocation skillLoaderId = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "skill_loader");
+        ResourceLocation skillLoaderId = new ResourceLocation(Constants.MOD_ID, "skill_loader");
         ResourceManagerHelper.get(PackType.CLIENT_RESOURCES)
                 .registerReloadListener(new SimpleSynchronousResourceReloadListener() {
                     @Override

@@ -64,7 +64,7 @@ public class TulpaNeoForgeClient {
     static void registerGuiLayers(net.neoforged.neoforge.client.event.RegisterGuiLayersEvent event) {
         // HUD: advancement-style activity toasts (top-right) when not watching a panel.
         event.registerAboveAll(
-                ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_toasts"),
+                new ResourceLocation(Constants.MOD_ID, "tulpa_toasts"),
                 (g, delta) -> com.dwinovo.tulpa.client.hud.TulpaToasts.render(g));
     }
 

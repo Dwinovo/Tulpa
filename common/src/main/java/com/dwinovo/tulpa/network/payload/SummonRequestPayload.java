@@ -20,7 +20,7 @@ public record SummonRequestPayload(String name) implements CustomPacketPayload {
     public static final int MAX_NAME = 32;
 
     public static final Type<SummonRequestPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "summon_request"));
+            new ResourceLocation(Constants.MOD_ID, "summon_request"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, SummonRequestPayload> STREAM_CODEC =
             StreamCodec.composite(ByteBufCodecs.stringUtf8(MAX_NAME), SummonRequestPayload::name,

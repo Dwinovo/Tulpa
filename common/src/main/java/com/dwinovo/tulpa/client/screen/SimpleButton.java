@@ -22,7 +22,7 @@ public final class SimpleButton extends Button {
     private static final ResourceLocation DISABLED = sprite("button_disabled");
 
     private static ResourceLocation sprite(String name) {
-        return ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, name);
+        return new ResourceLocation(Constants.MOD_ID, name);
     }
 
     /** Optional centered icon sprite; when set it replaces the text label (e.g. the eye toggle). */

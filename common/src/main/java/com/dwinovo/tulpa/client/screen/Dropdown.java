@@ -17,7 +17,7 @@ public final class Dropdown {
 
     private static final int ROW = 16;
     private static final net.minecraft.resources.ResourceLocation FRAME =
-            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.dwinovo.tulpa.Constants.MOD_ID, "button");
+            new net.minecraft.resources.ResourceLocation(com.dwinovo.tulpa.Constants.MOD_ID, "button");
 
     private int x, y, w, h = 18;
     private boolean open;

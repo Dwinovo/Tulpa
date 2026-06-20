@@ -20,7 +20,7 @@ public record ClientUiActionPayload(Action action) implements CustomPacketPayloa
     public enum Action { OPEN_SETTINGS, RESET_LOOPS }
 
     public static final Type<ClientUiActionPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "client_ui_action"));
+            new ResourceLocation(Constants.MOD_ID, "client_ui_action"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, ClientUiActionPayload> STREAM_CODEC =
             StreamCodec.composite(

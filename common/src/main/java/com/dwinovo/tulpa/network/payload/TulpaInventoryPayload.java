@@ -24,7 +24,7 @@ public record TulpaInventoryPayload(UUID uuid, boolean loaded, List<ItemStack> i
         implements CustomPacketPayload {
 
     public static final Type<TulpaInventoryPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_inventory"));
+            new ResourceLocation(Constants.MOD_ID, "tulpa_inventory"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TulpaInventoryPayload> STREAM_CODEC =
             StreamCodec.composite(

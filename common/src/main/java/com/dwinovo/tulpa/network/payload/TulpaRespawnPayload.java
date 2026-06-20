@@ -21,7 +21,7 @@ import java.util.UUID;
 public record TulpaRespawnPayload(UUID entityUuid, String cause) implements CustomPacketPayload {
 
     public static final Type<TulpaRespawnPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "tulpa_respawn"));
+            new ResourceLocation(Constants.MOD_ID, "tulpa_respawn"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TulpaRespawnPayload> STREAM_CODEC =
             StreamCodec.composite(

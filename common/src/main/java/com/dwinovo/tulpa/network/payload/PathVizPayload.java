@@ -39,7 +39,7 @@ public record PathVizPayload(UUID companion,
     public static final int MAX = 512;
 
     public static final Type<PathVizPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "path_viz"));
+            new ResourceLocation(Constants.MOD_ID, "path_viz"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PathVizPayload> STREAM_CODEC =
             StreamCodec.composite(
