@@ -1,8 +1,3 @@
-plugins {
-    // see https://fabricmc.net/develop/ for new versions
-    // 1.21.1 is an obfuscated MC version → use the -remap loom variant (the plain
-    // net.fabricmc.fabric-loom is the unobf path used on 26.1+). Same 1.14.x line.
-    id 'net.fabricmc.fabric-loom-remap' version '1.14.10' apply false
-    // see https://projects.neoforged.net/neoforged/moddevgradle for new versions
-    id 'net.neoforged.moddev' version '2.0.141' apply false
-}
+// 1.20.4 = Forge + Fabric. Toolchain matches the MultiLoader-Template 1.20.4 branch
+// (Gradle 8.7): common → SpongeVanillaGradle, fabric → fabric-loom, forge → ForgeGradle 6.
+// Each subproject declares its own plugin version inline, so the root stays empty.
