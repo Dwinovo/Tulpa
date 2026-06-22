@@ -4,6 +4,8 @@
 
 ### LLM-powered AI companions for Minecraft
 
+*中文名 **「言出法随」** — 尽管开口，剩下的交给我*
+
 *Summon a companion, then just **talk to it**. A real player's body — driven by a mind that runs on your machine, on your own API key.*
 
 ![Minecraft](https://img.shields.io/badge/Minecraft-26.1.2-62B47A?style=flat-square)
@@ -12,7 +14,7 @@
 ![License](https://img.shields.io/badge/License-MIT-4B6BFB?style=flat-square)
 ![Status](https://img.shields.io/badge/status-WIP-A8731E?style=flat-square)
 
-[**Features**](#features) · [**Quick start**](#quick-start) · [**Usage**](#usage) · [**How it works**](#how-it-works) · [**Tools**](#what-it-can-do) · [**Config**](#configuration) · [**Build**](#building-from-source)
+[**Features**](#features) · [**Quick start**](#quick-start) · [**Usage**](#usage) · [**How it works**](#how-it-works) · [**Tools**](#what-it-can-do) · [**Skills**](#skills--teach-it-anything-in-markdown) · [**Config**](#configuration) · [**Build**](#building-from-source)
 
 </div>
 
@@ -27,6 +29,7 @@ Tell your companion *"go mine me a stack of iron,"* *"build a hut where I'm stan
 - 🗣️ **Just talk to it.** Natural-language requests become real, multi-step work in the world — no scripts, no GUIs full of toggles.
 - 🧠 **The brain runs on *your* machine.** The agent loop calls the LLM from the owner's client with the owner's API key. No server-side LLM, no shared bill — each player pays only for their own companion's thinking.
 - 🧍 **The body is a real player, not a custom mob.** Companions are server-side *fake players*, so they interact with the world through genuine player code — they "just work" with other mods, redstone, mob AI, and containers instead of needing per-feature adapters.
+- 📖 **Teach it any mod with a Markdown file — no adapter, no waiting.** Because the companion is a real player driving *universal* tools (`transfer` and `interact_at` work on **any** GUI or block, vanilla or modded), making it play a new mod doesn't take a compatibility patch — it takes a `SKILL.md` written in plain English. Want it to run a Create andesite farm or progress through Mekanism? Describe the workflow and drop the file in. You don't wait on the mod author, and you don't wait on *us*. **[→ Skills](#skills--teach-it-anything-in-markdown)**
 - 🧭 **Baritone-grade pathfinding, from scratch.** A self-contained A\* pathfinder reimplements Baritone's cost model and movement set 1:1 (walk, diagonal, ascend/descend, jump, parkour, pillar-up, dig-down, scaffold-bridging) — **no Baritone dependency**.
 - 🛠️ **27 tools.** Mine, build, fight (native melee + bow), craft by hand-placing into the grid, use any container, scan the world, locate structures/biomes, manage inventory, and plan with a live to-do list.
 - 🔌 **Bring your own model.** OpenAI, DeepSeek, Kimi/Moonshot, MiniMax, Doubao, and Qwen out of the box — any OpenAI-compatible endpoint via a custom base URL.
@@ -140,12 +143,40 @@ The model expresses **intent** — the companion figures out *how* (pathing, too
 
 **Planning & meta**
 - `todowrite` — the model's own to-do list (shown live in the plan panel)
-- `load_skill` — load a Markdown "skill" (a saved workflow) on demand
+- `load_skill` — pull in a Markdown [skill](#skills--teach-it-anything-in-markdown) (a saved workflow) full-text, on demand
 - `wait` — idle deliberately (smelting, nightfall, timers) instead of burning tokens
 
 </details>
 
-**Skills** are Markdown workflows in `config/tulpa/skills/<name>/SKILL.md`. They're advertised to the model as a table of contents and loaded full-text only when relevant, keeping the prompt lean.
+## Skills — teach it anything, in Markdown
+
+Tulpa's interface to the world is **natural language**, the whole way down. So is the way you *extend* it. A **skill** is just a `SKILL.md` file — YAML frontmatter (`name` + `description`) and a plain-English how-to in the body. No code, no Java, no recompile.
+
+This is the payoff of the fake-player design. The companion already touches the world through *universal* tools — `transfer` and `interact_at` drive **any** container, machine, or block exactly like a human hand, modded or not. So teaching it a new mod is never an integration project; it's a writing task. **You don't wait for the mod author to add support, and you don't wait for us to ship a patch** — you write down the workflow and the companion can do it.
+
+```
+config/tulpa/skills/create_andesite_farm/SKILL.md
+─────────────────────────────────────────────────
+---
+name: create_andesite_farm
+description: Build and run a Create andesite generator — assemble the
+  kinetic chain, point it at a depot, and stockpile the andesite.
+---
+# Skill: create_andesite_farm
+
+1. Craft a water wheel and an andesite casing (lookup_recipe each).
+2. Place the wheel over flowing water so it spins; ...
+3. ... (the steps, in your own words)
+```
+
+Drop that folder in and the companion can play Create — the same trick teaches it Mekanism, Farmer's Delight, Applied Energistics, or your own modpack's progression, the moment you can describe it.
+
+**How the model uses them — progressive disclosure, so the prompt stays lean:**
+
+- **Every turn**, the model sees only a *table of contents*: each skill's `name` + `description`, nothing more. Dozens of skills cost almost no tokens.
+- **When a task matches** a description, the model calls the `load_skill` tool and the **full body streams into the conversation** — just-in-time instructions, paid for only when they're actually relevant.
+
+**Where they live:** `config/tulpa/skills/<name>/SKILL.md`. Tulpa ships a built-in set — combat basics, the container/crafting/smelting playbook, and a full Nether → blaze rods → ender pearls → stronghold → dragon speedrun chain — extracted to that folder on first launch. After that **the folder is yours**: edit them, delete them, write your own. It's the same `SKILL.md` shape the broader agent-skills ecosystem uses, so skills written elsewhere mostly drop straight in.
 
 ## Configuration
 
