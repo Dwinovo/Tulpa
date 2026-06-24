@@ -2,8 +2,7 @@ package com.dwinovo.tulpa.pathing.util;
 
 /**
  * Physics-derived movement cost constants, in game ticks — a 1:1 port of
- * Baritone's {@code ActionCosts} (cabaletta/baritone). See
- * {@code docs/BARITONE_PATHFINDING.md} for the full alignment reference.
+ * Baritone's {@code ActionCosts} (cabaletta/baritone).
  *
  * <p>Every base cost is {@code 20 / speedInBlocksPerSecond}. Fall and jump costs
  * are NOT magic numbers: they come from Minecraft's gravity/drag model
