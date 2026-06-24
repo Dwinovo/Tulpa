@@ -22,8 +22,8 @@ import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Per-level snapshots of the loaded chunks near companions, for the off-thread planner
- * (docs/PATHFINDING_ASYNC.md). Once per tick (from both loaders' end-of-tick hook) we rebuild each
+ * Per-level snapshots of the loaded chunks near companions, for the off-thread planner.
+ * Once per tick (from both loaders' end-of-tick hook) we rebuild each
  * companion-level's {@link LoadedChunks} from the chunks currently loaded around its companions — a
  * cheap gather of live {@link LevelChunk} references via the non-blocking {@code getChunkNow}. The
  * planner then reads those refs LIVE (Baritone's {@code useTheRealWorld}); because the snapshot is
