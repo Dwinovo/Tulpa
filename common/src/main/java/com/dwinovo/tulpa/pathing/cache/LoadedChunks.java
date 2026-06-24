@@ -8,7 +8,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 
 /**
  * An immutable snapshot of the loaded chunks near a level's companions — the server-side equivalent of
- * Baritone's {@code createThreadSafeCopy()} of the chunk provider (docs/PATHFINDING_ASYNC.md). Built on
+ * Baritone's {@code createThreadSafeCopy()} of the chunk provider. Built on
  * the main thread once per tick ({@link PathCaches#serverTick}) and read by the planner (off-thread
  * from P-C). It holds live {@link LevelChunk} references, so a lookup reads the LIVE section palette
  * (Baritone's {@code useTheRealWorld}) — exact for loaded terrain. We tolerate the rare race of reading

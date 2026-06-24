@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Guards that the cost model stays a 1:1 port of Baritone's {@code ActionCosts}
- * + the relevant {@code Settings} defaults (see {@code docs/BARITONE_PATHFINDING.md}).
+ * + the relevant {@code Settings} defaults.
  * Baritone's A* is intentionally inadmissible (weighted heuristic), so these
  * check the exact constants/formulas rather than any admissibility bound.
  */
