@@ -1,24 +1,16 @@
-<div align="center">
-
 # Tulpa · 言出法随
 
 ### An AI harness that lets large models truly live inside Minecraft
 
 *言出法随 (yán chū fǎ suí) — speak it, and it comes true.*
 
-[**English**](README.md) · [简体中文](README_CN.md)
+[English](README.md) · [简体中文](README_CN.md)
 
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.11-62B47A?style=flat-square)
 ![Loaders](https://img.shields.io/badge/Loaders-Fabric%20%7C%20NeoForge-DE7C36?style=flat-square)
 ![Java](https://img.shields.io/badge/Java-21-007396?style=flat-square&logo=openjdk&logoColor=white)
 ![License](https://img.shields.io/badge/code-LGPL--3.0-4B6BFB?style=flat-square)
 ![Status](https://img.shields.io/badge/status-early%20%2F%20vision-A8731E?style=flat-square)
-
-[**Vision**](#vision) · [**How it works**](#how-it-works) · [**Reach**](#reach) · [**Quick start**](#quick-start) · [**What it can do**](#what-it-can-do) · [**Roadmap**](#roadmap)
-
-</div>
-
-<!-- Tip: drop a gameplay GIF/screenshot here once you have one — it sells the project faster than any paragraph. -->
 
 ---
 
@@ -69,7 +61,7 @@ Lucky for us, Tulpa's body is a real player, so *physically* it gets along with 
 But "able to reach out" isn't "able to understand." Does the AI know what a Mechanical Press is for? How an AE2 network should be wired? Delivering that understanding to the model takes two instruments — the very same two Claude itself uses to reach the real world:
 
 - 🔌 **MCP — connect.** A compatibility module that wires a mod's inner world, structured, into the AI's senses and hands. In Anthropic's own words: this is **handing it a hammer**.
-- 📖 **Skill — coach.** A plain-text [workflow](#what-it-can-do) — zero code, anyone can write one — that teaches the AI how to put a capability to good use. This is **showing it how to swing that hammer to drive a nail**.
+- 📖 **Skill — coach.** A plain-text workflow — zero code, anyone can write one — that teaches the AI how to put a capability to good use. This is **showing it how to swing that hammer to drive a nail**.
 
 One grants the capability, the other the craft — and better yet, **they stack**:
 
@@ -97,7 +89,7 @@ Give it an intent and it breaks it into dozens of actions and runs them end to e
 - 🔭 **Real perception** — scan blocks, scan entities, check status, look up recipes, locate any structure or biome, even x-ray what's inside a machine without opening its GUI.
 - 🧠 **Real memory** — conversations persist across saves and auto-compact when they grow long; it remembers the crafting tables, furnaces, and chests it has used, and walks back to them instead of building new ones. Death is recoverable: vanilla death drops as usual, then it respawns by your side after a moment.
 
-Nearly thirty tools like these make up its hands and eyes *right now*. And its abilities keep growing — through the very two instruments of [Reach](#reach):
+Nearly thirty tools like these make up its hands and eyes *right now*. And its abilities keep growing — through the very two instruments of Reach:
 
 - 📖 **Write a Skill to coach it.** Markdown workflows under `config/tulpa/skills/`, loaded only when relevant to keep the prompt lean. It ships with a full set of guides for the whole vanilla end-game (the Nether, blaze rods, ender pearls, the stronghold, the dragon fight…). Edit one, or write your own, to teach it your base's rules — or a whole new mod's playbook.
 - 🔌 **Plug in an MCP to extend it.** A compatibility module wires a mod's inner world, structured, into its senses and hands — so the boundary of what it *can do* grows together with the entire modded ecosystem.
@@ -116,12 +108,8 @@ Contributions, skill submissions, and compat experiments are all welcome. This i
 
 ---
 
-<div align="center">
+Want to build it yourself, see the full tool list, or read the architecture? It's all in the source — start under `common/src/main/java/com/dwinovo/tulpa/`.
 
-<sub>Want to build it yourself, see the full tool list, or read the architecture? It's all in the source — start under <code>common/src/main/java/com/dwinovo/tulpa/</code>.</sub>
+**Licensing** (modeled on AE2): the source code is [LGPL-3.0](https://github.com/Dwinovo/minecraft-tulpa/blob/HEAD/LICENSE) — forks you distribute must stay open under the same license. The forthcoming public integration API (what compatibility modules / MCP bridges code against) is [MIT](https://github.com/Dwinovo/minecraft-tulpa/blob/HEAD/LICENSE-API), so anyone can build mod-compat freely. The art & assets are [All Rights Reserved](https://github.com/Dwinovo/minecraft-tulpa/blob/HEAD/LICENSE-ASSETS), and the names "Tulpa" / "言出法随" are reserved. Built on the [MultiLoader Template](https://github.com/jaredlll08/MultiLoader-Template).
 
-<sub><b>Licensing</b> (modeled on AE2): the source code is <a href="LICENSE">LGPL-3.0</a> — forks you distribute must stay open under the same license. The forthcoming public integration API (what compatibility modules / MCP bridges code against) is <a href="LICENSE-API">MIT</a>, so anyone can build mod-compat freely. The art &amp; assets are <a href="LICENSE-ASSETS">All Rights Reserved</a>, and the names "Tulpa" / "言出法随" are reserved. Built on the <a href="https://github.com/jaredlll08/MultiLoader-Template">MultiLoader Template</a>.</sub>
-
-<sub>The pathfinder draws on <a href="https://github.com/cabaletta/baritone">Baritone</a> for design ideas only, and is a fully independent rewrite for a <b>server-side (fake-player)</b> setting — <b>no source was copied, ported, or adapted from it</b>. Tulpa's code is licensed LGPL-3.0 of its own accord; that choice is not a consequence of Baritone (which is also LGPL-3.0).</sub>
-
-</div>
+The pathfinder draws on [Baritone](https://github.com/cabaletta/baritone) for design ideas only, and is a fully independent rewrite for a **server-side (fake-player)** setting — **no source was copied, ported, or adapted from it**. Tulpa's code is licensed LGPL-3.0 of its own accord; that choice is not a consequence of Baritone (which is also LGPL-3.0).

@@ -4,7 +4,7 @@ package com.dwinovo.tulpa.pathing.util;
  * Tunable pathfinding parameters — a 1:1 port of the relevant defaults from
  * Baritone's {@code Settings} (cabaletta/baritone). Centralised here so every
  * cost / search / executor knob matches Baritone and can be debugged against
- * its known-good behaviour. See {@code docs/BARITONE_PATHFINDING.md}.
+ * its known-good behaviour.
  *
  * <p>Physics constants (walk/jump/fall costs) live in {@link ActionCosts}; this
  * class holds only the values Baritone exposes as user settings.
