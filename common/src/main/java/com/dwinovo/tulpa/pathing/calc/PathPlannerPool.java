@@ -8,8 +8,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
- * The shared worker pool that runs A* searches off the server tick thread (docs/PATHFINDING_ASYNC.md
- * §5.4). One pool for ALL companions — 100 companions don't spawn 100 threads. Each
+ * The shared worker pool that runs A* searches off the server tick thread.
+ * One pool for ALL companions — 100 companions don't spawn 100 threads. Each
  * {@link com.dwinovo.tulpa.pathing.exec.PlayerNav} submits its search here and polls the returned
  * future each tick.
  *
