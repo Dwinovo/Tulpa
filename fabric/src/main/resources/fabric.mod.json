@@ -16,13 +16,13 @@
     "environment": "*",
     "entrypoints": {
         "main": [
-            "com.dwinovo.tulpa.TulpaMod"
+            "com.dwinovo.numen.NumenMod"
         ],
         "client": [
-            "com.dwinovo.tulpa.TulpaFabricClient"
+            "com.dwinovo.numen.NumenFabricClient"
         ],
         "fabric-datagen": [
-            "com.dwinovo.tulpa.data.FabricDataGenerators"
+            "com.dwinovo.numen.data.FabricDataGenerators"
         ]
     },
     "mixins": [
