@@ -171,11 +171,11 @@ jobs:
           version-type: ${{ steps.meta.outputs.version_type }}
           github-prerelease: ${{ steps.meta.outputs.github_prerelease }}
 
-          # TODO: Tulpa's CurseForge numeric project id (delete the two curseforge-* lines to skip it).
+          # TODO: Numen's CurseForge numeric project id (delete the two curseforge-* lines to skip it).
           curseforge-id: 1581109
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
 
-          # TODO: Tulpa's Modrinth project id/slug.
+          # TODO: Numen's Modrinth project id/slug.
           modrinth-id: b1E5VR0g
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
 

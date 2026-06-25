@@ -1,9 +1,9 @@
-Tulpa — Public API license (MIT)
+Numen — Public API license (MIT)
 
-This MIT license applies ONLY to Tulpa's public integration API: the surface
+This MIT license applies ONLY to Numen's public integration API: the surface
 that third-party compatibility modules and MCP bridges code against — i.e.
-classes under the `com.dwinovo.tulpa.api` package (forthcoming). It exists so
-that anyone can build mod-compatibility modules against Tulpa freely, including
+classes under the `com.dwinovo.numen.api` package (forthcoming). It exists so
+that anyone can build mod-compatibility modules against Numen freely, including
 in proprietary or commercially-licensed projects.
 
 All other source code in this project is licensed under LGPL-3.0 (see LICENSE),
