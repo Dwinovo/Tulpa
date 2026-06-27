@@ -244,7 +244,7 @@ public final class NumenLlmClient {
      * </ul>
      * Unknown values fall back to {@code openai} with a warning log.
      */
-    private static LlmProvider pickProvider(String name) {
+    public static LlmProvider pickProvider(String name) {
         if (name == null) return new OpenAIProvider();
         return switch (name.toLowerCase()) {
             case DeepSeekProvider.NAME -> new DeepSeekProvider();

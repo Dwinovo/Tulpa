@@ -56,7 +56,7 @@ public class CommonClass {
      * sides for any future server-side validation (e.g. unknown-tool
      * rejection in {@code ExecuteToolPayload}).
      */
-    private static void registerTools() {
+    public static void registerTools() {
         // Entity world-action + entity-perspective perception tools.
         ToolRegistry.register(new MoveToTool());
         ToolRegistry.register(new HuntTool());

@@ -33,3 +33,8 @@ logs
 
 # Claude local tooling (skills, settings, etc.) — not mod source
 .claude/
+
+# benchmark credentials — API keys live in an untracked .env (see benchmark/.env.example)
+.env
+**/.env
+!**/.env.example
