@@ -56,7 +56,7 @@ public final class ToolSchema {
             if (arg == null) continue;   // engine-injected context — not a model argument
             String name = arg.name().isEmpty() ? p.getName() : arg.name();
             properties.put(name, propertySchema(p, arg));
-            required.add(name);          // strict mode: every property is required
+            if (arg.required()) required.add(name);
         }
 
         Map<String, Object> schema = new LinkedHashMap<>();
@@ -80,13 +80,18 @@ public final class ToolSchema {
         }
 
         String base = jsonType(type);
-        // required=false → nullable union; the property is still listed in `required`.
-        prop.put("type", arg.required() ? base : List.of(base, "null"));
+        prop.put("type", arg.nullable() ? List.of(base, "null") : base);
         prop.put("description", arg.value());
-        if (!Double.isNaN(arg.min())) prop.put("minimum", arg.min());
-        if (!Double.isNaN(arg.max())) prop.put("maximum", arg.max());
+        if (!Double.isNaN(arg.min())) prop.put("minimum", bound(base, arg.min()));
+        if (!Double.isNaN(arg.max())) prop.put("maximum", bound(base, arg.max()));
         if (arg.enumValues().length > 0) prop.put("enum", List.of(arg.enumValues()));
         return prop;
+    }
+
+    /** A numeric bound boxed to match the property's JSON type: Integer for {@code integer}, Double else. */
+    private static Object bound(String base, double v) {
+        if (base.equals("integer")) return (int) v;   // autoboxes to Integer, matching int-literal schemas
+        return v;                                      // autoboxes to Double
     }
 
     /** Element type of a {@code List<T>} or {@code T[]} parameter. */

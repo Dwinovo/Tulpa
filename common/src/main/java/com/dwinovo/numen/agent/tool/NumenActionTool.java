@@ -48,13 +48,15 @@ public final class NumenActionTool implements NumenTool {
         final SlotType type;
         final String argName;     // ARG only
         final Class<?> argType;   // ARG only
-        final boolean required;   // ARG only
+        final boolean required;   // ARG only — listed in the schema's required[]
+        final boolean nullable;   // ARG only — type permits null
 
-        Slot(SlotType type, String argName, Class<?> argType, boolean required) {
+        Slot(SlotType type, String argName, Class<?> argType, boolean required, boolean nullable) {
             this.type = type;
             this.argName = argName;
             this.argType = argType;
             this.required = required;
+            this.nullable = nullable;
         }
     }
 
@@ -87,13 +89,13 @@ public final class NumenActionTool implements NumenTool {
             Arg arg = p.getAnnotation(Arg.class);
             if (arg != null) {
                 String argName = arg.name().isEmpty() ? p.getName() : arg.name();
-                plan.add(new Slot(SlotType.ARG, argName, p.getType(), arg.required()));
+                plan.add(new Slot(SlotType.ARG, argName, p.getType(), arg.required(), arg.nullable()));
             } else if (NumenPlayer.class.isAssignableFrom(p.getType())) {
                 injectsEntity = true;
-                plan.add(new Slot(SlotType.ENTITY, null, null, false));
+                plan.add(new Slot(SlotType.ENTITY, null, null, false, false));
             } else if (p.getType() == ToolContext.class) {
                 injectsContext = true;
-                plan.add(new Slot(SlotType.CONTEXT, null, null, false));
+                plan.add(new Slot(SlotType.CONTEXT, null, null, false, false));
             } else {
                 throw new IllegalArgumentException("@NumenAction " + name
                         + ": parameter " + p.getName() + " of type " + p.getType().getName()
@@ -142,7 +144,7 @@ public final class NumenActionTool implements NumenTool {
         for (int i = 0; i < slots.length; i++) {
             Slot s = slots[i];
             argv[i] = switch (s.type) {
-                case ARG -> coerce(args, s.argName, s.argType, s.required);
+                case ARG -> coerce(args, s.argName, s.argType, s.required, s.nullable);
                 case ENTITY -> entity;
                 case CONTEXT -> ctx;
             };
@@ -174,11 +176,30 @@ public final class NumenActionTool implements NumenTool {
     }
 
     /** Coerce one JSON argument to the method parameter's Java type. */
-    private Object coerce(JsonObject args, String key, Class<?> type, boolean required) {
+    private Object coerce(JsonObject args, String key, Class<?> type, boolean required, boolean nullable) {
         JsonElement el = args.get(key);
-        if (el == null || el.isJsonNull()) {
-            if (required) throw new IllegalArgumentException("missing required argument: " + key);
-            return null;   // nullable arg → boxed null
+        boolean absent = el == null || el.isJsonNull();
+
+        // List<String> args (block_ids, entity_ids, …): an absent OPTIONAL list is the
+        // empty list (matching the old itemSet "absent → match everything" lenient shape).
+        if (List.class.isAssignableFrom(type)) {
+            List<String> out = new ArrayList<>();
+            if (absent) {
+                if (required && !nullable) throw new IllegalArgumentException("missing required argument: " + key);
+                return out;
+            }
+            if (el.isJsonArray()) {
+                for (JsonElement e : el.getAsJsonArray()) {
+                    if (e != null && !e.isJsonNull()) out.add(e.getAsString());
+                }
+            }
+            return out;
+        }
+
+        if (absent) {
+            // Mandatory only when it's in `required` AND not nullable; otherwise null binds.
+            if (required && !nullable) throw new IllegalArgumentException("missing required argument: " + key);
+            return null;   // optional / nullable → boxed null
         }
         try {
             if (type == String.class) return el.getAsString();

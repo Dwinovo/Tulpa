@@ -46,12 +46,12 @@ public final class MovementTools {
             + "same unreachable target. move_to is for getting somewhere to STAND; "
             + "to open/use a station give its coordinate to interact_at instead.")
     public TaskRecord moveTo(
-            @Arg(value = "Target X. Null for an elevation-only move (y alone).", required = false) Double x,
+            @Arg(value = "Target X. Null for an elevation-only move (y alone).", nullable = true) Double x,
             @Arg(value = "Target Y (block height). LEAVE NULL to go to a "
                     + "location (x+z) — Y is auto-resolved to the surface. Only "
                     + "set it for an exact cell (x+y+z) or an elevation move (y alone).",
-                    required = false) Double y,
-            @Arg(value = "Target Z. Null for an elevation-only move (y alone).", required = false) Double z,
+                    nullable = true) Double y,
+            @Arg(value = "Target Z. Null for an elevation-only move (y alone).", nullable = true) Double z,
             @Arg(value = "Speed multiplier in [0.1, 2.0]. 1.0 is normal walking speed.",
                     min = MIN_SPEED, max = MAX_SPEED) double speed,
             ToolContext ctx) {

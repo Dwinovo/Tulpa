@@ -41,9 +41,9 @@ class ToolSchemaTest {
 
         @NumenAction(name = "move_to", description = "travel somewhere")
         void moveTo(
-                @Arg(value = "target x", required = false) Double x,
-                @Arg(value = "target y", required = false) Double y,
-                @Arg(value = "target z", required = false) Double z,
+                @Arg(value = "target x", nullable = true) Double x,
+                @Arg(value = "target y", nullable = true) Double y,
+                @Arg(value = "target z", nullable = true) Double z,
                 @Arg(value = "speed multiplier", min = 0.1, max = 2.0) double speed) {
         }
     }

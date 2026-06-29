@@ -15,13 +15,22 @@ import java.lang.annotation.Target;
  * <p>Parameters <em>without</em> this annotation are engine-injected context
  * (the companion handle, the reply callback) and are excluded from the schema.
  *
- * <h2>Optionality and strict mode</h2>
- * {@link #required()} {@code = false} makes the argument <em>nullable</em>
- * (type becomes a {@code [type, "null"]} union) — but the property still appears
- * in the schema's {@code required} list. This matches the OpenAI strict /
- * structured-output contract, where every property must be listed in
- * {@code required} and "optional" is expressed as "may be null", not "may be
- * absent". A nullable arg should map to a boxed / nullable Java parameter.
+ * <h2>Optionality — two orthogonal axes</h2>
+ * Whether an argument appears in the schema's {@code required} list and whether
+ * its type permits {@code null} are independent, matching the two ways the tools
+ * express "optional":
+ * <ul>
+ *   <li>{@link #required()} — is the property listed in {@code required}? Default
+ *       {@code true}. The OpenAI strict / structured-output contract wants every
+ *       property required and expresses "optional" as {@link #nullable()}; a few
+ *       older tools instead drop the property from {@code required}, which
+ *       {@code required = false} reproduces.</li>
+ *   <li>{@link #nullable()} — is the type a {@code [type, "null"]} union? Default
+ *       {@code false}. Set {@code true} for the strict-mode "optional" form
+ *       (still in {@code required}, but may be null).</li>
+ * </ul>
+ * Either form of optionality should map to a boxed / nullable Java parameter so
+ * a missing value can bind as {@code null}.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.PARAMETER)
@@ -33,8 +42,11 @@ public @interface Arg {
     /** Override the argument name. Empty = use the parameter's own name. */
     String name() default "";
 
-    /** {@code false} = nullable (a {@code [type,"null"]} union); still listed in {@code required}. */
+    /** Is the property listed in the schema's {@code required} array? Default {@code true}. */
     boolean required() default true;
+
+    /** Is the type a {@code [type, "null"]} union (strict-mode "optional")? Default {@code false}. */
+    boolean nullable() default false;
 
     /** Inclusive numeric lower bound ({@code minimum}). {@code NaN} = unset. */
     double min() default Double.NaN;

@@ -1,21 +1,19 @@
 package com.dwinovo.numen;
 
+import com.dwinovo.numen.agent.tool.NumenTools;
 import com.dwinovo.numen.agent.tool.ToolRegistry;
-import com.dwinovo.numen.agent.tool.tools.BreakBlockTool;
-import com.dwinovo.numen.agent.tool.tools.DropItemsTool;
+import com.dwinovo.numen.agent.tool.tools.BlockActionTools;
+import com.dwinovo.numen.agent.tool.tools.CombatTools;
+import com.dwinovo.numen.agent.tool.tools.GuiTools;
+import com.dwinovo.numen.agent.tool.tools.InventoryTools;
 import com.dwinovo.numen.agent.tool.tools.LoadSkillTool;
-import com.dwinovo.numen.agent.tool.tools.WaitTool;
-import com.dwinovo.numen.agent.tool.tools.EquipTool;
-import com.dwinovo.numen.agent.tool.tools.HuntTool;
-import com.dwinovo.numen.agent.tool.tools.ShootTool;
-import com.dwinovo.numen.agent.tool.tools.LocateStructureTool;
-import com.dwinovo.numen.agent.tool.tools.CollectItemsTool;
-import com.dwinovo.numen.agent.tool.tools.MineBlockTool;
-import com.dwinovo.numen.agent.tool.tools.PlaceBlockTool;
-import com.dwinovo.numen.agent.tool.tools.EatItemTool;
+import com.dwinovo.numen.agent.tool.tools.LocateTools;
+import com.dwinovo.numen.agent.tool.tools.MovementTools;
+import com.dwinovo.numen.agent.tool.tools.PerceptionTools;
+import com.dwinovo.numen.agent.tool.tools.QueryExtraTools;
 import com.dwinovo.numen.agent.tool.tools.ScanBlocksTool;
-import com.dwinovo.numen.agent.tool.tools.ScanNearbyEntitiesTool;
 import com.dwinovo.numen.agent.tool.tools.TodoWriteTool;
+import com.dwinovo.numen.agent.tool.tools.TransferTool;
 import com.dwinovo.numen.platform.Services;
 
 /**
@@ -52,48 +50,56 @@ public class CommonClass {
      * rejection in {@code ExecuteToolPayload}).
      */
     public static void registerTools() {
+        // Tool implementations now live as @NumenAction methods grouped into
+        // domain holders; the reflective adapter (NumenTools.tool) turns each into
+        // a NumenTool. Registration ORDER is preserved exactly (prompt caching).
+        MovementTools movement = new MovementTools();
+        CombatTools combat = new CombatTools();
+        LocateTools locate = new LocateTools();
+        InventoryTools inventory = new InventoryTools();
+        BlockActionTools blocks = new BlockActionTools();
+        GuiTools gui = new GuiTools();
+        PerceptionTools perception = new PerceptionTools();
+        QueryExtraTools queries = new QueryExtraTools();
+
         // Entity world-action + entity-perspective perception tools.
-        // move_to — migrated to @NumenAction (world-action: returns a TaskRecord).
-        ToolRegistry.register(com.dwinovo.numen.agent.tool.NumenTools.tool(
-                new com.dwinovo.numen.agent.tool.tools.MovementTools(), "move_to"));
-        ToolRegistry.register(new HuntTool());
-        ToolRegistry.register(new ShootTool());
-        ToolRegistry.register(new LocateStructureTool());
-        ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.LocateBiomeTool());
-        ToolRegistry.register(new CollectItemsTool());
-        ToolRegistry.register(new MineBlockTool());
-        ToolRegistry.register(new EquipTool());
-        ToolRegistry.register(new PlaceBlockTool());
-        ToolRegistry.register(new BreakBlockTool());
-        ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.InteractAtTool());
-        ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.InteractEntityTool());
-        ToolRegistry.register(new EatItemTool());
-        ToolRegistry.register(new WaitTool());
-        ToolRegistry.register(new DropItemsTool());
+        reg(movement, "move_to");
+        reg(combat, "hunt");
+        reg(combat, "shoot");
+        reg(locate, "locate_structure");
+        reg(locate, "locate_biome");
+        reg(inventory, "collect_items");
+        reg(blocks, "auto_mine");
+        reg(inventory, "equip_item");
+        reg(blocks, "place_block");
+        reg(blocks, "break_block");
+        reg(blocks, "interact_at");
+        reg(blocks, "interact_entity");
+        reg(inventory, "eat_item");
+        reg(inventory, "wait");
+        reg(inventory, "drop_items");
         // GUI primitives — interact_at opens a menu, then the model inspects + clicks it directly.
-        ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.InspectGuiTool());
-        ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.TransferTool());
-        ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.CloseGuiTool());
-        // get_self_status — migrated to the @NumenAction authoring surface (dogfood).
-        // Registered in place so the tool-list order (and prompt caching) is unchanged.
-        ToolRegistry.register(com.dwinovo.numen.agent.tool.NumenTools.tool(
-                new com.dwinovo.numen.agent.tool.tools.PerceptionTools(), "get_self_status"));
-        ToolRegistry.register(com.dwinovo.numen.agent.tool.NumenTools.tool(
-                new com.dwinovo.numen.agent.tool.tools.PerceptionTools(), "get_owner_status"));
+        reg(gui, "inspect_gui");
+        ToolRegistry.register(new TransferTool());   // not yet on @NumenAction: object-array arg
+        reg(gui, "close_gui");
+        reg(perception, "get_self_status");
+        reg(perception, "get_owner_status");
 
         // Shared perception / planning tools.
-        ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.LookupRecipeTool());
-        ToolRegistry.register(new ScanNearbyEntitiesTool());
-        ToolRegistry.register(new ScanBlocksTool());
-        // inspect_block — migrated to @NumenAction (query with args).
-        ToolRegistry.register(com.dwinovo.numen.agent.tool.NumenTools.tool(
-                new com.dwinovo.numen.agent.tool.tools.PerceptionTools(), "inspect_block"));
-        ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.InspectBlockStorageTool());
-        ToolRegistry.register(com.dwinovo.numen.agent.tool.NumenTools.tool(
-                new com.dwinovo.numen.agent.tool.tools.PerceptionTools(), "get_world_info"));
-        ToolRegistry.register(new TodoWriteTool());
-        ToolRegistry.register(new LoadSkillTool());
+        reg(queries, "lookup_recipe");
+        reg(queries, "scan_nearby_entities");
+        ToolRegistry.register(new ScanBlocksTool()); // not yet on @NumenAction: async-query path
+        reg(perception, "inspect_block");
+        reg(queries, "inspect_block_storage");
+        reg(perception, "get_world_info");
+        ToolRegistry.register(new TodoWriteTool());  // not yet on @NumenAction: local path
+        ToolRegistry.register(new LoadSkillTool());  // not yet on @NumenAction: local path
 
         Constants.LOG.info("[numen] registered {} tool(s)", ToolRegistry.size());
+    }
+
+    /** Register a single {@code @NumenAction} method from a holder, by tool name. */
+    private static void reg(Object holder, String action) {
+        ToolRegistry.register(NumenTools.tool(holder, action));
     }
 }
