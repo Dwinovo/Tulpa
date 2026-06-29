@@ -34,6 +34,11 @@ tasks.withType(JavaCompile).configureEach {
 
 repositories {
     mavenCentral()
+    // Local maven repo holding the published numen-api engine (numen-core depends on it).
+    maven {
+        name = 'localNumen'
+        url = uri(findProperty('local_maven_url') ?: 'file:///D:/01_Projects/numen-maven')
+    }
     // https://docs.gradle.org/current/userguide/declaring_repositories.html#declaring_content_exclusively_found_in_one_repository
     exclusiveContent {
         forRepository {

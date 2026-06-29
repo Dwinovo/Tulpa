@@ -3,6 +3,12 @@ plugins {
     id 'net.neoforged.moddev'
 }
 
+dependencies {
+    // The numen-api engine, loaded as a mod dependency (resolved from local maven).
+    // NeoForge is Mojang-mapped natively, so no remap step is needed.
+    implementation "com.dwinovo.numen:numen-api-neoforge-1.21.1:0.0.2"
+}
+
 neoForge {
     version = neoforge_version
     // Automatically enable neoforge AccessTransformers if the file exists
