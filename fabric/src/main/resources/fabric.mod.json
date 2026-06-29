@@ -17,6 +17,9 @@
     "entrypoints": {
         "main": [
             "com.dwinovo.numen.core.NumenCoreFabric"
+        ],
+        "fabric-datagen": [
+            "com.dwinovo.numen.core.data.FabricDataGenerators"
         ]
     },
     "depends": {

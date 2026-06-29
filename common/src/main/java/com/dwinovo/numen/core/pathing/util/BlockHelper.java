@@ -443,7 +443,7 @@ public final class BlockHelper {
         // stations like the crafting table). A tag membership test reads only the immutable BlockState
         // holder — no Level/snapshot — so it is safe on the off-thread search.
         BlockState state = level.getBlockState(pos);
-        if (state.is(com.dwinovo.numen.init.InitTag.DO_NOT_BREAK)) return true;
+        if (state.is(com.dwinovo.numen.core.init.InitTag.DO_NOT_BREAK)) return true;
         // Broad proxy: any block-entity block (chests, furnaces, hoppers, barrels, shulkers, modded
         // machines, …) is functional/valuable. Off-thread the search can't reconstruct a block entity,
         // so the cache view answers presence from a main-thread snapshot (BlockEntityAware).

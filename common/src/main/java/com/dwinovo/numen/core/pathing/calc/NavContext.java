@@ -1,6 +1,6 @@
 package com.dwinovo.numen.core.pathing.calc;
 
-import com.dwinovo.numen.init.InitTag;
+import com.dwinovo.numen.core.init.InitTag;
 import com.dwinovo.numen.core.pathing.util.ActionCosts;
 import com.dwinovo.numen.core.pathing.util.BlockHelper;
 import com.dwinovo.numen.core.pathing.util.PathSettings;
