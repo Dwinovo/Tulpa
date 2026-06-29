@@ -537,6 +537,9 @@ public final class NumenScreen extends Screen {
     }
 
     private void requestInventory() {
+        // No companion selected (empty roster / hotkey-opened blank panel) → nothing to fetch.
+        // The payload's UUID stream-codec can't encode null, so this guard also prevents a crash.
+        if (uuid == null) return;
         if (Minecraft.getInstance().getConnection() != null) {
             Services.NETWORK.sendToServer(new RequestInventoryPayload(uuid));
         }
