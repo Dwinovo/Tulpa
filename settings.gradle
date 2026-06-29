@@ -25,11 +25,3 @@ rootProject.name = 'Numen'
 include('common')
 include('fabric')
 include('neoforge')
-
-// numen-core builds on top of the numen-api engine. Composite build: the
-// numen-api maven coordinates are substituted with its local source projects,
-// so Loom/moddev remap the api as a proper mod dependency and edits to the api
-// take effect immediately (no republish-per-change).
-// Auto-substitution: Gradle matches the numen-api-* maven coordinates below to
-// the included build's projects via their maven-publish publication coordinates.
-includeBuild('../numen-api')

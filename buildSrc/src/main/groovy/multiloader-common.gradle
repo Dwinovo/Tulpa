@@ -34,10 +34,16 @@ tasks.withType(JavaCompile).configureEach {
 
 repositories {
     mavenCentral()
-    // Local maven repo holding the published numen-api engine (numen-core depends on it).
+    // Published numen-api engine. Local file repo first (fast iteration on this
+    // machine after `gradlew publish`); the public raw maven is the fallback so
+    // fresh clones / other people resolve it too.
     maven {
         name = 'localNumen'
         url = uri(findProperty('local_maven_url') ?: 'file:///D:/01_Projects/numen-maven')
+    }
+    maven {
+        name = 'numenRemote'
+        url = 'https://raw.githubusercontent.com/Dwinovo/numen-maven/main'
     }
     // https://docs.gradle.org/current/userguide/declaring_repositories.html#declaring_content_exclusively_found_in_one_repository
     exclusiveContent {
