@@ -4,7 +4,6 @@ import com.dwinovo.numen.agent.tool.ToolRegistry;
 import com.dwinovo.numen.agent.tool.tools.BreakBlockTool;
 import com.dwinovo.numen.agent.tool.tools.DropItemsTool;
 import com.dwinovo.numen.agent.tool.tools.GetOwnerStatusTool;
-import com.dwinovo.numen.agent.tool.tools.GetSelfStatusTool;
 import com.dwinovo.numen.agent.tool.tools.GetWorldInfoTool;
 import com.dwinovo.numen.agent.tool.tools.InspectBlockTool;
 import com.dwinovo.numen.agent.tool.tools.LoadSkillTool;
@@ -77,7 +76,10 @@ public class CommonClass {
         ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.InspectGuiTool());
         ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.TransferTool());
         ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.CloseGuiTool());
-        ToolRegistry.register(new GetSelfStatusTool());
+        // get_self_status — migrated to the @NumenAction authoring surface (dogfood).
+        // Registered in place so the tool-list order (and prompt caching) is unchanged.
+        ToolRegistry.register(com.dwinovo.numen.agent.tool.api.NumenTools.tool(
+                new com.dwinovo.numen.agent.tool.tools.PerceptionTools(), "get_self_status"));
         ToolRegistry.register(new GetOwnerStatusTool());
 
         // Shared perception / planning tools.
