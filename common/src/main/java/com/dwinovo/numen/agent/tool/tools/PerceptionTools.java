@@ -1,10 +1,13 @@
 package com.dwinovo.numen.agent.tool.tools;
 
+import com.dwinovo.numen.agent.tool.api.Arg;
 import com.dwinovo.numen.agent.tool.api.NumenAction;
 import com.dwinovo.numen.entity.NumenPlayer;
+import com.dwinovo.numen.task.tasks.BlockMiningProgress;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -12,7 +15,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Perception tools authored on the {@link NumenAction} surface — the first
@@ -100,5 +106,77 @@ public final class PerceptionTools {
         root.addProperty("in_lava", self.isInLava());
 
         return root.toString();
+    }
+
+    @NumenAction(name = "inspect_block", description =
+            "Inspect a single block at the given integer coordinates. "
+            + "Returns block id, its block-state properties when any (e.g. an "
+            + "end_portal_frame's has_eye/facing), hardness, whether you have "
+            + "the correct tool in hand, an estimated dig-tick count, and "
+            + "whether the block is in your 4.5-block mining reach. Call this "
+            + "before auto_mine to confirm the operation will succeed, or to "
+            + "check which end_portal_frame cells still need an ender_eye.")
+    @SuppressWarnings("deprecation")  // BlockBehaviour.isSolid() carries Mojang's
+                                     // "deprecated for override" marker, not phased out.
+    public String inspectBlock(@Arg("Block X.") int x,
+                               @Arg("Block Y.") int y,
+                               @Arg("Block Z.") int z,
+                               NumenPlayer self) {
+        BlockPos pos = new BlockPos(x, y, z);
+        BlockState state = self.level().getBlockState(pos);
+
+        JsonObject root = new JsonObject();
+        root.addProperty("x", x);
+        root.addProperty("y", y);
+        root.addProperty("z", z);
+        root.addProperty("block", BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString());
+        // Block-state properties (e.g. end_portal_frame's has_eye/facing, so the
+        // model can tell which of the 12 frames still need an ender_eye; stairs
+        // facing; etc.). Omitted when the block has no properties.
+        if (!state.getProperties().isEmpty()) {
+            JsonObject props = new JsonObject();
+            for (Property<?> p : state.getProperties()) {
+                props.addProperty(p.getName(), propValue(state, p));
+            }
+            root.add("properties", props);
+        }
+        root.addProperty("is_air", state.isAir());
+        root.addProperty("is_solid", state.isSolid());
+        root.addProperty("is_liquid", !state.getFluidState().isEmpty());
+
+        float hardness = state.getDestroySpeed(self.level(), pos);
+        root.addProperty("hardness", hardness);
+        root.addProperty("unbreakable", hardness < 0);
+
+        boolean needsTool = state.requiresCorrectToolForDrops();
+        root.addProperty("needs_correct_tool", needsTool);
+        ItemStack hand = self.getMainHandItem();
+        boolean handIsRightTool = hand.isCorrectToolForDrops(state);
+        root.addProperty("current_hand_correct_tool", handIsRightTool);
+
+        if (!state.isAir() && hardness >= 0) {
+            float toolSpeed = hand.getDestroySpeed(state);
+            if (toolSpeed <= 0.0F) toolSpeed = 1.0F;
+            // Same vanilla rule as BlockMiningProgress — block that doesn't
+            // require correct tool always uses fast divisor.
+            boolean fast = !needsTool || handIsRightTool;
+            float divisor = fast ? 30.0F : 100.0F;
+            int ticks = hardness == 0.0F
+                    ? 1
+                    : Math.max(1, (int) Math.ceil(hardness * divisor / toolSpeed));
+            root.addProperty("estimated_mining_ticks", ticks);
+        }
+
+        Vec3 center = Vec3.atCenterOf(pos);
+        double distSqr = self.distanceToSqr(center);
+        root.addProperty("distance_to_me", Math.sqrt(distSqr));
+        root.addProperty("in_reach", distSqr <= BlockMiningProgress.REACH_SQR);
+
+        return root.toString();
+    }
+
+    /** Serialized value of one block-state property (e.g. "true", "north"). */
+    private static <T extends Comparable<T>> String propValue(BlockState state, Property<T> p) {
+        return p.getName(state.getValue(p));
     }
 }

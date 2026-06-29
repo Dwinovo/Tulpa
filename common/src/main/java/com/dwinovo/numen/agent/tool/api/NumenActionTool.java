@@ -2,6 +2,7 @@ package com.dwinovo.numen.agent.tool.api;
 
 import com.dwinovo.numen.agent.tool.NumenTool;
 import com.dwinovo.numen.entity.NumenPlayer;
+import com.dwinovo.numen.task.TaskRecord;
 import com.dwinovo.numen.task.TaskResult;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -22,19 +23,37 @@ import java.util.Map;
  *
  * <h2>Where it runs — inferred, not declared</h2>
  * The author never tags a category. The adapter infers it from the signature:
- * a method that takes the live {@link NumenPlayer} body and returns a value is
- * a server-side <em>query</em> (runs on the tick thread against the
- * authoritative entity). Other shapes (pure-client, body tasks) are added as
- * tools migrate; until then they raise a clear "shape not yet supported".
+ * <ul>
+ *   <li>returns a {@link TaskRecord} → a body <em>world-action</em>: shipped to
+ *       the server, where {@link #toTaskRecord} reflectively builds the record
+ *       and the task queue runs it (the method takes a {@link ToolContext} for
+ *       the call id / deadline);</li>
+ *   <li>takes the live {@link NumenPlayer} body and returns a value → a
+ *       server-side <em>query</em>: runs on the tick thread, replies in place.</li>
+ * </ul>
+ * Pure-client tools are added as more tools migrate; an unrecognised shape
+ * raises a clear error at registration.
  */
 public final class NumenActionTool implements NumenTool {
 
-    @FunctionalInterface
-    private interface Binder {
-        Object bind(JsonObject args, NumenPlayer entity);
-    }
+    private enum Kind { QUERY, WORLD }
 
-    private enum Kind { QUERY }
+    private enum SlotType { ARG, ENTITY, CONTEXT }
+
+    /** One method parameter: either a model argument or an injected context value. */
+    private static final class Slot {
+        final SlotType type;
+        final String argName;     // ARG only
+        final Class<?> argType;   // ARG only
+        final boolean required;   // ARG only
+
+        Slot(SlotType type, String argName, Class<?> argType, boolean required) {
+            this.type = type;
+            this.argName = argName;
+            this.argType = argType;
+            this.required = required;
+        }
+    }
 
     private final Object holder;
     private final Method method;
@@ -42,7 +61,7 @@ public final class NumenActionTool implements NumenTool {
     private final String description;
     private final Map<String, Object> schema;
     private final long timeoutTicks;
-    private final Binder[] binders;
+    private final Slot[] slots;
     private final Kind kind;
 
     public NumenActionTool(Object holder, Method method) {
@@ -59,31 +78,40 @@ public final class NumenActionTool implements NumenTool {
         this.timeoutTicks = action.timeoutTicks();
 
         boolean injectsEntity = false;
-        List<Binder> plan = new ArrayList<>();
+        boolean injectsContext = false;
+        List<Slot> plan = new ArrayList<>();
         for (Parameter p : method.getParameters()) {
             Arg arg = p.getAnnotation(Arg.class);
             if (arg != null) {
                 String argName = arg.name().isEmpty() ? p.getName() : arg.name();
-                Class<?> type = p.getType();
-                boolean required = arg.required();
-                plan.add((args, entity) -> coerce(args, argName, type, required));
+                plan.add(new Slot(SlotType.ARG, argName, p.getType(), arg.required()));
             } else if (NumenPlayer.class.isAssignableFrom(p.getType())) {
                 injectsEntity = true;
-                plan.add((args, entity) -> entity);
+                plan.add(new Slot(SlotType.ENTITY, null, null, false));
+            } else if (p.getType() == ToolContext.class) {
+                injectsContext = true;
+                plan.add(new Slot(SlotType.CONTEXT, null, null, false));
             } else {
                 throw new IllegalArgumentException("@NumenAction " + name
                         + ": parameter " + p.getName() + " of type " + p.getType().getName()
                         + " is neither an @Arg nor an injectable context type");
             }
         }
-        this.binders = plan.toArray(new Binder[0]);
+        this.slots = plan.toArray(new Slot[0]);
 
+        boolean returnsTaskRecord = TaskRecord.class.isAssignableFrom(method.getReturnType());
         boolean returnsValue = method.getReturnType() != void.class;
-        if (injectsEntity && returnsValue) {
+        if (returnsTaskRecord) {
+            this.kind = Kind.WORLD;
+        } else if (injectsEntity && returnsValue) {
             this.kind = Kind.QUERY;
         } else {
             throw new IllegalArgumentException("@NumenAction " + name
-                    + ": tool shape not yet supported by the adapter (only server queries so far)");
+                    + ": tool shape not yet supported by the adapter (server query or body task only)");
+        }
+        if (kind == Kind.QUERY && injectsContext) {
+            throw new IllegalArgumentException("@NumenAction " + name
+                    + ": a query tool cannot take a ToolContext (no body task)");
         }
     }
 
@@ -96,24 +124,41 @@ public final class NumenActionTool implements NumenTool {
 
     @Override
     public String executeQuery(JsonObject args, NumenPlayer entity) {
-        Object[] argv = new Object[binders.length];
-        for (int i = 0; i < binders.length; i++) {
-            argv[i] = binders[i].bind(args, entity);
+        Object result = invoke(buildArgs(args, entity, null));
+        return resultToString(result);
+    }
+
+    @Override
+    public TaskRecord toTaskRecord(String toolCallId, JsonObject args, long currentGameTime) {
+        Object result = invoke(buildArgs(args, null, new ToolContext(toolCallId, currentGameTime)));
+        return (TaskRecord) result;
+    }
+
+    private Object[] buildArgs(JsonObject args, NumenPlayer entity, ToolContext ctx) {
+        Object[] argv = new Object[slots.length];
+        for (int i = 0; i < slots.length; i++) {
+            Slot s = slots[i];
+            argv[i] = switch (s.type) {
+                case ARG -> coerce(args, s.argName, s.argType, s.required);
+                case ENTITY -> entity;
+                case CONTEXT -> ctx;
+            };
         }
-        Object result;
+        return argv;
+    }
+
+    private Object invoke(Object[] argv) {
         try {
-            result = method.invoke(holder, argv);
+            return method.invoke(holder, argv);
         } catch (InvocationTargetException ex) {
             Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
             // Argument-validation failures surface as a failed tool result; the
-            // payload handler converts IllegalArgumentException for us.
-            if (cause instanceof IllegalArgumentException iae) throw iae;
+            // caller (payload handler / agent loop) converts IllegalArgumentException.
             if (cause instanceof RuntimeException re) throw re;
             throw new RuntimeException(cause);
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("cannot invoke @NumenAction " + name, ex);
         }
-        return resultToString(result);
     }
 
     private String resultToString(Object result) {

@@ -5,7 +5,6 @@ import com.dwinovo.numen.agent.tool.tools.BreakBlockTool;
 import com.dwinovo.numen.agent.tool.tools.DropItemsTool;
 import com.dwinovo.numen.agent.tool.tools.GetOwnerStatusTool;
 import com.dwinovo.numen.agent.tool.tools.GetWorldInfoTool;
-import com.dwinovo.numen.agent.tool.tools.InspectBlockTool;
 import com.dwinovo.numen.agent.tool.tools.LoadSkillTool;
 import com.dwinovo.numen.agent.tool.tools.WaitTool;
 import com.dwinovo.numen.agent.tool.tools.EquipTool;
@@ -16,7 +15,6 @@ import com.dwinovo.numen.agent.tool.tools.CollectItemsTool;
 import com.dwinovo.numen.agent.tool.tools.MineBlockTool;
 import com.dwinovo.numen.agent.tool.tools.PlaceBlockTool;
 import com.dwinovo.numen.agent.tool.tools.EatItemTool;
-import com.dwinovo.numen.agent.tool.tools.MoveToTool;
 import com.dwinovo.numen.agent.tool.tools.ScanBlocksTool;
 import com.dwinovo.numen.agent.tool.tools.ScanNearbyEntitiesTool;
 import com.dwinovo.numen.agent.tool.tools.TodoWriteTool;
@@ -57,7 +55,9 @@ public class CommonClass {
      */
     public static void registerTools() {
         // Entity world-action + entity-perspective perception tools.
-        ToolRegistry.register(new MoveToTool());
+        // move_to — migrated to @NumenAction (world-action: returns a TaskRecord).
+        ToolRegistry.register(com.dwinovo.numen.agent.tool.api.NumenTools.tool(
+                new com.dwinovo.numen.agent.tool.tools.MovementTools(), "move_to"));
         ToolRegistry.register(new HuntTool());
         ToolRegistry.register(new ShootTool());
         ToolRegistry.register(new LocateStructureTool());
@@ -86,7 +86,9 @@ public class CommonClass {
         ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.LookupRecipeTool());
         ToolRegistry.register(new ScanNearbyEntitiesTool());
         ToolRegistry.register(new ScanBlocksTool());
-        ToolRegistry.register(new InspectBlockTool());
+        // inspect_block — migrated to @NumenAction (query with args).
+        ToolRegistry.register(com.dwinovo.numen.agent.tool.api.NumenTools.tool(
+                new com.dwinovo.numen.agent.tool.tools.PerceptionTools(), "inspect_block"));
         ToolRegistry.register(new com.dwinovo.numen.agent.tool.tools.InspectBlockStorageTool());
         ToolRegistry.register(new GetWorldInfoTool());
         ToolRegistry.register(new TodoWriteTool());
