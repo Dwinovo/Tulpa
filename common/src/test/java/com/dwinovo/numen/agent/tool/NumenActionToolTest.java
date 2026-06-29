@@ -110,7 +110,10 @@ class NumenActionToolTest {
         check(p, NumenTools.tool(queries, "inspect_block_storage"), new InspectBlockStorageTool());
 
         check(p, NumenTools.tool(new ScanTools(), "scan_blocks"), new ScanBlocksTool());
-        check(p, NumenTools.tool(new AgentTools(), "load_skill"), new LoadSkillTool());
+        AgentTools agentTools = new AgentTools();
+        check(p, NumenTools.tool(agentTools, "load_skill"), new LoadSkillTool());
+        check(p, NumenTools.tool(agentTools, "todowrite"), new TodoWriteTool());
+        check(p, NumenTools.tool(new ContainerTools(), "transfer"), new TransferTool());
 
         assertTrue(p.isEmpty(), "surface mismatches (" + p.size() + "):\n" + String.join("\n", p));
     }
@@ -146,6 +149,24 @@ class NumenActionToolTest {
         args.addProperty("name", "definitely_missing_skill_xyz");
         String result = loadSkill.executeLocal(args, null);   // load_skill needs no ClientToolContext
         assertTrue(result.contains("unknown skill"), "local tool ran and reported the missing skill");
+    }
+
+    /** An object-array arg binds to {@code List<record>}; exercised via todowrite's LOCAL path. */
+    @Test
+    void objectArrayArgCoerces() {
+        NumenTool todo = NumenTools.tool(new AgentTools(), "todowrite");
+        JsonObject args = new JsonObject();
+        JsonArray todos = new JsonArray();
+        JsonObject item = new JsonObject();
+        item.addProperty("content", "dig iron");
+        item.addProperty("status", "in_progress");
+        item.addProperty("priority", "high");
+        todos.add(item);
+        args.add("todos", todos);
+
+        String result = todo.executeLocal(args, null);
+        assertTrue(result.contains("\"success\":true"), "object-array bound and tool ran");
+        assertTrue(result.contains("dig iron"), "todo content echoed back");
     }
 
     /** A list arg binds to {@code List<String>} and a truly-optional arg binds to null — MC-free. */

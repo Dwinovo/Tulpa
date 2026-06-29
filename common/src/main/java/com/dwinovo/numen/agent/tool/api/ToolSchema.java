@@ -3,6 +3,7 @@ package com.dwinovo.numen.agent.tool.api;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -68,23 +69,50 @@ public final class ToolSchema {
     }
 
     private static Map<String, Object> propertySchema(Parameter p, Arg arg) {
-        Map<String, Object> prop = new LinkedHashMap<>();
         Class<?> type = p.getType();
-
         if (type.isArray() || List.class.isAssignableFrom(type)) {
+            Class<?> elem = elementType(p, type);
+            Map<String, Object> prop = new LinkedHashMap<>();
             prop.put("type", "array");
             prop.put("description", arg.value());
-            prop.put("items", Map.of("type", jsonType(elementType(p, type))));
+            // Array of objects (a record element) → recurse into an object schema.
+            prop.put("items", elem.isRecord() ? objectSchema(elem) : Map.of("type", jsonType(elem)));
             if (arg.minItems() >= 0) prop.put("minItems", arg.minItems());
             return prop;
         }
+        return scalarSchema(type, arg);
+    }
 
+    /** Object schema for a record element: one property per {@code @Arg} record component. */
+    private static Map<String, Object> objectSchema(Class<?> recordClass) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        List<String> required = new ArrayList<>();
+        for (RecordComponent rc : recordClass.getRecordComponents()) {
+            Arg arg = rc.getAnnotation(Arg.class);
+            String name = (arg != null && !arg.name().isEmpty()) ? arg.name() : rc.getName();
+            props.put(name, scalarSchema(rc.getType(), arg));
+            if (arg == null || arg.required()) required.add(name);
+        }
+        Map<String, Object> obj = new LinkedHashMap<>();
+        obj.put("type", "object");
+        obj.put("properties", props);
+        obj.put("required", required);
+        obj.put("additionalProperties", false);
+        return obj;
+    }
+
+    /** Schema for one scalar property/field (handles nullable union, bounds, enum). */
+    private static Map<String, Object> scalarSchema(Class<?> type, Arg arg) {
+        Map<String, Object> prop = new LinkedHashMap<>();
         String base = jsonType(type);
-        prop.put("type", arg.nullable() ? List.of(base, "null") : base);
-        prop.put("description", arg.value());
-        if (!Double.isNaN(arg.min())) prop.put("minimum", bound(base, arg.min()));
-        if (!Double.isNaN(arg.max())) prop.put("maximum", bound(base, arg.max()));
-        if (arg.enumValues().length > 0) prop.put("enum", List.of(arg.enumValues()));
+        boolean nullable = arg != null && arg.nullable();
+        prop.put("type", nullable ? List.of(base, "null") : base);
+        if (arg != null) {
+            prop.put("description", arg.value());
+            if (!Double.isNaN(arg.min())) prop.put("minimum", bound(base, arg.min()));
+            if (!Double.isNaN(arg.max())) prop.put("maximum", bound(base, arg.max()));
+            if (arg.enumValues().length > 0) prop.put("enum", List.of(arg.enumValues()));
+        }
         return prop;
     }
 

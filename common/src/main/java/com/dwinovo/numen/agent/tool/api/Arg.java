@@ -33,7 +33,7 @@ import java.lang.annotation.Target;
  * a missing value can bind as {@code null}.
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.PARAMETER)
+@Target({ElementType.PARAMETER, ElementType.RECORD_COMPONENT})
 public @interface Arg {
 
     /** Human description of the argument, shown to the model. */

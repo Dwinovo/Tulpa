@@ -49,13 +49,16 @@ public final class NumenActionTool implements NumenTool {
         final SlotType type;
         final String argName;     // ARG only
         final Class<?> argType;   // ARG only
+        final Class<?> elemType;  // ARG only — element class for a List<> arg, else null
         final boolean required;   // ARG only — listed in the schema's required[]
         final boolean nullable;   // ARG only — type permits null
 
-        Slot(SlotType type, String argName, Class<?> argType, boolean required, boolean nullable) {
+        Slot(SlotType type, String argName, Class<?> argType, Class<?> elemType,
+             boolean required, boolean nullable) {
             this.type = type;
             this.argName = argName;
             this.argType = argType;
+            this.elemType = elemType;
             this.required = required;
             this.nullable = nullable;
         }
@@ -91,18 +94,19 @@ public final class NumenActionTool implements NumenTool {
             Arg arg = p.getAnnotation(Arg.class);
             if (arg != null) {
                 String argName = arg.name().isEmpty() ? p.getName() : arg.name();
-                plan.add(new Slot(SlotType.ARG, argName, p.getType(), arg.required(), arg.nullable()));
+                plan.add(new Slot(SlotType.ARG, argName, p.getType(), listElement(p),
+                        arg.required(), arg.nullable()));
             } else if (NumenPlayer.class.isAssignableFrom(p.getType())) {
                 injectsEntity = true;
-                plan.add(new Slot(SlotType.ENTITY, null, null, false, false));
+                plan.add(new Slot(SlotType.ENTITY, null, null, null, false, false));
             } else if (p.getType() == ToolContext.class) {
                 injectsContext = true;
-                plan.add(new Slot(SlotType.CONTEXT, null, null, false, false));
+                plan.add(new Slot(SlotType.CONTEXT, null, null, null, false, false));
             } else if (p.getType() == java.util.function.Consumer.class) {
                 injectsReply = true;
-                plan.add(new Slot(SlotType.REPLY, null, null, false, false));
+                plan.add(new Slot(SlotType.REPLY, null, null, null, false, false));
             } else if (p.getType() == ClientToolContext.class) {
-                plan.add(new Slot(SlotType.CLIENT, null, null, false, false));
+                plan.add(new Slot(SlotType.CLIENT, null, null, null, false, false));
             } else {
                 throw new IllegalArgumentException("@NumenAction " + name
                         + ": parameter " + p.getName() + " of type " + p.getType().getName()
@@ -167,7 +171,7 @@ public final class NumenActionTool implements NumenTool {
         for (int i = 0; i < slots.length; i++) {
             Slot s = slots[i];
             argv[i] = switch (s.type) {
-                case ARG -> coerce(args, s.argName, s.argType, s.required, s.nullable);
+                case ARG -> coerce(args, s.argName, s.argType, s.elemType, s.required, s.nullable);
                 case ENTITY -> entity;
                 case CONTEXT -> ctx;
                 case CLIENT -> clientCtx;
@@ -201,21 +205,26 @@ public final class NumenActionTool implements NumenTool {
     }
 
     /** Coerce one JSON argument to the method parameter's Java type. */
-    private Object coerce(JsonObject args, String key, Class<?> type, boolean required, boolean nullable) {
+    private Object coerce(JsonObject args, String key, Class<?> type, Class<?> elemType,
+                          boolean required, boolean nullable) {
         JsonElement el = args.get(key);
         boolean absent = el == null || el.isJsonNull();
 
-        // List<String> args (block_ids, entity_ids, …): an absent OPTIONAL list is the
-        // empty list (matching the old itemSet "absent → match everything" lenient shape).
+        // List args: List<record> binds element objects to records; List<String> the
+        // simple case. An absent OPTIONAL list is the empty list (matches the old
+        // itemSet "absent → match everything" lenient shape).
         if (List.class.isAssignableFrom(type)) {
-            List<String> out = new ArrayList<>();
+            List<Object> out = new ArrayList<>();
             if (absent) {
                 if (required && !nullable) throw new IllegalArgumentException("missing required argument: " + key);
                 return out;
             }
             if (el.isJsonArray()) {
                 for (JsonElement e : el.getAsJsonArray()) {
-                    if (e != null && !e.isJsonNull()) out.add(e.getAsString());
+                    if (e == null || e.isJsonNull()) continue;
+                    out.add(elemType != null && elemType.isRecord()
+                            ? buildRecord(elemType, e.getAsJsonObject())
+                            : e.getAsString());
                 }
             }
             return out;
@@ -226,6 +235,10 @@ public final class NumenActionTool implements NumenTool {
             if (required && !nullable) throw new IllegalArgumentException("missing required argument: " + key);
             return null;   // optional / nullable → boxed null
         }
+        return coerceScalar(el, type, key);
+    }
+
+    private Object coerceScalar(JsonElement el, Class<?> type, String key) {
         try {
             if (type == String.class) return el.getAsString();
             if (type == int.class || type == Integer.class) return el.getAsInt();
@@ -237,5 +250,46 @@ public final class NumenActionTool implements NumenTool {
             throw new IllegalArgumentException("argument '" + key + "' has the wrong type");
         }
         throw new IllegalArgumentException("unsupported @Arg type for '" + key + "': " + type.getName());
+    }
+
+    /** Build a record element from a JSON object, one canonical-constructor arg per component. */
+    private Object buildRecord(Class<?> recordClass, JsonObject obj) {
+        java.lang.reflect.RecordComponent[] comps = recordClass.getRecordComponents();
+        Object[] vals = new Object[comps.length];
+        Class<?>[] types = new Class[comps.length];
+        for (int i = 0; i < comps.length; i++) {
+            java.lang.reflect.RecordComponent rc = comps[i];
+            Arg arg = rc.getAnnotation(Arg.class);
+            String field = (arg != null && !arg.name().isEmpty()) ? arg.name() : rc.getName();
+            boolean req = arg == null || arg.required();
+            boolean nul = arg != null && arg.nullable();
+            types[i] = rc.getType();
+            JsonElement fe = obj.get(field);
+            if (fe == null || fe.isJsonNull()) {
+                if (req && !nul) throw new IllegalArgumentException("missing field: " + field);
+                vals[i] = null;
+            } else {
+                vals[i] = coerceScalar(fe, rc.getType(), field);
+            }
+        }
+        try {
+            java.lang.reflect.Constructor<?> ctor = recordClass.getDeclaredConstructor(types);
+            ctor.setAccessible(true);
+            return ctor.newInstance(vals);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalArgumentException(
+                    "cannot build " + recordClass.getSimpleName() + ": " + ex.getMessage());
+        }
+    }
+
+    /** Element class of a {@code List<T>} parameter, or null if not a parameterized list. */
+    private static Class<?> listElement(Parameter p) {
+        if (!List.class.isAssignableFrom(p.getType())) return null;
+        if (p.getParameterizedType() instanceof java.lang.reflect.ParameterizedType pt
+                && pt.getActualTypeArguments().length == 1
+                && pt.getActualTypeArguments()[0] instanceof Class<?> elem) {
+            return elem;
+        }
+        return null;
     }
 }

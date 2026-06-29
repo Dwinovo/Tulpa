@@ -5,6 +5,7 @@ import com.dwinovo.numen.agent.tool.ToolRegistry;
 import com.dwinovo.numen.agent.tool.tools.AgentTools;
 import com.dwinovo.numen.agent.tool.tools.BlockActionTools;
 import com.dwinovo.numen.agent.tool.tools.CombatTools;
+import com.dwinovo.numen.agent.tool.tools.ContainerTools;
 import com.dwinovo.numen.agent.tool.tools.GuiTools;
 import com.dwinovo.numen.agent.tool.tools.InventoryTools;
 import com.dwinovo.numen.agent.tool.tools.LocateTools;
@@ -12,8 +13,6 @@ import com.dwinovo.numen.agent.tool.tools.MovementTools;
 import com.dwinovo.numen.agent.tool.tools.PerceptionTools;
 import com.dwinovo.numen.agent.tool.tools.QueryExtraTools;
 import com.dwinovo.numen.agent.tool.tools.ScanTools;
-import com.dwinovo.numen.agent.tool.tools.TodoWriteTool;
-import com.dwinovo.numen.agent.tool.tools.TransferTool;
 import com.dwinovo.numen.platform.Services;
 
 /**
@@ -63,6 +62,7 @@ public class CommonClass {
         QueryExtraTools queries = new QueryExtraTools();
         ScanTools scan = new ScanTools();
         AgentTools agent = new AgentTools();
+        ContainerTools container = new ContainerTools();
 
         // Entity world-action + entity-perspective perception tools.
         reg(movement, "move_to");
@@ -82,7 +82,7 @@ public class CommonClass {
         reg(inventory, "drop_items");
         // GUI primitives — interact_at opens a menu, then the model inspects + clicks it directly.
         reg(gui, "inspect_gui");
-        ToolRegistry.register(new TransferTool());   // not yet on @NumenAction: object-array arg
+        reg(container, "transfer");
         reg(gui, "close_gui");
         reg(perception, "get_self_status");
         reg(perception, "get_owner_status");
@@ -94,7 +94,7 @@ public class CommonClass {
         reg(perception, "inspect_block");
         reg(queries, "inspect_block_storage");
         reg(perception, "get_world_info");
-        ToolRegistry.register(new TodoWriteTool());  // not yet on @NumenAction: object-array arg
+        reg(agent, "todowrite");
         reg(agent, "load_skill");
 
         Constants.LOG.info("[numen] registered {} tool(s)", ToolRegistry.size());
