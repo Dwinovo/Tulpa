@@ -26,6 +26,10 @@ tasks.withType(Javadoc).configureEach {
 // Chinese Windows) misreads sources as "illegal character" errors.
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // Retain parameter names in bytecode so the @NumenAction tool layer can
+    // derive an argument's name from the method signature (reflection on
+    // Parameter.getName()), instead of forcing every @Arg to repeat the name.
+    options.compilerArgs.add('-parameters')
 }
 
 repositories {
