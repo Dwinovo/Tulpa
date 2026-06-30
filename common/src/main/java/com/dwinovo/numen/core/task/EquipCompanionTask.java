@@ -104,7 +104,7 @@ public final class EquipCompanionTask implements CompanionTask {
         if (!previous.isEmpty()) {
             inv.add(previous);                              // mutates `previous` down by what fit
             if (!previous.isEmpty() && player.level() instanceof ServerLevel sl) {
-                player.spawnAtLocation(previous);       // overflow → drop
+                player.spawnAtLocation(sl, previous);       // overflow → drop
             }
         }
         inv.setChanged();

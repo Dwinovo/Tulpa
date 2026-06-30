@@ -65,7 +65,7 @@ public final class NavSnapshot implements BlockGetter, com.dwinovo.numen.core.pa
     }
 
     @Override
-    public int getMinBuildHeight() {
-        return level.getMinBuildHeight();
+    public int getMinY() {
+        return level.getMinY();
     }
 }

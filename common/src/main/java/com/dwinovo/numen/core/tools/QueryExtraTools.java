@@ -19,6 +19,7 @@ import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.PlacementInfo;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -35,6 +36,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -140,15 +142,15 @@ String item_id,
         String name = BuiltInRegistries.ITEM.getKey(target).getPath();
 
         List<String> recipes = new ArrayList<>();
-        for (RecipeHolder<?> holder : level.getRecipeManager().getRecipes()) {
+        for (RecipeHolder<?> holder : level.recipeAccess().getRecipes()) {
             if (recipes.size() >= MAX_RECIPES) {
                 break;
             }
             Recipe<?> r = holder.value();
             if (r instanceof CraftingRecipe cr) {
-                // 1.21.1 has no PlacementInfo; a special recipe (firework, map-clone, …) has no
-                // static ingredient list — an empty list, or all-empty cells.
-                if (cr.getIngredients().isEmpty() || cr.getIngredients().stream().allMatch(Ingredient::isEmpty)) {
+                // A special recipe (firework, map-clone, …) has no static ingredient list.
+                PlacementInfo info = cr.placementInfo();
+                if (info.isImpossibleToPlace() || info.ingredients().isEmpty()) {
                     continue;
                 }
                 ItemStack result;
@@ -182,7 +184,7 @@ String item_id,
                 if (result.isEmpty() || result.getItem() != target) {
                     continue;
                 }
-                recipes.add("[stonecutter] " + describeIngredient(sc.getIngredients().get(0))
+                recipes.add("[stonecutter] " + describeIngredient(sc.input())
                         + " -> makes " + result.getCount());
             } else if (r instanceof SmithingRecipe sm) {
                 ItemStack result;
@@ -224,13 +226,13 @@ String item_id,
         if (recipe instanceof ShapedRecipe shaped) {
             int w = shaped.getWidth();
             int h = shaped.getHeight();
-            var cells = shaped.getIngredients();   // 1.21.1: NonNullList<Ingredient>, gaps = Ingredient.EMPTY
+            List<Optional<Ingredient>> cells = shaped.getIngredients();   // row-major, gaps = empty
             StringBuilder sb = new StringBuilder("shaped " + w + "x" + h + ", makes " + count + ":");
             for (int r = 0; r < h; r++) {
                 sb.append("\n  ");
                 for (int c = 0; c < w; c++) {
-                    Ingredient ing = cells.get(r * w + c);
-                    sb.append(ing.isEmpty() ? "." : describeIngredient(ing));
+                    Optional<Ingredient> ing = cells.get(r * w + c);
+                    sb.append(ing.map(QueryExtraTools::describeIngredient).orElse("."));
                     if (c < w - 1) {
                         sb.append(" | ");
                     }
@@ -240,8 +242,7 @@ String item_id,
         }
         // Shapeless: order doesn't matter, place anywhere.
         Map<String, Integer> counts = new LinkedHashMap<>();
-        for (Ingredient ing : recipe.getIngredients()) {
-            if (ing.isEmpty()) continue;
+        for (Ingredient ing : recipe.placementInfo().ingredients()) {
             counts.merge(describeIngredient(ing), 1, Integer::sum);
         }
         String list = counts.entrySet().stream()
@@ -257,8 +258,8 @@ String item_id,
                 : type == RecipeType.SMOKING ? "smoking (smoker)"
                 : type == RecipeType.CAMPFIRE_COOKING ? "campfire"
                 : "smelting (furnace)";
-        return "[" + station + "] " + describeIngredient(recipe.getIngredients().get(0)) + " -> makes "
-                + result.getCount() + " (" + recipe.getCookingTime() + " ticks)";
+        return "[" + station + "] " + describeIngredient(recipe.input()) + " -> makes "
+                + result.getCount() + " (" + recipe.cookingTime() + " ticks)";
     }
 
     /** A smithing recipe (smithing table). 1.21.1's SmithingRecipe exposes only is*Ingredient(stack)
@@ -270,8 +271,8 @@ String item_id,
     /** Name an ingredient: a single item directly, a shared-suffix tag as "planks (any)", else a few
      *  members — so a category ingredient doesn't mislead the model into one specific item. */
     private static String describeIngredient(Ingredient ing) {
-        List<String> paths = java.util.Arrays.stream(ing.getItems())   // 1.21.1: getItems() -> ItemStack[]
-                .map(s -> BuiltInRegistries.ITEM.getKey(s.getItem()).getPath())
+        List<String> paths = ing.items()   // 1.21.4: items() -> Stream<Holder<Item>>
+                .map(h -> BuiltInRegistries.ITEM.getKey(h.value()).getPath())
                 .distinct()
                 .toList();
         if (paths.isEmpty()) {

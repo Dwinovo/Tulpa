@@ -80,7 +80,7 @@ String item_id,
         if (id == null) {
             throw new IllegalArgumentException("item_id is not a valid id: " + item_id);
         }
-        Item item = BuiltInRegistries.ITEM.get(id);
+        Item item = BuiltInRegistries.ITEM.getValue(id);
         if (item == null || item == Items.AIR) {
             throw new IllegalArgumentException("unknown item: " + id);
         }
@@ -111,7 +111,7 @@ Integer radius,
                 if (el == null) continue;
                 ResourceLocation id = ResourceLocation.tryParse(el);
                 if (id != null && BuiltInRegistries.ITEM.containsKey(id)) {
-                    filter.add(BuiltInRegistries.ITEM.get(id));
+                    filter.add(BuiltInRegistries.ITEM.getValue(id));
                 }
             }
         }

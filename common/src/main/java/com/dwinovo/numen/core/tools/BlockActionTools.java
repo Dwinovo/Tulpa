@@ -120,7 +120,7 @@ Integer radius,
             if (el == null) continue;
             ResourceLocation id = ResourceLocation.tryParse(el);
             if (id == null) continue;
-            Block b = BuiltInRegistries.BLOCK.get(id);
+            Block b = BuiltInRegistries.BLOCK.getValue(id);
             if (b != null && b != Blocks.AIR) out.add(b);
         }
         return out;

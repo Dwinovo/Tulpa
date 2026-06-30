@@ -91,7 +91,7 @@ List<String> block_ids,
             if (raw == null) continue;
             ResourceLocation id = ResourceLocation.tryParse(raw);
             if (id == null) continue;
-            Block b = BuiltInRegistries.BLOCK.get(id);
+            Block b = BuiltInRegistries.BLOCK.getValue(id);
             if (b != null && b != Blocks.AIR) out.add(b);
         }
         return out;

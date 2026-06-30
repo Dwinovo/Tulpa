@@ -90,9 +90,9 @@ public final class ScanBlocksJob {
                 SectionPos.blockToSectionCoord(center.getX() + radius) - centerChunkX,
                 centerChunkX - SectionPos.blockToSectionCoord(center.getX() - radius));
         this.minSectionY = SectionPos.blockToSectionCoord(
-                Math.max(center.getY() - radius, level.getMinBuildHeight()));
+                Math.max(center.getY() - radius, level.getMinY()));
         this.maxSectionY = SectionPos.blockToSectionCoord(
-                Math.min(center.getY() + radius, level.getMaxBuildHeight()));
+                Math.min(center.getY() + radius, level.getMaxY()));
         int side = 2 * maxRing + 1;
         this.columnsTotal = side * side;
     }
