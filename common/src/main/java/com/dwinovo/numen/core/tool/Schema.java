@@ -150,9 +150,44 @@ public final class Schema {
             return root;
         }
 
+        // ---- strict-mode "optional" = stays in required[], type is a [type, "null"] union ----
+
+        public Builder nullableNumber(String name, String desc) {
+            props.put(name, nul("number", desc));
+            required.add(name);
+            return this;
+        }
+
+        public Builder nullableInteger(String name, String desc) {
+            props.put(name, nul("integer", desc));
+            required.add(name);
+            return this;
+        }
+
+        public Builder nullableString(String name, String desc) {
+            props.put(name, nul("string", desc));
+            required.add(name);
+            return this;
+        }
+
+        /** Optional ({@code required=false}) AND nullable enum string — the place_block facing/axis/half shape. */
+        public Builder optionalNullableEnum(String name, String desc, String... values) {
+            Map<String, Object> p = nul("string", desc);
+            p.put("enum", List.of(values));
+            props.put(name, p);
+            return this;
+        }
+
         private static Map<String, Object> base(String type, String desc) {
             Map<String, Object> p = new LinkedHashMap<>();
             p.put("type", type);
+            p.put("description", desc);
+            return p;
+        }
+
+        private static Map<String, Object> nul(String type, String desc) {
+            Map<String, Object> p = new LinkedHashMap<>();
+            p.put("type", List.of(type, "null"));
             p.put("description", desc);
             return p;
         }

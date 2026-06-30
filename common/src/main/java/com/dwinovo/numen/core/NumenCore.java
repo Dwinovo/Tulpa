@@ -119,29 +119,29 @@ public final class NumenCore {
 
         // Registration ORDER is preserved (backends with prompt-caching keyed off
         // the tool list cache stably across requests).
-        reg(movement, "move_to");
-        reg(combat, "hunt");
-        reg(combat, "shoot");
-        reg(locate, "locate_structure");
-        reg(locate, "locate_biome");
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.MoveToTool());
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.HuntTool());
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.ShootTool());
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.LocateStructureTool());
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.LocateBiomeTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.CollectItemsTool());
-        reg(blocks, "auto_mine");
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.AutoMineTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.EquipItemTool());
-        reg(blocks, "place_block");
-        reg(blocks, "break_block");
-        reg(blocks, "interact_at");
-        reg(blocks, "interact_entity");
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.PlaceBlockTool());
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.BreakBlockTool());
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.InteractAtTool());
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.InteractEntityTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.EatItemTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.WaitTool());   // SAMPLE: raw NumenTool, no @NumenAction
         ToolRegistry.register(new com.dwinovo.numen.core.tools.DropItemsTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.InspectGuiTool());
-        reg(container, "transfer");
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.TransferTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.CloseGuiTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.GetSelfStatusTool());   // SAMPLE: raw NumenTool
         ToolRegistry.register(new com.dwinovo.numen.core.tools.GetOwnerStatusTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.LookupRecipeTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.ScanNearbyEntitiesTool());
-        reg(scan, "scan_blocks");
+        ToolRegistry.register(new com.dwinovo.numen.core.tools.ScanBlocksTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.InspectBlockTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.InspectBlockStorageTool());
         ToolRegistry.register(new com.dwinovo.numen.core.tools.GetWorldInfoTool());
