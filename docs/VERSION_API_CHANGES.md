@@ -16,7 +16,7 @@ Fabric + NeoForge 同源，**api 与 core 各自同名分支**。向上移植（
 `1.20.1 → 1.20.2 → 1.20.4 → 1.20.6 → 1.21.1 → 1.21.4 → 1.21.5 → 1.21.8 → 1.21.10 → 1.21.11 → 26.1.2`
 
 新架构（numen-api 拆分 + 调度器 + raw `NumenTool` + skill 体系）基线在 **`1.21.1`**，正逐档向上移植。
-**已移植：1.21.1 → 1.21.4 ✓**
+**已移植：1.21.1 → 1.21.4 → 1.21.5 ✓**
 
 ## 每档的流程
 
@@ -130,9 +130,50 @@ super(output, lookup, MOD_ID, existingFileHelper)                     → super(
 
 ---
 
-## 1.21.4 → 1.21.5
-<!-- 来源参考：v0.0.2-1.21.4-beta ↔ v0.0.2-1.21.5-beta（约 16 文件）。移植时填写。 -->
-_待移植时填写_
+## 1.21.4 → 1.21.5 ✓（已验证，双 loader 编译 + 出包通过）
+
+构建旋钮：MC `1.21.5` / range `[1.21.5, 1.21.6)` / NeoForm `1.21.5-20250325.162830` /
+Fabric `0.119.6+1.21.5` / NeoForge `21.5.97`。
+
+### 通用（common）
+
+**世界明暗判断** ❗（`GetWorldInfoTool`）：
+```java
+level.isDay()   → level.isBrightOutside()
+level.isNight() → level.isDarkOutside()
+```
+
+**Inventory 选中槽** ❗ — 字段 `selected` 私有化，改读写方法（`BlockDigger`、`Equip/Hunt/Mine/Shoot` task）：
+```java
+inv.selected        → inv.getSelectedSlot()
+inv.selected = slot → inv.setSelectedSlot(slot)
+```
+
+**SavedData → SavedDataType** ❗ — 存档数据走 codec 化的 `SavedDataType`（`CompanionRegistry`，在 api）：
+```java
+// 删 save()/load() 重写 + SavedData.Factory，改成：
+import net.minecraft.world.level.saveddata.SavedDataType;
+private static final SavedDataType<T> TYPE = new SavedDataType<>(
+        "numen_companions", T::new, CODEC, DataFixTypes.SAVED_DATA_RANDOM_SEQUENCES);
+getDataStorage().computeIfAbsent(FACTORY, "name") → computeIfAbsent(TYPE)
+// 仍 extends SavedData；不再需要 HolderLookup/CompoundTag/NbtOps import
+```
+
+**CompoundTag codec 化 NBT** ❗（`NumenPlayer`）：
+```java
+output.putUUID(KEY, uuid)                        → output.store(KEY, UUIDUtil.CODEC, uuid)
+if (input.hasUUID(KEY)) x = input.getUUID(KEY)   → input.read(KEY, UUIDUtil.CODEC).ifPresent(v -> x = v)
+```
+
+### NeoForge loader
+**事件总线合并** — 1.21.5 把 mod-bus 与 game-bus 合并。旧的「构造器分别向 modBus / NeoForge.EVENT_BUS
+注册」**仍可编译可用**，只是 `@EventBusSubscriber(bus=…)` 的 `bus` 属性标记为 deprecated-for-removal
+（仅警告）。为最小改动本档未改写为 `@EventBusSubscriber`，留待将来必要时再做。
+
+### 未触及（新架构无需改，记录备查）
+老分支这一档还改过：`SmithingRecipe.baseIngredient()`（1.21.4 Optional → 1.21.5 直接 Ingredient）、
+9 字段 payload 改回 `StreamCodec.composite`（1.21.4 上限 8）、`GetOwnerStatusTool` 的 `EntityReference`。
+新架构当前实现未用到这些点，故本档未改；后续相关代码若改动碰到，再按此补。
 
 ## 1.21.5 → 1.21.8
 <!-- 约 24 文件 -->

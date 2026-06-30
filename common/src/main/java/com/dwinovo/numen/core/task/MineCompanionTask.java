@@ -410,7 +410,7 @@ public final class MineCompanionTask implements CompanionTask {
      *  simulated drops match the real ones (e.g. respects a Silk Touch / Fortune pick if carried). */
     private ItemStack bestToolFor(BlockState state) {
         Inventory inv = player.getInventory();
-        ItemStack best = inv.getItem(inv.selected);
+        ItemStack best = inv.getItem(inv.getSelectedSlot());
         float bestSpeed = best.getDestroySpeed(state);
         for (int i = 0; i < inv.getContainerSize(); i++) {
             ItemStack s = inv.getItem(i);

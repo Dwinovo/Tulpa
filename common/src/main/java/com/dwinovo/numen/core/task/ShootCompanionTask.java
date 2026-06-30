@@ -299,7 +299,7 @@ public final class ShootCompanionTask implements CompanionTask {
      *  it keeps whichever bow/crossbow the owner equipped rather than second-guessing the choice. */
     private void holdRangedWeapon() {
         Inventory inv = player.getInventory();
-        if (inv.getItem(inv.selected).getItem() instanceof ProjectileWeaponItem) return;
+        if (inv.getItem(inv.getSelectedSlot()).getItem() instanceof ProjectileWeaponItem) return;
         for (int i = 0; i < inv.getContainerSize(); i++) {
             if (inv.getItem(i).getItem() instanceof ProjectileWeaponItem) {
                 player.holdInHand(i);
