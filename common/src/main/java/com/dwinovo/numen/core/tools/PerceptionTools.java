@@ -1,7 +1,5 @@
 package com.dwinovo.numen.core.tools;
 
-import com.dwinovo.numen.agent.tool.api.Arg;
-import com.dwinovo.numen.agent.tool.api.NumenAction;
 import com.dwinovo.numen.entity.NumenPlayer;
 import com.dwinovo.numen.core.task.BlockMiningProgress;
 import com.google.gson.JsonArray;
@@ -29,14 +27,6 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class PerceptionTools {
 
-    @NumenAction(name = "get_self_status", description =
-            "Read your complete status in one call: name, game mode, HP / max HP, "
-            + "hunger / saturation, position, dimension, biome, the structures you "
-            + "are standing in (village, mineshaft, …), equipment (hands + armor — "
-            + "an equipped item leaves the backpack, it is NOT lost), your full "
-            + "backpack inventory, current attack target, and movement state. ALWAYS "
-            + "call this before combat or planning decisions and periodically during "
-            + "long tasks. No arguments.")
     public String getSelfStatus(NumenPlayer self) {
         JsonObject root = new JsonObject();
         root.addProperty("entity_id", self.getId());
@@ -109,19 +99,11 @@ public final class PerceptionTools {
         return root.toString();
     }
 
-    @NumenAction(name = "inspect_block", description =
-            "Inspect a single block at the given integer coordinates. "
-            + "Returns block id, its block-state properties when any (e.g. an "
-            + "end_portal_frame's has_eye/facing), hardness, whether you have "
-            + "the correct tool in hand, an estimated dig-tick count, and "
-            + "whether the block is in your 4.5-block mining reach. Call this "
-            + "before auto_mine to confirm the operation will succeed, or to "
-            + "check which end_portal_frame cells still need an ender_eye.")
     @SuppressWarnings("deprecation")  // BlockBehaviour.isSolid() carries Mojang's
                                      // "deprecated for override" marker, not phased out.
-    public String inspectBlock(@Arg("Block X.") int x,
-                               @Arg("Block Y.") int y,
-                               @Arg("Block Z.") int z,
+    public String inspectBlock(int x,
+int y,
+int z,
                                NumenPlayer self) {
         BlockPos pos = new BlockPos(x, y, z);
         BlockState state = self.level().getBlockState(pos);
@@ -181,12 +163,6 @@ public final class PerceptionTools {
         return p.getName(state.getValue(p));
     }
 
-    @NumenAction(name = "get_owner_status", description =
-            "Read your owner's current status: name, online state, HP, "
-            + "hunger, position, distance from you, and held item. Call "
-            + "before any 'follow', 'protect', or 'rendezvous' decision. "
-            + "If the owner is offline the call returns online:false — "
-            + "default to autonomous mode until they return. No arguments.")
     public String getOwnerStatus(NumenPlayer self) {
         JsonObject root = new JsonObject();
         java.util.UUID ownerUuid = self.getOwnerUuid();
@@ -239,11 +215,6 @@ public final class PerceptionTools {
         return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
-    @NumenAction(name = "get_world_info", description =
-            "Read the current world state: dimension, game-time tick counter, "
-            + "whether it's bright or dark outside (combat / spawn planning), "
-            + "and weather (clear / rain / thunder, affects sailing and combat). "
-            + "No arguments.")
     public String getWorldInfo(NumenPlayer self) {
         var level = self.level();
 

@@ -1,8 +1,6 @@
 package com.dwinovo.numen.core.tools;
 
 import com.dwinovo.numen.agent.tool.ToolArgs;
-import com.dwinovo.numen.agent.tool.api.Arg;
-import com.dwinovo.numen.agent.tool.api.NumenAction;
 import com.dwinovo.numen.entity.NumenPlayer;
 import com.dwinovo.numen.platform.Services;
 import com.dwinovo.numen.task.TaskResult;
@@ -53,18 +51,9 @@ public final class QueryExtraTools {
     private static final double MIN_RADIUS = 1.0;
     private static final double MAX_RADIUS = 64.0;
 
-    @NumenAction(name = "scan_nearby_entities", description =
-            "List entities within a radius around you, sorted by distance. "
-            + "Use type_filter to narrow: 'hostile' for monsters, 'passive' "
-            + "for animals/items, 'player' for players, 'all' for everything. "
-            + "Returns at most 20 entities; truncated:true means more exist. "
-            + "Each entry has id, type, position, distance, hp, and category. "
-            + "To fight mobs, use hunt (it scans by type itself).")
     public String scanNearbyEntities(
-            @Arg(value = "Search radius in blocks. Range [1, 64].",
-                    min = MIN_RADIUS, max = MAX_RADIUS) double radius,
-            @Arg(value = "One of: hostile, passive, player, all.",
-                    enumValues = {"hostile", "passive", "player", "all"}) String type_filter,
+double radius,
+String type_filter,
             NumenPlayer self) {
         radius = Math.clamp(radius, MIN_RADIUS, MAX_RADIUS);
         String filter = readEnum("type_filter", type_filter,
@@ -141,17 +130,8 @@ public final class QueryExtraTools {
     /** Cap recipes per lookup — enough variants to choose from without a token bomb. */
     private static final int MAX_RECIPES = 4;
 
-    @NumenAction(name = "lookup_recipe", timeoutTicks = 20, description =
-            "Look up how to make an item — like JEI. Returns every recipe whose output is this item, "
-            + "across all stations: crafting (with the grid layout), smelting / blasting / smoking, "
-            + "stonecutting, and smithing — each tagged [crafting] / [smelting] / [stonecutter] / "
-            + "[smithing] / …. Then make it: [crafting] → transfer each ingredient into a grid cell "
-            + "(your own 2x2, or a crafting table for 3x3); "
-            + "[smelting] → open the furnace and transfer the input + fuel; [stonecutter] / "
-            + "[smithing] → open the station and transfer the inputs. No recipe found = the item "
-            + "is mined or traded, not made.")
     public String lookupRecipe(
-            @Arg("Namespaced output item, e.g. minecraft:diamond_pickaxe.") String item_id,
+String item_id,
             NumenPlayer self) {
         Item target = ToolArgs.parseItem(item_id);
         if (!(self.level() instanceof ServerLevel level)) {
@@ -324,17 +304,9 @@ public final class QueryExtraTools {
 
     // ---- inspect_block_storage ----
 
-    @NumenAction(name = "inspect_block_storage", description =
-            "Read what a block HOLDS — items, fluid, and energy — directly from the block, "
-            + "WITHOUT opening its GUI. Works on most modded machines, tanks and batteries "
-            + "(chests, furnaces, Create / Mekanism / Thermal machines, fluid tanks, energy "
-            + "cells) because they expose standard item/fluid/energy handlers. Give the block's "
-            + "integer x/y/z. Use this instead of right-click + inspect_gui when you just need a "
-            + "machine's contents or fill levels. Note: storage-network terminals (AE2/RS) show "
-            + "only their local buffer here, not the whole network.")
-    public String inspectBlockStorage(@Arg("Block X.") int x,
-                                      @Arg("Block Y.") int y,
-                                      @Arg("Block Z.") int z,
+    public String inspectBlockStorage(int x,
+int y,
+int z,
                                       NumenPlayer self) {
         BlockPos pos = new BlockPos(x, y, z);
         BlockState state = self.level().getBlockState(pos);

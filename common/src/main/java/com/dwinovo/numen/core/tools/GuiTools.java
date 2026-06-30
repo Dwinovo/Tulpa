@@ -1,6 +1,5 @@
 package com.dwinovo.numen.core.tools;
 
-import com.dwinovo.numen.agent.tool.api.NumenAction;
 import com.dwinovo.numen.entity.NumenPlayer;
 import com.dwinovo.numen.task.TaskResult;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -21,14 +20,6 @@ import java.util.List;
  */
 public final class GuiTools {
 
-    @NumenAction(name = "inspect_gui", timeoutTicks = 20, description =
-            "Look at the GUI you currently have open. After interact_at right-clicks a chest / "
-                    + "furnace / machine it shows that container; with NO container open it shows YOUR own "
-                    + "inventory menu (which includes a 2x2 crafting grid), so you can craft small recipes "
-                    + "without a table. Lists every slot — index, side, item + count, [output] mark — plus "
-                    + "the cursor and any machine progress. If a crafting grid is open it draws the grid as a "
-                    + "2D map of slot numbers (handy for hand-loading a modded grid). Use it to choose "
-                    + "transfer slot indices and to verify a transfer. No arguments.")
     public String inspectGui(NumenPlayer self) {
         AbstractContainerMenu menu = self.containerMenu;
         if (menu == null) {
@@ -135,9 +126,6 @@ public final class GuiTools {
                 : BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath() + " x" + stack.getCount();
     }
 
-    @NumenAction(name = "close_gui", timeoutTicks = 20, description =
-            "Close the container GUI you currently have open — do this when you've finished moving "
-                    + "items. No arguments.")
     public String closeGui(NumenPlayer self) {
         AbstractContainerMenu menu = self.containerMenu;
         if (menu == null || menu == self.inventoryMenu) {

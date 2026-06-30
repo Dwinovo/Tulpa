@@ -1,6 +1,5 @@
 package com.dwinovo.numen.core;
 
-import com.dwinovo.numen.core.tool.NumenTools;
 import com.dwinovo.numen.core.tool.CoreServerTools;
 import com.dwinovo.numen.agent.tool.ToolRegistry;
 import com.dwinovo.numen.entity.CompanionLifecycle;
@@ -40,17 +39,6 @@ import com.dwinovo.numen.core.task.ShootCompanionTask;
 import com.dwinovo.numen.core.task.ShootTaskRecord;
 import com.dwinovo.numen.core.task.WaitCompanionTask;
 import com.dwinovo.numen.core.task.WaitTaskRecord;
-import com.dwinovo.numen.core.tools.AgentTools;
-import com.dwinovo.numen.core.tools.BlockActionTools;
-import com.dwinovo.numen.core.tools.CombatTools;
-import com.dwinovo.numen.core.tools.ContainerTools;
-import com.dwinovo.numen.core.tools.GuiTools;
-import com.dwinovo.numen.core.tools.InventoryTools;
-import com.dwinovo.numen.core.tools.LocateTools;
-import com.dwinovo.numen.core.tools.MovementTools;
-import com.dwinovo.numen.core.tools.PerceptionTools;
-import com.dwinovo.numen.core.tools.QueryExtraTools;
-import com.dwinovo.numen.core.tools.ScanTools;
 
 /**
  * Loader-agnostic init for the {@code numen-core} tool pack — the worked example
@@ -61,7 +49,7 @@ import com.dwinovo.numen.core.tools.ScanTools;
  *
  * <p>Two things plug into the engine here:
  * <ul>
- *   <li>tools — {@code @NumenAction} holders adapted by {@link NumenTools} and
+ *   <li>tools — each a {@link com.dwinovo.numen.agent.tool.NumenTool} (raw) and
  *       added to the global {@link ToolRegistry} (order preserved for prompt
  *       caching);</li>
  *   <li>task runners — each {@code TaskRecord} type a world-action tool emits is
@@ -105,17 +93,6 @@ public final class NumenCore {
     }
 
     private static void registerTools() {
-        MovementTools movement = new MovementTools();
-        CombatTools combat = new CombatTools();
-        LocateTools locate = new LocateTools();
-        InventoryTools inventory = new InventoryTools();
-        BlockActionTools blocks = new BlockActionTools();
-        GuiTools gui = new GuiTools();
-        PerceptionTools perception = new PerceptionTools();
-        QueryExtraTools queries = new QueryExtraTools();
-        ScanTools scan = new ScanTools();
-        AgentTools agent = new AgentTools();
-        ContainerTools container = new ContainerTools();
 
         // Registration ORDER is preserved (backends with prompt-caching keyed off
         // the tool list cache stably across requests).
@@ -149,9 +126,6 @@ public final class NumenCore {
         ToolRegistry.register(new com.dwinovo.numen.core.tools.LoadSkillTool());   // raw NumenTool
     }
 
-    private static void reg(Object holder, String action) {
-        ToolRegistry.register(NumenTools.tool(holder, action));
-    }
 
     private static void registerTaskRunners() {
         CompanionTaskFactory.register(MoveToTaskRecord.class, (p, r) -> new MoveToCompanionTask(p, r));

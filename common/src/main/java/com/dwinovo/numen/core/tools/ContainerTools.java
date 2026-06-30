@@ -1,7 +1,5 @@
 package com.dwinovo.numen.core.tools;
 
-import com.dwinovo.numen.agent.tool.api.Arg;
-import com.dwinovo.numen.agent.tool.api.NumenAction;
 import com.dwinovo.numen.entity.NumenPlayer;
 import com.dwinovo.numen.task.TaskResult;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -22,29 +20,12 @@ public final class ContainerTools {
 
     /** One transfer; its @Arg components become the {@code moves} array item schema. */
     public record Move(
-            @Arg("Source slot index (from inspect_gui).") int from,
-            @Arg(value = "Destination slot. OMIT to route the stack to the other section "
-                    + "(deposit/take/feed). Give a slot to place exactly there "
-                    + "(empty=move, same item=merge, different item=swap).", nullable = true) Integer to,
-            @Arg(value = "Exact number to move (needs `to`; default = the whole stack). "
-                    + "Ignored when `to` is omitted — routing moves the whole stack.", nullable = true) Integer count) {}
+int from,
+Integer to,
+Integer count) {}
 
-    @NumenAction(name = "transfer", timeoutTicks = 20, description =
-            "Transfer items between slots in the GUI you have open — reorganize, load a machine, "
-            + "deposit or take. Pass `moves` as a LIST; they run in order, so do the whole job in "
-            + "one call. inspect_gui first for slot indices.\n"
-            + "Each transfer: {from, to?, count?}.\n"
-            + "• Omit `to` → send from's whole stack to the OTHER section, routed by the menu "
-            + "(deposit into a chest, take out, feed a furnace input). The easiest bulk deposit/"
-            + "withdraw — you don't pick a destination slot.\n"
-            + "• Give `to` → put it in that EXACT slot: empty → moves there; same item → stacks/"
-            + "merges; a different item → the two slots SWAP.\n"
-            + "• `count` (needs `to`) → move exactly that many instead of the whole stack.\n"
-            + "Returns what actually happened to each transfer — amounts, merges, swaps, or why "
-            + "nothing moved (full / output-only slot). To craft, transfer ingredients into a grid "
-            + "(lookup_recipe for the layout); to drop items use drop_items.")
     public String transfer(
-            @Arg("Transfers to run in order (one whole job per call).") List<Move> moves,
+List<Move> moves,
             NumenPlayer self) {
         AbstractContainerMenu menu = self.containerMenu;
         if (menu == null) {

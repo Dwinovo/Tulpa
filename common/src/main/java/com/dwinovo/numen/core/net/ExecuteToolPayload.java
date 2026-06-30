@@ -1,7 +1,6 @@
 package com.dwinovo.numen.core.net;
 
 import com.dwinovo.numen.Constants;
-import com.dwinovo.numen.core.tool.NumenActionTool;
 import com.dwinovo.numen.agent.tool.NumenTool;
 import com.dwinovo.numen.agent.tool.ToolRegistry;
 import com.dwinovo.numen.task.TaskResult;
@@ -127,17 +126,14 @@ public record ExecuteToolPayload(UUID entityUuid,
             return;
         }
         // Run the tool against the live companion: a query replies now, a world action
-        // enqueues and its result returns via the task lifecycle. Server execution is
-        // not part of the MC-free NumenTool contract, so dispatch concretely — the raw
-        // ServerNumenTool base, or the legacy reflective adapter during the transition.
+        // enqueues and its result returns via the task lifecycle. Server execution isn't
+        // part of the MC-free NumenTool contract, so dispatch via core's ServerNumenTool base.
         java.util.function.Consumer<String> reply = json ->
                 com.dwinovo.numen.platform.Services.NETWORK.sendToPlayer(player,
                         new TaskResultPayload(p.entityUuid(), p.toolCallId(), json));
         try {
             if (tool instanceof com.dwinovo.numen.core.tool.ServerNumenTool st) {
                 st.runOnServer(p.toolCallId(), args, companion, reply);
-            } else if (tool instanceof NumenActionTool action) {
-                action.runOnServer(p.toolCallId(), args, companion, reply);
             } else {
                 replyError(player, p, "tool not server-runnable: " + p.toolName());
             }

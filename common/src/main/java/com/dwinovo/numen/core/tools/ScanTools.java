@@ -1,7 +1,5 @@
 package com.dwinovo.numen.core.tools;
 
-import com.dwinovo.numen.agent.tool.api.Arg;
-import com.dwinovo.numen.agent.tool.api.NumenAction;
 import com.dwinovo.numen.entity.NumenPlayer;
 import com.dwinovo.numen.core.pathing.util.BlockScanner;
 import com.dwinovo.numen.core.task.ScanBlocksJob;
@@ -31,24 +29,9 @@ public final class ScanTools {
     private static final int MAX_RADIUS = 192;
     private static final int MAX_RESULTS = 32;
 
-    @NumenAction(name = "scan_blocks", description =
-            "Bulk find blocks of given type(s) within a spherical radius "
-            + "around you. Returns matches sorted by distance, capped at "
-            + MAX_RESULTS + ". A perception tool for surveying the area — to "
-            + "actually gather blocks use auto_mine, which finds and digs "
-            + "them itself. Radius is in blocks (max " + MAX_RADIUS + " = 12 "
-            + "chunks — use big radii for landscape features like water, "
-            + "lava lakes or villages' blocks; a big scan answers after a few "
-            + "seconds, you can keep acting meanwhile). FLUIDS are scannable "
-            + "too: minecraft:water / minecraft:lava work as block_ids, and "
-            + "fluid matches carry source:true/false — only SOURCE lava turns "
-            + "to obsidian under water, and only SOURCE water fills a bucket. "
-            + "block_ids accepts one or more namespaced ids; include all "
-            + "variants (e.g. both iron_ore and deepslate_iron_ore for iron).")
     public void scanBlocks(
-            @Arg(value = "Spherical search radius in blocks (max " + MAX_RADIUS + ").",
-                    min = MIN_RADIUS, max = MAX_RADIUS) int radius,
-            @Arg(value = "List of namespaced block ids to search for.", minItems = 1) List<String> block_ids,
+int radius,
+List<String> block_ids,
             NumenPlayer self, Consumer<String> reply) {
         int r = Math.clamp(radius, MIN_RADIUS, MAX_RADIUS);
         Set<Block> targets = readBlockIds(block_ids);
