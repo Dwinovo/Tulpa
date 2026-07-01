@@ -198,5 +198,40 @@ core 内嵌 api 用 **ForgeGradle jarJar**:`jarJar.enable()` + `jarJar(group,nam
 **FG6 的 jarJar 产物带 `-all` classifier** → 可分发的 Forge 单文件是 `numen-forge-1.20.4-0.0.3-all.jar`(内嵌 api),
 plain `numen-forge-1.20.4-0.0.3.jar` 是不含 api 的 reobf jar。**发布/CI 要发 `-all.jar`。**
 
-## 1.20.4 → 1.20.2 / 1.20.2 → 1.20.1
-_待移植时填写（同为 Forge/Java17，预计更小）_
+## 1.20.4 → 1.20.2 ✓（纯旋钮档）
+
+老 tag 之间 **零源码差异**,只有 `gradle.properties`:MC `1.20.2` / range `[1.20.2, 1.21)` /
+Fabric `0.91.0+1.20.2` / loader `0.15.0` / Forge `48.0.49`(+ core 三个 build.gradle 的 api 坐标 → 1.20.2)。
+
+## 1.20.2 → 1.20.1 ✓（最老支持版；Forge/Java17;双 loader 编译 + 出包通过）
+
+构建旋钮:MC `1.20.1` / range `[1.20.1, 1.21)` / Fabric `0.92.1+1.20.1` / loader `0.15.11` / Forge `47.2.30`。
+1.20.1 **早于 1.20.2 的 configuration phase 和 sprite GuiGraphics**,所以多处 API 回退(基本全在 api,core 少量)。
+
+### api ❗
+```java
+// GuiCompat shim（新文件）：1.20.1 的 GuiGraphics 没有 blitSprite(ResourceLocation,…)（sprite blit 是 1.20.2+）。
+//   自己按 PNG 头读尺寸 + mcmeta nine_slice 拼 blit。所有 g.blitSprite(sprite,…) → GuiCompat.blitSprite(g, sprite,…)（24 处/6 屏）。
+//   附带 1.20.1 屏幕回退：skin 用 ResourceLocation、mouseScrolled 3 参、renderEntityInInventory 锚点式。
+// config-phase 回退：
+new NumenPlayer(server, level, profile, ClientInformation.createDefault()) → new NumenPlayer(server, level, profile)
+placeNewPlayer(conn, player, CommonListenerCookie.createInitial(profile)) → placeNewPlayer(conn, player)   // 2 参
+CompanionRegistry: 去 SavedData.Factory → getDataStorage().computeIfAbsent(::load, ::new, "numen_companions")
+FakeConnection: 换 1.20.1 版本体（send(Packet, PacketSendListener) 两参,无 runOnceConnected/flushChannel）
+// mixin 换目标：ServerCommonPacketListenerImpl（config-phase 类，1.20.1 没有）→ ServerGamePacketListenerImpl；改 mixins.json
+// Forge 网络：Forge 47.x classic —— NetworkRegistry.newSimpleChannel（不是 ChannelBuilder）+ registerMessage + NetworkEvent.Context
+```
+
+### ❗ 最大的坑:`CustomPacketPayload` 1.20.1 不存在
+`net.minecraft.network.protocol.common.custom.CustomPacketPayload` 是 1.20.2 configuration-phase 引入的,1.20.1 没有。
+api 引入 mod-local 接口 `com.dwinovo.numen.network.NumenPayload`(`ResourceLocation id()` + `write(FriendlyByteBuf)`),
+把 api 的 13 个 payload + `INetworkChannel` + 两端通道 + **core 的 3 个 net payload**(ExecuteTool/TaskResult/CancelTasks)
+的 `implements CustomPacketPayload` 全换成 `implements NumenPayload`(`id()/write()/static read()` 不变)。
+
+### core ❗
+```java
+// 除上面的 payload → NumenPayload 外：
+// RecipeHolder 1.20.1 不存在,getRecipes() 直接返回 Recipe<?>（QueryExtraTools）：
+for (RecipeHolder<?> h : mgr.getRecipes()) { Recipe<?> r = h.value(); … }
+   → for (Recipe<?> r : mgr.getRecipes()) { … }   // 去掉 import RecipeHolder
+```
