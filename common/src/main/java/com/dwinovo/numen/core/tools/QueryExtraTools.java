@@ -155,7 +155,7 @@ String item_id,
                 }
                 ItemStack result;
                 try {
-                    result = cr.assemble(CraftingInput.EMPTY, level.registryAccess());   // shaped/shapeless ignore input
+                    result = cr.assemble(CraftingInput.EMPTY);   // shaped/shapeless ignore input
                 } catch (RuntimeException inputDependent) {
                     continue;
                 }
@@ -166,7 +166,7 @@ String item_id,
             } else if (r instanceof AbstractCookingRecipe cook) {
                 ItemStack result;
                 try {
-                    result = cook.assemble(new SingleRecipeInput(ItemStack.EMPTY), level.registryAccess());   // ignores input
+                    result = cook.assemble(new SingleRecipeInput(ItemStack.EMPTY));   // ignores input
                 } catch (RuntimeException inputDependent) {
                     continue;
                 }
@@ -177,7 +177,7 @@ String item_id,
             } else if (r instanceof StonecutterRecipe sc) {
                 ItemStack result;
                 try {
-                    result = sc.assemble(new SingleRecipeInput(ItemStack.EMPTY), level.registryAccess());     // ignores input
+                    result = sc.assemble(new SingleRecipeInput(ItemStack.EMPTY));     // ignores input
                 } catch (RuntimeException inputDependent) {
                     continue;
                 }
@@ -192,7 +192,7 @@ String item_id,
                     // Empty input: a transform recipe (netherite upgrade etc.) still yields its result
                     // item; a cosmetic trim recipe yields the (empty) base, so it self-excludes.
                     result = sm.assemble(new SmithingRecipeInput(
-                            ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY), level.registryAccess());
+                            ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY));
                 } catch (RuntimeException inputDependent) {
                     continue;
                 }

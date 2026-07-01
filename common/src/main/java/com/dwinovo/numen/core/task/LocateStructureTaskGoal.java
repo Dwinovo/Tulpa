@@ -155,8 +155,8 @@ public final class LocateStructureTaskGoal implements CompanionTask {
             if (job.placement instanceof RandomSpreadStructurePlacement spread) {
                 job.spread = spread;
                 job.seed = state.getLevelSeed();
-                job.centerRegX = Math.floorDiv(here.x, spread.spacing());
-                job.centerRegZ = Math.floorDiv(here.z, spread.spacing());
+                job.centerRegX = Math.floorDiv(here.x(), spread.spacing());
+                job.centerRegZ = Math.floorDiv(here.z(), spread.spacing());
                 job.maxRing = SEARCH_RADIUS_RINGS;
                 jobs.add(job);
             } else if (job.placement instanceof ConcentricRingsStructurePlacement rings) {
@@ -286,7 +286,7 @@ public final class LocateStructureTaskGoal implements CompanionTask {
             // CHUNK_LOAD_NEEDED — the expensive fallback, globally budgeted.
             if (loaded == null) {
                 if (!SearchBudget.tryChunkLoad()) return null;
-                loaded = sl.getChunk(candidate.x, candidate.z, ChunkStatus.STRUCTURE_STARTS);
+                loaded = sl.getChunk(candidate.x(), candidate.z(), ChunkStatus.STRUCTURE_STARTS);
             }
             StructureStart start = sl.structureManager()
                     .getStartForStructure(SectionPos.bottomOf(loaded), structure, loaded);

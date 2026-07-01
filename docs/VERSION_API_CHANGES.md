@@ -16,7 +16,7 @@ Fabric + NeoForge 同源，**api 与 core 各自同名分支**。向上移植（
 `1.20.1 → 1.20.2 → 1.20.4 → 1.20.6 → 1.21.1 → 1.21.4 → 1.21.5 → 1.21.8 → 1.21.10 → 1.21.11 → 26.1.2`
 
 新架构（numen-api 拆分 + 调度器 + raw `NumenTool` + skill 体系）基线在 **`1.21.1`**，正逐档向上移植。
-**已移植：1.21.1 → 1.21.4 → 1.21.5 → 1.21.8 → 1.21.10 → 1.21.11 ✓**
+**已移植：1.21.1 → 1.21.4 → 1.21.5 → 1.21.8 → 1.21.10 → 1.21.11 → 26.1.2 ✓（全阶梯完成）**
 
 ## 每档的流程
 
@@ -316,5 +316,51 @@ AbstractButton 抽象方法 renderWidget(...) → renderContents(...)（SimpleBu
 `ResourceLocation→Identifier` 才炸（core 编到旧 api 的 `PathVizPayload`）。
 **每档三个 build.gradle 的 api 坐标都要一起改。**
 
-## 1.21.11 → 26.1.2
-_待移植时填写_
+## 1.21.11 → 26.1.2 ✓（已验证，双 loader 编译 + 出包通过；跨版本纪元的大跳）
+
+最硬一档：26.1 的渲染重构 + Java 25 + Fabric 换原生 loom。构建旋钮：MC `26.1.2` / range `[26.1.2, 26.2)` /
+NeoForm `26.1.2-1` / Fabric `0.148.2+26.1.2` / **Fabric loader `0.19.2`**(阶梯里首次变) / NeoForge `26.1.2.50-beta`。
+
+### ⚠ Java 25 ❗（环境级）
+26.1 要求 **Gradle JVM 本身是 Java 25**(Loom 用它跑 MC 解包),不是 toolchain。
+- `gradle.properties`:`java_version=21 → 25`。
+- 构建时 `JAVA_HOME` 指向 JDK 25(本机:`C:\Java\graalvm-community-openjdk-25.0.2+10.1`),否则报
+  `Minecraft 26.1.2 requires Java 25 but Gradle is using 21`。CI 的 setup-java 也要改成 25。
+
+### 渲染重构：GuiGraphics → GuiGraphicsExtractor ❗（api，render-state 提取模型）
+```java
+GuiGraphics → GuiGraphicsExtractor（类型 + import）
+Screen.render(GuiGraphics,…)              → extractRenderState(GuiGraphicsExtractor,…)（+ super.）
+AbstractWidget: w.render(…)               → w.extractRenderState(…)
+  抽象 renderWidget(…)                     → extractWidgetRenderState(GuiGraphicsExtractor,…)
+AbstractButton.renderContents(…)          → extractContents(GuiGraphicsExtractor,…)
+g.drawString → g.text；g.drawCenteredString → g.centeredText
+g.renderItem → g.item；g.renderItemDecorations → g.itemDecorations（g.fill / g.blitSprite 不变）
+PlayerFaceRenderer.draw(…)                → PlayerFaceExtractor.extractRenderState(…)
+InventoryScreen.renderEntityInInventoryFollowsMouse → extractEntityInInventoryFollowsMouse
+```
+
+### 其它 MC（api + core）❗
+```java
+SavedDataType 名参 String → Identifier.fromNamespaceAndPath(ns, path)（api CompanionRegistry）
+ClickType → ContainerInput（core GuiTools）
+recipe.assemble(input, level.registryAccess()) → recipe.assemble(input)（core QueryExtraTools，4 处）
+ChunkPos.asLong(x,z) → ChunkPos.pack(x,z)；ChunkPos 字段 .x/.z 私有化 → .x()/.z()
+Entity.interact(player,hand) / Player.interactOn(entity,hand) → 末尾加 Vec3 rel（实体相对命中点）
+NeoForge: RenderLevelStageEvent.AfterTranslucentBlocks → AfterTranslucentFeatures
+```
+
+### Fabric 换原生 loom + API 包重组 ❗
+`fabric/build.gradle`:插件 `fabric-loom-remap → fabric-loom`;删 `mappings loom.officialMojangMappings()`;
+`modImplementation → implementation`(**原生 loom 没有 `modImplementation`!** JiJ 仍用 `include`,
+但 api 依赖改 `implementation` + `include`)。
+```java
+KeyBindingHelper(keybinding.v1) → KeyMappingHelper(keymapping.v1)；registerKeyBinding → registerKeyMapping
+WorldRenderEvents(rendering.v1.world).AFTER_ENTITIES → LevelRenderEvents(rendering.v1.level).AFTER_TRANSLUCENT_FEATURES
+  回调 ctx.matrices() → ctx.poseStack()
+HudRenderCallback.EVENT.register(cb) → HudElementRegistry.addLast(Identifier, cb)
+ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD → ServerEntityLevelChangeEvents.AFTER_PLAYER_CHANGE_LEVEL
+FabricDataOutput → FabricPackOutput
+FabricTagProvider(.BlockTagProvider/.ItemTagProvider) → FabricTagsProvider(.BlockTagsProvider/.ItemTagsProvider)
+PayloadTypeRegistry.playC2S()/playS2C() → serverboundPlay()/clientboundPlay()
+```
