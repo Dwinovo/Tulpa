@@ -16,7 +16,7 @@ Fabric + NeoForge 同源，**api 与 core 各自同名分支**。向上移植（
 `1.20.1 → 1.20.2 → 1.20.4 → 1.20.6 → 1.21.1 → 1.21.4 → 1.21.5 → 1.21.8 → 1.21.10 → 1.21.11 → 26.1.2`
 
 新架构（numen-api 拆分 + 调度器 + raw `NumenTool` + skill 体系）基线在 **`1.21.1`**，正逐档向上移植。
-**已移植：1.21.1 → 1.21.4 → 1.21.5 → 1.21.8 ✓**
+**已移植：1.21.1 → 1.21.4 → 1.21.5 → 1.21.8 → 1.21.10 ✓**
 
 ## 每档的流程
 
@@ -233,8 +233,57 @@ extends net.minecraft.data.tags.ItemTagsProvider
 // NeoForge DataGenerators 同样去掉 @EventBusSubscriber 的 bus 属性。
 ```
 
-## 1.21.8 → 1.21.10
-_待移植时填写_
+## 1.21.8 → 1.21.10 ✓（已验证，双 loader 编译 + 出包通过；跳过 1.21.9）
+
+含 1.21.9 的**输入 API 重构 + NeoForge Transfer 重写**。构建旋钮：MC `1.21.10` / range `[1.21.10, 1.21.11)` /
+NeoForm `1.21.10-20251010.172816` / Fabric `0.138.4+1.21.10` / NeoForge `21.10.64`。几乎全在 api。
+
+### 客户端输入 ❗（api：NumenScreen、SettingsScreen）
+```java
+keyPressed(int keyCode, int scanCode, int modifiers)  → keyPressed(KeyEvent event)          // event.key()
+mouseClicked(double x, double y, int button)          → mouseClicked(MouseButtonEvent event, boolean dbl)
+                                                                              // event.x()/y()/button()
+super.keyPressed(k,s,m) → super.keyPressed(event); super.mouseClicked(x,y,b) → super.mouseClicked(event, dbl)
+// 内部大量 mouseX/mouseY/button 引用：方法开头取局部 double mouseX=event.x(),… 保持方法体不变即可。
+// import net.minecraft.client.input.KeyEvent / MouseButtonEvent
+```
+
+### 其它客户端（api）
+```java
+// EditBox 格式化器：setFormatter(BiFunction) → addFormatter(EditBox.TextFormatter)（FlatEditBox、NumenScreen）
+//   FlatEditBox 的 fmt 字段类型 BiFunction → EditBox.TextFormatter，取值 fmt.apply(..) → fmt.format(..)
+// KeyMapping 分类：字符串 "key.categories.misc" → 枚举 KeyMapping.Category.MISC（NumenKeys）
+// PlayerSkin 包移动：net.minecraft.client.resources.PlayerSkin → net.minecraft.world.entity.player.PlayerSkin
+// Fabric 世界渲染事件包：...rendering.v1.WorldRenderEvents → ...rendering.v1.world.WorldRenderEvents
+//   回调 ctx.matrixStack() → ctx.matrices()（NumenFabricClient）
+```
+
+### 存档 load（api：CompanionFactory）❗
+```java
+getPlayerList().load(player, ProblemReporter.DISCARDING).ifPresent(player::load)
+  → getPlayerList().loadPlayerData(player.nameAndId())
+        .map(tag -> TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), tag))
+        .ifPresent(player::load)
+// import net.minecraft.world.level.storage.TagValueInput
+```
+
+### NeoForge 平台（api）❗
+```java
+// Transfer API 重写（NeoForgeBlockCapabilityReader 整体重写）：
+IItemHandler/IFluidHandler + Capabilities.ItemHandler/FluidHandler.BLOCK
+   → ResourceHandler<ItemResource>/<FluidResource> + Capabilities.Item/Fluid.BLOCK
+     （size()/getResource(i)/getAmountAsLong(i)/getCapacityAsLong(i,res)）
+IEnergyStorage + Capabilities.EnergyStorage.BLOCK → EnergyHandler + Capabilities.Energy.BLOCK
+   canReceive()/canExtract() 没了 → 在回滚的 Transaction 里模拟 insert/extract 探测方向
+// FMLLoader.isProduction() → FMLLoader.getCurrent().isProduction()（NeoForgePlatformHelper）
+```
+
+### NeoForge 核心入口（core：NumenCoreNeoForge）❗
+```java
+// FMLEnvironment.dist（静态字段没了）→ FMLLoader.getCurrent().getDist()
+// IModFile.findResource/getSecureJar 一直在变 → 改用 loader 无关的 classloader 资源解析：
+Path.of(NumenCoreNeoForge.class.getResource("/skills").toURI())   // 防御式 try/catch
+```
 
 ## 1.21.10 → 1.21.11
 _待移植时填写_
